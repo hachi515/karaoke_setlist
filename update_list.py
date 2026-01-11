@@ -52,6 +52,8 @@ history_file = "history.csv"
 if os.path.exists(history_file):
     try:
         history_df = pd.read_csv(history_file, encoding='utf-8-sig')
+        # ★ここでnanを消去（重要）
+        history_df = history_df.fillna("")
         if '順番' in history_df.columns:
             history_df['順番'] = pd.to_numeric(history_df['順番'], errors='coerce')
     except Exception as e:
@@ -94,15 +96,16 @@ if new_data_frames:
     # --- 3. 過去データと結合 & 重複排除 ---
     combined_df = pd.concat([history_df, new_df], ignore_index=True)
     
-    # 重複判定の基準列
+    # 重複判定
     subset_cols = ['取得日', '部屋主', '曲名（ファイル名）', '歌った人', '作品名', '歌手名']
     existing_cols = [c for c in subset_cols if c in combined_df.columns]
     
-    # 重複削除（新しいデータを優先して残す）
     final_df = combined_df.drop_duplicates(subset=existing_cols, keep='last')
+    
+    # 最終的なnan消去（念のため）
+    final_df = final_df.fillna("")
 
-    # ソート: 取得日(降順) -> 順番(降順)
-    # ※順番が数値になっていないと並び替えがおかしくなるので念のため変換
+    # ソート
     if '順番' in final_df.columns:
         final_df['順番'] = pd.to_numeric(final_df['順番'], errors='coerce')
         
@@ -125,7 +128,7 @@ else:
 
 
 # --- HTML生成 ---
-# ここでは f-string を使い、CSS内の {} は {{ }} にエスケープし、変数は { } で埋め込みます
+# デザイン調整: 自動幅調整、フォント改善、件数右寄せ
 html_content = f"""
 <!DOCTYPE html>
 <html lang="ja">
@@ -135,15 +138,16 @@ html_content = f"""
     <title>Karaoke setlist all</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        /* 全体レイアウト */
+        /* ベースフォント設定 */
         html, body {{
             height: 100%;
             margin: 0;
             padding: 0;
             overflow: hidden;
-            font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Hiragino Sans", "Hiragino Kaku Gothic ProN", Arial, sans-serif;
-            background-color: #fcfcfc;
+            font-family: "Helvetica Neue", "Arial", "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Meiryo", sans-serif;
+            background-color: #f8f9fa;
             color: #333;
+            font-size: 14px; /* 少し大きく */
             display: flex;
             flex-direction: column;
         }}
@@ -151,53 +155,59 @@ html_content = f"""
         /* ヘッダーエリア */
         .header-area {{
             flex: 0 0 auto;
-            padding: 15px 20px 10px 20px;
+            padding: 12px 20px;
             background-color: #fff;
             border-bottom: 1px solid #ddd;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             z-index: 20;
         }}
 
+        /* タイトルと日時を横並びかつレスポンシブに */
+        .title-row {{
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }}
+
         h1 {{ 
-            margin: 0 0 5px 0; 
-            font-size: 1.5rem; 
-            text-align: left;
+            margin: 0; 
+            font-size: 1.4rem; 
+            font-weight: bold;
+            color: #2c3e50;
         }}
         
         .update-time {{ 
-            color: #666; 
-            font-size: 0.85em; 
-            text-align: left;
-            margin-bottom: 15px; 
+            color: #7f8c8d; 
+            font-size: 0.9em; 
         }}
 
-        /* 検索ボックスエリア */
-        .search-container {{
+        /* コントロールエリア（検索バーとボタンと件数） */
+        .controls-row {{
             display: flex;
             flex-wrap: wrap;
             gap: 10px;
             align-items: center;
-            justify-content: flex-start;
+        }}
+
+        .search-container {{
+            display: flex;
+            flex: 1; /* 可能な限り広げる */
+            gap: 8px;
+            align-items: center;
+            max-width: 600px;
         }}
 
         .search-box {{
-            width: 300px;
+            flex: 1;
             padding: 8px 12px;
             font-size: 14px;
             border: 1px solid #ccc;
             border-radius: 4px;
-            box-sizing: border-box;
-            background-color: #f9f9f9;
-        }}
-        .search-box:focus {{
             background-color: #fff;
-            outline: 2px solid #007bff;
         }}
-
-        .btn-group {{
-            display: flex;
-            gap: 5px;
-        }}
+        .search-box:focus {{ outline: 2px solid #007bff; border-color: transparent; }}
 
         .btn {{
             padding: 8px 16px;
@@ -208,19 +218,18 @@ html_content = f"""
             border: none;
             border-radius: 4px;
             white-space: nowrap;
-            transition: background-color 0.2s;
-        }}
-        .btn:hover {{ background-color: #0056b3; }}
-        .btn-reset {{ background-color: #6c757d; }}
-        .btn-reset:hover {{ background-color: #545b62; }}
-
-        /* 件数表示 */
-        .count-display {{
-            text-align: left;
-            font-size: 0.85em;
-            color: #666;
-            margin-top: 5px;
             font-weight: bold;
+            transition: opacity 0.2s;
+        }}
+        .btn:hover {{ opacity: 0.9; }}
+        .btn-reset {{ background-color: #6c757d; }}
+
+        /* 件数表示 (右寄せ) */
+        .count-display {{
+            margin-left: auto; /* 右に押しやる */
+            font-weight: bold;
+            color: #555;
+            white-space: nowrap;
         }}
 
         /* テーブルラッパー */
@@ -230,24 +239,26 @@ html_content = f"""
             position: relative;
             background-color: #fff;
             -webkit-overflow-scrolling: touch;
+            padding-bottom: 20px;
         }}
 
-        /* テーブル設定 */
+        /* テーブル設定 (自動幅調整のためtable-layout: autoを使用) */
         table {{ 
             border-collapse: separate; 
             border-spacing: 0; 
             width: 100%; 
-            font-size: 13px; 
-            min-width: 800px;
+            table-layout: auto; /* 自動調整 */
+            min-width: 600px; /* 最小幅 */
         }}
         
         th, td {{ 
-            padding: 10px 12px;
+            padding: 12px 15px;
             text-align: left; 
-            border-right: 1px solid #eee;
             border-bottom: 1px solid #eee;
             vertical-align: middle;
-            line-height: 1.5;
+            line-height: 1.6;
+            white-space: normal; /* 折り返しを許可 */
+            word-break: break-word; /* 長い単語も折り返す */
         }}
 
         /* ヘッダー固定設定 */
@@ -260,97 +271,101 @@ html_content = f"""
             z-index: 10; 
             cursor: pointer;
             border-bottom: 2px solid #ddd;
-            white-space: nowrap;
+            white-space: nowrap; /* ヘッダーは折り返さない */
         }}
         th:hover {{ background-color: #e9ecef; }}
 
-        /* --- 列幅の調整エリア --- */
-        th:nth-child(1), td:nth-child(1) {{ min-width: 90px; }} /* 部屋主 */
-        th:nth-child(2), td:nth-child(2) {{ min-width: 50px; text-align: center; }} /* 順番 */
+        /* --- 列幅の目安調整 (固定ではなく最小幅を指定) --- */
         
-        /* 4列目(作品名)と5列目(歌手名)の幅を統一 */
+        /* 部屋主 */
+        th:nth-child(1), td:nth-child(1) {{ 
+            min-width: 100px; 
+            white-space: nowrap; /* 部屋主名は折り返さない */
+        }} 
+        
+        /* 順番 */
+        th:nth-child(2), td:nth-child(2) {{ 
+            min-width: 50px; 
+            text-align: center; 
+        }} 
+        
+        /* 曲名・作品名・歌手名 (均等な比重を持たせる) */
+        th:nth-child(3), td:nth-child(3),
         th:nth-child(4), td:nth-child(4),
         th:nth-child(5), td:nth-child(5) {{
-            min-width: 170px;
-            width: 18%;
+            min-width: 150px; /* 最低限の幅 */
         }}
 
-        /* 7列目(コメント)を広くする */
+        /* コメント (広く取る) */
         th:nth-child(7), td:nth-child(7) {{
-            min-width: 250px;
+            min-width: 200px;
         }}
         
-        td {{ word-break: break-all; }}
-        th:last-child, td:last-child {{ border-right: none; }}
+        /* 行の装飾 */
         tr:nth-child(even) {{ background-color: #fafafa; }}
-        
+        tr:hover {{ background-color: #f1f8ff; }} /* ホバー時の色 */
+
         /* --- スマホ向けレスポンシブ調整 --- */
         @media (max-width: 600px) {{
-            .header-area {{ padding: 10px 12px; }}
-            h1 {{ font-size: 1.3rem; }}
-            .update-time {{ margin-bottom: 10px; }}
+            .header-area {{ padding: 10px; }}
+            h1 {{ font-size: 1.2rem; }}
             
-            .search-container {{ 
-                flex-direction: column;
-                align-items: stretch;
-                gap: 8px;
-            }}
-            .search-box {{ width: 100%; font-size: 16px; }}
+            .controls-row {{ flex-direction: column; align-items: stretch; }}
+            .search-container {{ max-width: 100%; }}
+            .count-display {{ margin-left: 0; text-align: right; margin-top: 5px; }}
             
-            .btn-group {{ 
-                display: flex; 
-                gap: 8px; 
-            }}
-            .btn {{ flex: 1; text-align: center; padding: 10px; }}
-            
-            th, td {{ padding: 8px; font-size: 12px; }}
+            th, td {{ padding: 8px 10px; font-size: 12px; }}
         }}
     </style>
 </head>
 <body>
 
     <div class="header-area">
-        <h1>Karaoke setlist all</h1>
-        <div class="update-time">最終集計: {current_datetime_str}</div>
+        <div class="title-row">
+            <h1>Karaoke setlist all</h1>
+            <div class="update-time">最終集計: {current_datetime_str}</div>
+        </div>
         
-        <div class="search-container">
-            <input type="text" id="searchInput" class="search-box" placeholder="キーワード・日付 (例: 2026/01/11)...">
-            <div class="btn-group">
+        <div class="controls-row">
+            <div class="search-container">
+                <input type="text" id="searchInput" class="search-box" placeholder="キーワード・日付 (例: 2026/01/11)...">
                 <button onclick="filterTable()" class="btn"><i class="fas fa-search"></i> 検索</button>
                 <button onclick="resetFilter()" class="btn btn-reset">リセット</button>
             </div>
+            <div class="count-display" id="countDisplay">読み込み中...</div>
         </div>
-        """
+    </div>
+"""
 
 if not final_df.empty:
-    # 件数表示：ここでは一重のカッコ { } を使います
-    html_content += f'<div class="count-display">全 {len(final_df)} 件</div>'
-    html_content += '</div>' # header-area 終了
-
     # スクロールエリア
     html_content += '<div class="table-wrapper"><table id="setlistTable">'
     
     html_content += '<thead><tr>'
     for col in final_df.columns:
-        # ここも一重のカッコ { }
-        html_content += f'<th onclick="sortTable({list(final_df.columns).index(col)})">{col} <i class="fas fa-sort"></i></th>'
+        html_content += f'<th onclick="sortTable({{list(final_df.columns).index(col)}})">{{col}} <i class="fas fa-sort"></i></th>'
     html_content += '</tr></thead>'
     
     html_content += '<tbody>'
     for _, row in final_df.iterrows():
         html_content += '<tr>'
         for val in row:
-            # ここも一重のカッコ { }
-            html_content += f'<td>{val}</td>'
+            html_content += f'<td>{{val}}</td>'
         html_content += '</tr>'
     html_content += '</tbody></table></div>'
+    
+    initial_count = len(final_df)
 else:
-    html_content += '<p style="padding:20px;">データがありません。</p></div>'
+    html_content += '<div style="padding:20px; text-align:center; color:#666;">データがありません。</div>'
+    initial_count = 0
 
-# JavaScript部分は変数を埋め込まないので、通常の文字列（fなし）で記述します
-html_content += """
+# JavaScript
+html_content += f"""
 <script>
-    function filterTable() {
+    // 初期件数
+    document.getElementById('countDisplay').innerText = '全 {initial_count} 件';
+
+    function filterTable() {{
         const input = document.getElementById("searchInput");
         const filter = input.value.toUpperCase();
         const keywords = filter.replace(/　/g, " ").split(" ").filter(k => k.length > 0);
@@ -359,44 +374,43 @@ html_content += """
         const trs = table.getElementsByTagName("tr");
         let visibleCount = 0;
 
-        for (let i = 1; i < trs.length; i++) {
+        for (let i = 1; i < trs.length; i++) {{
             const tr = trs[i];
             let rowText = "";
             const tds = tr.getElementsByTagName("td");
-            for (let j = 0; j < tds.length; j++) {
+            for (let j = 0; j < tds.length; j++) {{
                 rowText += (tds[j].textContent || tds[j].innerText) + " ";
-            }
+            }}
             rowText = rowText.toUpperCase();
             
             let isMatch = true;
-            for (let k = 0; k < keywords.length; k++) {
-                if (rowText.indexOf(keywords[k]) === -1) {
+            for (let k = 0; k < keywords.length; k++) {{
+                if (rowText.indexOf(keywords[k]) === -1) {{
                     isMatch = false;
                     break;
-                }
-            }
-            if (isMatch || keywords.length === 0) {
+                }}
+            }}
+            if (isMatch || keywords.length === 0) {{
                 tr.style.display = "";
                 visibleCount++;
-            } else {
+            }} else {{
                 tr.style.display = "none";
-            }
-        }
+            }}
+        }}
         
-        const countDisplay = document.querySelector('.count-display');
-        if(countDisplay) countDisplay.innerText = '表示: ' + visibleCount + ' 件 / 全 ' + (trs.length - 1) + ' 件';
-    }
+        document.getElementById('countDisplay').innerText = '表示: ' + visibleCount + ' 件 / 全 ' + (trs.length - 1) + ' 件';
+    }}
 
-    document.getElementById("searchInput").addEventListener("keyup", function(event) {
+    document.getElementById("searchInput").addEventListener("keyup", function(event) {{
         if (event.key === "Enter") filterTable();
-    });
+    }});
 
-    function resetFilter() {
+    function resetFilter() {{
         document.getElementById("searchInput").value = "";
         filterTable();
-    }
+    }}
 
-    function sortTable(n) {
+    function sortTable(n) {{
         const table = document.getElementById("setlistTable");
         const tbody = table.querySelector('tbody');
         const rows = Array.from(tbody.rows);
@@ -407,23 +421,23 @@ html_content += """
         table.querySelectorAll('th').forEach(h => h.setAttribute('data-dir', ''));
         th.setAttribute('data-dir', dir);
 
-        rows.sort((a, b) => {
+        rows.sort((a, b) => {{
             const cellA = a.cells[n].innerText.trim();
             const cellB = b.cells[n].innerText.trim();
 
-            if (!isNaN(cellA) && !isNaN(cellB) && cellA !== '' && cellB !== '') {
+            if (!isNaN(cellA) && !isNaN(cellB) && cellA !== '' && cellB !== '') {{
                 const numA = parseFloat(cellA);
                 const numB = parseFloat(cellB);
                 return dir === 'asc' ? numA - numB : numB - numA;
-            }
+            }}
 
             return dir === 'asc' 
                 ? cellA.localeCompare(cellB, 'ja') 
                 : cellB.localeCompare(cellA, 'ja');
-        });
+        }});
 
         rows.forEach(row => tbody.appendChild(row));
-    }
+    }}
 </script>
 </body>
 </html>
