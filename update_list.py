@@ -246,11 +246,11 @@ html_content = f"""
         }}
         
         th, td {{ 
-            padding: 12px 10px;
+            padding: 8px 10px;
             text-align: left; 
             border-bottom: 1px solid #eee;
             vertical-align: middle;
-            line-height: 1.5;
+            line-height: 1.3;
             white-space: normal; /* 折り返し許可 */
             word-break: break-all; /* 長い単語折り返し */
             overflow-wrap: break-word;
@@ -302,12 +302,12 @@ html_content = f"""
 
         /* スマホ向け */
         @media (max-width: 600px) {{
-            .header-area {{ padding: 10px; }}
+            .header-area {{ padding: 8px; }}
             .controls-row {{ flex-direction: column; align-items: stretch; }}
             .search-container {{ max-width: 100%; }}
             .count-display {{ margin-left: 0; text-align: right; margin-top: 5px; }}
             
-            th, td {{ padding: 8px; font-size: 12px; }}
+            th, td {{ padding: 6px; font-size: 12px; }}
         }}
     </style>
 </head>
@@ -439,4 +439,5 @@ html_content += f"""
 
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
+
 
