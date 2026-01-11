@@ -35,4 +35,8 @@ jobs:
           git config --global user.email 'action@github.com'
           git add index.html
           # 変更がある場合のみコミット
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto update list" && git push)
+          if ! git diff --quiet || ! git diff --staged --quiet; then
+            git commit -m "Auto update list"
+            git pull --rebase origin main
+            git push origin main
+          fi
