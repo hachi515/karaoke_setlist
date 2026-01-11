@@ -140,27 +140,29 @@
         th:hover { background-color: #e9ecef; }
 
         /* --- 列幅設定 --- */
-        /* 全体のバランスを見直しました */
+        /* ※注意: columns_to_hide で列を削除した場合、nth-childの番号がずれるため
+           幅の指定が意図しない列に適用される可能性があります。
+           列を隠す場合は、ここのnth-child番号も調整が必要になる場合があります。 */
 
-        /* 1. 部屋主 (少し狭く) */
+        /* 1. 部屋主 */
         th:nth-child(1), td:nth-child(1) { width: 10%; min-width: 90px; }
         
-        /* 2. 順番 (狭く) */
+        /* 2. 順番 */
         th:nth-child(2), td:nth-child(2) { width: 5%; min-width: 40px; text-align: center; }
         
-        /* 3. 曲名 (メインなので広く) */
+        /* 3. 曲名 */
         th:nth-child(3), td:nth-child(3) { width: 20%; min-width: 180px; }
 
-        /* 4. 作品名 (曲名より少し狭く) */
+        /* 4. 作品名 */
         th:nth-child(4), td:nth-child(4) { width: 15%; min-width: 120px; }
 
-        /* 5. 歌手名 (作品名と同じくらい) */
+        /* 5. 歌手名 */
         th:nth-child(5), td:nth-child(5) { width: 15%; min-width: 120px; }
 
         /* 6. 歌った人 */
         th:nth-child(6), td:nth-child(6) { width: 10%; min-width: 90px; }
 
-        /* 7. コメント (曲名と同じくらいの幅に制限) */
+        /* 7. コメント */
         th:nth-child(7), td:nth-child(7) { width: 15%; min-width: 140px; }
 
         /* 8. 取得日 */
@@ -186,7 +188,7 @@
     <div class="header-area">
         <div class="title-row">
             <h1>Karaoke setlist all</h1>
-            <div class="update-time">最終集計: 2026/01/11 18:49</div>
+            <div class="update-time">最終集計: 2026/01/11 19:09</div>
         </div>
         
         <div class="controls-row">
