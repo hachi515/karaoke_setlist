@@ -291,10 +291,10 @@ html_content = f"""
         th:nth-child(6), td:nth-child(6) {{ width: 10%; min-width: 90px; }}
 
         /* 7. コメント (曲名と同じくらいの幅に制限) */
-        th:nth-child(7), td:nth-child(7) {{ width: 20%; min-width: 140px; }}
+        th:nth-child(7), td:nth-child(7) {{ width: 15%; min-width: 140px; }}
 
         /* 8. 取得日 */
-        th:nth-child(8), td:nth-child(8) {{ width: 5%; min-width: 80px; }}
+        th:nth-child(8), td:nth-child(8) {{ width: 10%; min-width: 90px; }}
 
         /* 行装飾 */
         tr:nth-child(even) {{ background-color: #fafafa; }}
@@ -439,3 +439,4 @@ html_content += f"""
 
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
+
