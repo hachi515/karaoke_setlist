@@ -101,8 +101,6 @@ if new_data_frames:
     existing_cols = [c for c in subset_cols if c in combined_df.columns]
     
     final_df = combined_df.drop_duplicates(subset=existing_cols, keep='last')
-    
-    # 最終的なnan消去
     final_df = final_df.fillna("")
 
     # ソート
@@ -128,8 +126,7 @@ else:
 
 
 # --- HTML生成 ---
-# デザイン調整: 自動幅調整、フォント改善、件数右寄せ
-# CSS部分の {} は {{ }} にエスケープし、変数 {val} などは一重の { } で記述します。
+# デザイン調整: 列幅の均等化、自動調整、フォント改善
 
 html_content = f"""
 <!DOCTYPE html>
@@ -164,7 +161,6 @@ html_content = f"""
             z-index: 20;
         }}
 
-        /* タイトルと日時を横並びかつレスポンシブに */
         .title-row {{
             display: flex;
             justify-content: space-between;
@@ -185,7 +181,7 @@ html_content = f"""
             font-size: 0.9em; 
         }}
 
-        /* コントロールエリア（検索バーとボタンと件数） */
+        /* コントロールエリア */
         .controls-row {{
             display: flex;
             flex-wrap: wrap;
@@ -195,7 +191,7 @@ html_content = f"""
 
         .search-container {{
             display: flex;
-            flex: 1; /* 可能な限り広げる */
+            flex: 1; 
             gap: 8px;
             align-items: center;
             max-width: 600px;
@@ -228,7 +224,7 @@ html_content = f"""
 
         /* 件数表示 (右寄せ) */
         .count-display {{
-            margin-left: auto; /* 右に押しやる */
+            margin-left: auto;
             font-weight: bold;
             color: #555;
             white-space: nowrap;
@@ -249,8 +245,8 @@ html_content = f"""
             border-collapse: separate; 
             border-spacing: 0; 
             width: 100%; 
-            table-layout: auto; /* 自動調整 */
-            min-width: 600px; /* 最小幅 */
+            table-layout: auto; /* 自動調整を有効に */
+            min-width: 600px; 
         }}
         
         th, td {{ 
@@ -260,7 +256,7 @@ html_content = f"""
             vertical-align: middle;
             line-height: 1.6;
             white-space: normal; /* 折り返しを許可 */
-            word-break: break-word; /* 長い単語も折り返す */
+            word-break: break-all; /* 長い単語も折り返す */
         }}
 
         /* ヘッダー固定設定 */
@@ -273,36 +269,34 @@ html_content = f"""
             z-index: 10; 
             cursor: pointer;
             border-bottom: 2px solid #ddd;
-            white-space: nowrap; /* ヘッダーは折り返さない */
+            white-space: nowrap; 
         }}
         th:hover {{ background-color: #e9ecef; }}
 
-        /* --- 列幅の目安調整 --- */
+        /* --- 列幅の調整 --- */
         
         /* 部屋主 */
         th:nth-child(1), td:nth-child(1) {{ 
-            min-width: 100px; 
+            min-width: 90px; 
             white-space: nowrap; 
         }} 
         
         /* 順番 */
         th:nth-child(2), td:nth-child(2) {{ 
-            min-width: 50px; 
+            min-width: 40px; 
             text-align: center; 
         }} 
         
-        /* 曲名・作品名・歌手名 */
+        /* 曲名(3), 作品名(4), 歌手名(5), コメント(7) を同じバランスにする */
+        /* min-widthで最低限を確保し、max-widthで長すぎる場合に折り返しを強制する */
         th:nth-child(3), td:nth-child(3),
         th:nth-child(4), td:nth-child(4),
-        th:nth-child(5), td:nth-child(5) {{
-            min-width: 150px; 
+        th:nth-child(5), td:nth-child(5),
+        th:nth-child(7), td:nth-child(7) {{
+            min-width: 160px; /* すべて同じ最小幅に */
+            max-width: 300px; /* これ以上は広がりすぎず折り返す */
         }}
 
-        /* コメント */
-        th:nth-child(7), td:nth-child(7) {{
-            min-width: 200px;
-        }}
-        
         /* 行の装飾 */
         tr:nth-child(even) {{ background-color: #fafafa; }}
         tr:hover {{ background-color: #f1f8ff; }}
@@ -311,12 +305,20 @@ html_content = f"""
         @media (max-width: 600px) {{
             .header-area {{ padding: 10px; }}
             h1 {{ font-size: 1.2rem; }}
-            
             .controls-row {{ flex-direction: column; align-items: stretch; }}
             .search-container {{ max-width: 100%; }}
             .count-display {{ margin-left: 0; text-align: right; margin-top: 5px; }}
             
             th, td {{ padding: 8px 10px; font-size: 12px; }}
+            
+            /* スマホでは少し幅を詰める */
+            th:nth-child(3), td:nth-child(3),
+            th:nth-child(4), td:nth-child(4),
+            th:nth-child(5), td:nth-child(5),
+            th:nth-child(7), td:nth-child(7) {{
+                min-width: 120px;
+                max-width: 200px;
+            }}
         }}
     </style>
 </head>
@@ -342,22 +344,20 @@ html_content = f"""
 if not final_df.empty:
     initial_count = len(final_df)
     
-    # スクロールエリア
     html_content += '<div class="table-wrapper"><table id="setlistTable">'
     
-    # ここから下は変数を埋め込むため、一重の { } を使います
     html_content += '<thead><tr>'
     for col in final_df.columns:
-        # {col} が正しい記述です
-        html_content += f'<th onclick="sortTable({list(final_df.columns).index(col)})">{col} <i class="fas fa-sort"></i></th>'
+        # 変数 {col} を表示
+        html_content += f'<th onclick="sortTable({{list(final_df.columns).index(col)}})">{{col}} <i class="fas fa-sort"></i></th>'
     html_content += '</tr></thead>'
     
     html_content += '<tbody>'
     for _, row in final_df.iterrows():
         html_content += '<tr>'
         for val in row:
-            # {val} が正しい記述です
-            html_content += f'<td>{val}</td>'
+            # 変数 {val} を表示
+            html_content += f'<td>{{val}}</td>'
         html_content += '</tr>'
     html_content += '</tbody></table></div>'
     
