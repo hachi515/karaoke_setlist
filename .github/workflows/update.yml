@@ -2,8 +2,8 @@ name: Update List
 
 on:
   schedule:
-    # 30分ごとに実行 (cron構文)
-    - cron: '*/30 * * * *'
+    # 15分ごとに実行 (cron構文)
+    - cron: '*/15 * * * *'
   workflow_dispatch: # 手動実行ボタンも有効にする
 
 permissions:
