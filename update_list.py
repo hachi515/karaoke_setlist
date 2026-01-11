@@ -117,12 +117,26 @@ if new_data_frames:
         final_df = final_df[cols]
 
     # --- 4. 履歴ファイル(CSV)を更新保存 ---
+    # ここでは全てのデータを保存します
     final_df.to_csv(history_file, index=False, encoding='utf-8-sig')
     print("履歴ファイルを更新しました。")
 
 else:
     final_df = history_df
     print("新しいデータが取得できませんでした。過去のデータを使用します。")
+
+
+# --- 5. HTML表示用データの準備（特定の列を除外） ---
+# ★ここに「CSVには残すが、HTMLには表示したくない列名」を指定してください
+# 例: columns_to_hide = ['取得日', '順番']
+# 隠したい列がない場合は [] のままでOKです
+columns_to_hide = [] 
+
+if not final_df.empty:
+    # 指定された列を削除したHTML用のデータを作成（元のfinal_dfは変わりません）
+    html_df = final_df.drop(columns=columns_to_hide, errors='ignore')
+else:
+    html_df = pd.DataFrame()
 
 
 # --- HTML生成 ---
@@ -270,27 +284,29 @@ html_content = f"""
         th:hover {{ background-color: #e9ecef; }}
 
         /* --- 列幅設定 --- */
-        /* 全体のバランスを見直しました */
+        /* ※注意: columns_to_hide で列を削除した場合、nth-childの番号がずれるため
+           幅の指定が意図しない列に適用される可能性があります。
+           列を隠す場合は、ここのnth-child番号も調整が必要になる場合があります。 */
 
-        /* 1. 部屋主 (少し狭く) */
+        /* 1. 部屋主 */
         th:nth-child(1), td:nth-child(1) {{ width: 10%; min-width: 90px; }}
         
-        /* 2. 順番 (狭く) */
+        /* 2. 順番 */
         th:nth-child(2), td:nth-child(2) {{ width: 5%; min-width: 40px; text-align: center; }}
         
-        /* 3. 曲名 (メインなので広く) */
+        /* 3. 曲名 */
         th:nth-child(3), td:nth-child(3) {{ width: 20%; min-width: 180px; }}
 
-        /* 4. 作品名 (曲名より少し狭く) */
+        /* 4. 作品名 */
         th:nth-child(4), td:nth-child(4) {{ width: 15%; min-width: 120px; }}
 
-        /* 5. 歌手名 (作品名と同じくらい) */
+        /* 5. 歌手名 */
         th:nth-child(5), td:nth-child(5) {{ width: 15%; min-width: 120px; }}
 
         /* 6. 歌った人 */
         th:nth-child(6), td:nth-child(6) {{ width: 10%; min-width: 90px; }}
 
-        /* 7. コメント (曲名と同じくらいの幅に制限) */
+        /* 7. コメント */
         th:nth-child(7), td:nth-child(7) {{ width: 15%; min-width: 140px; }}
 
         /* 8. 取得日 */
@@ -330,19 +346,19 @@ html_content = f"""
     </div>
 """
 
-if not final_df.empty:
-    initial_count = len(final_df)
+if not html_df.empty:
+    initial_count = len(html_df)
     
     html_content += '<div class="table-wrapper"><table id="setlistTable">'
     
     html_content += '<thead><tr>'
-    for col in final_df.columns:
+    for col in html_df.columns:
         # 変数 {col} を表示（一重の波括弧）
-        html_content += f'<th onclick="sortTable({list(final_df.columns).index(col)})">{col} <i class="fas fa-sort"></i></th>'
+        html_content += f'<th onclick="sortTable({list(html_df.columns).index(col)})">{col} <i class="fas fa-sort"></i></th>'
     html_content += '</tr></thead>'
     
     html_content += '<tbody>'
-    for _, row in final_df.iterrows():
+    for _, row in html_df.iterrows():
         html_content += '<tr>'
         for val in row:
             # 変数 {val} を表示（一重の波括弧）
@@ -439,5 +455,3 @@ html_content += f"""
 
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
-
-
