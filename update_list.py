@@ -1,7 +1,7 @@
 import pandas as pd
 import requests
 import datetime
-import re
+import os
 
 # --- 時刻設定 ---
 now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
@@ -47,8 +47,23 @@ room_map = {
     11106: "冨塚部屋"
 }
 
+# --- 1. 過去のデータ(history.csv)を読み込む ---
+history_file = "history.csv"
+if os.path.exists(history_file):
+    try:
+        history_df = pd.read_csv(history_file, encoding='utf-8-sig')
+        # 数値型を保証
+        if '順番' in history_df.columns:
+            history_df['順番'] = pd.to_numeric(history_df['順番'], errors='coerce')
+    except Exception as e:
+        print(f"履歴ファイルの読み込みエラー: {e}")
+        history_df = pd.DataFrame()
+else:
+    history_df = pd.DataFrame()
+
+# --- 2. 新しいデータを取得する ---
 target_ports = list(room_map.keys())
-all_data_frames = []
+new_data_frames = []
 
 for port in target_ports:
     url = f"http://Ykr.moe:{port}/simplelist.php"
@@ -65,13 +80,54 @@ for port in target_ports:
             df['部屋主'] = room_map[port]
             df['取得日'] = current_date_str
             
-            all_data_frames.append(df)
+            new_data_frames.append(df)
             print(f"Port {port} ({room_map[port]}): OK")
             
     except Exception as e:
         print(f"Port {port}: Error - {e}")
 
-# HTML生成 (f-stringを使用し、変数を展開。CSS/JSの{}は{{}}でエスケープ)
+# 新しいデータがある場合のみ処理
+if new_data_frames:
+    new_df = pd.concat(new_data_frames, ignore_index=True)
+    if '順番' in new_df.columns:
+        new_df['順番'] = pd.to_numeric(new_df['順番'], errors='coerce')
+
+    # --- 3. 過去データと結合 & 重複排除 ---
+    # 結合
+    combined_df = pd.concat([history_df, new_df], ignore_index=True)
+    
+    # 重複削除のルール:
+    # 「取得日」「部屋主」「曲名」「歌った人」「歌手名」「作品名」がすべて同じなら、重複とみなして1つにする
+    # (これにより、1日に何度もスクリプトが動いても、同じ曲は1日1回しか記録されません)
+    # ※「順番」や「コメント」が変わった場合も別登録したい場合は、subsetに加えてください
+    subset_cols = ['取得日', '部屋主', '曲名（ファイル名）', '歌った人', '作品名', '歌手名']
+    
+    # 必要な列が存在するか確認してから重複削除
+    existing_cols = [c for c in subset_cols if c in combined_df.columns]
+    final_df = combined_df.drop_duplicates(subset=existing_cols, keep='last') # last: 新しい情報を優先
+
+    # ソート: 取得日(降順) -> 部屋主 -> 順番
+    sort_cols = ['取得日', '順番']
+    final_df = final_df.sort_values(by=sort_cols, ascending=[False, False])
+    
+    # 列の並び順整理
+    cols = list(final_df.columns)
+    if '部屋主' in cols:
+        cols.insert(0, cols.pop(cols.index('部屋主')))
+        final_df = final_df[cols]
+
+    # --- 4. 履歴ファイル(CSV)を更新保存 ---
+    final_df.to_csv(history_file, index=False, encoding='utf-8-sig')
+    print("履歴ファイルを更新しました。")
+
+else:
+    # 新しいデータが取れなかった場合は、既存の履歴を表示に使用
+    final_df = history_df
+    print("新しいデータが取得できませんでした。過去のデータを使用します。")
+
+
+# --- HTML生成 ---
+# (変数を埋め込むため f-string を使用。CSS/JSの {} は {{}} でエスケープ)
 html_content = f"""
 <!DOCTYPE html>
 <html lang="ja">
@@ -214,16 +270,16 @@ html_content = f"""
         th:nth-child(1), td:nth-child(1) {{ min-width: 90px; }} /* 部屋主 */
         th:nth-child(2), td:nth-child(2) {{ min-width: 50px; text-align: center; }} /* 順番 */
         
-        /* 4列目(作品名)と5列目(歌手名)の幅を同じ比率・同じ最小幅にする */
+        /* 4列目(作品名)と5列目(歌手名)の幅を統一 */
         th:nth-child(4), td:nth-child(4),
         th:nth-child(5), td:nth-child(5) {{
-            min-width: 170px; /* 最小幅を統一 */
-            width: 18%;       /* 画面幅に余裕がある場合、同じ比率で広がるように指定 */
+            min-width: 170px;
+            width: 18%;
         }}
 
         /* 7列目(コメント)を広くする */
         th:nth-child(7), td:nth-child(7) {{
-            min-width: 250px; /* 他の列より大きく確保 */
+            min-width: 250px;
         }}
         
         td {{ word-break: break-all; }}
@@ -268,19 +324,7 @@ html_content = f"""
         </div>
         """
 
-if all_data_frames:
-    final_df = pd.concat(all_data_frames, ignore_index=True)
-    if '順番' in final_df.columns:
-        final_df['順番'] = pd.to_numeric(final_df['順番'], errors='coerce')
-    
-    # ソート: 取得日(降順) -> 順番(降順)
-    final_df = final_df.sort_values(by=['取得日', '順番'], ascending=[False, False])
-
-    cols = list(final_df.columns)
-    if '部屋主' in cols:
-        cols.insert(0, cols.pop(cols.index('部屋主')))
-        final_df = final_df[cols]
-
+if not final_df.empty:
     # 件数表示
     html_content += f'<div class="count-display">全 {{len(final_df)}} 件</div>'
     html_content += '</div>' # header-area 終了
@@ -300,9 +344,8 @@ if all_data_frames:
             html_content += f'<td>{{val}}</td>'
         html_content += '</tr>'
     html_content += '</tbody></table></div>'
-
 else:
-    html_content += '<p style="padding:20px;">データの取得に失敗しました。</p></div>'
+    html_content += '<p style="padding:20px;">データがありません。</p></div>'
 
 # JavaScript
 html_content += """
@@ -355,4 +398,36 @@ html_content += """
 
     function sortTable(n) {
         const table = document.getElementById("setlistTable");
-        const tbody = table
+        const tbody = table.querySelector('tbody');
+        const rows = Array.from(tbody.rows);
+        const th = table.querySelectorAll('th')[n];
+        
+        let dir = th.getAttribute('data-dir') === 'asc' ? 'desc' : 'asc';
+        
+        table.querySelectorAll('th').forEach(h => h.setAttribute('data-dir', ''));
+        th.setAttribute('data-dir', dir);
+
+        rows.sort((a, b) => {
+            const cellA = a.cells[n].innerText.trim();
+            const cellB = b.cells[n].innerText.trim();
+
+            if (!isNaN(cellA) && !isNaN(cellB) && cellA !== '' && cellB !== '') {
+                const numA = parseFloat(cellA);
+                const numB = parseFloat(cellB);
+                return dir === 'asc' ? numA - numB : numB - numA;
+            }
+
+            return dir === 'asc' 
+                ? cellA.localeCompare(cellB, 'ja') 
+                : cellB.localeCompare(cellA, 'ja');
+        });
+
+        rows.forEach(row => tbody.appendChild(row));
+    }
+</script>
+</body>
+</html>
+"""
+
+with open("index.html", "w", encoding="utf-8") as f:
+    f.write(html_content)
