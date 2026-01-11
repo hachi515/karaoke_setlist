@@ -77,41 +77,84 @@ html_content = """
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Karaoke setlist all</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        body { font-family: "Helvetica Neue", Arial, sans-serif; padding: 20px; color: #333; }
-        h1 { margin-bottom: 10px; }
+        /* ベーススタイル */
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Hiragino Sans", "Hiragino Kaku Gothic ProN", Arial, sans-serif;
+            padding: 10px; 
+            color: #333; 
+            margin: 0;
+            background-color: #fcfcfc;
+        }
+        h1 { margin: 5px 0 10px 0; font-size: 1.4rem; text-align: center; }
         
-        .search-container { margin-bottom: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .update-time { 
+            color: #666; font-size: 0.8em; text-align: center; margin-bottom: 10px; 
+        }
+
+        /* 検索ボックスエリア */
+        .search-container { 
+            background: #fff; 
+            padding: 10px; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05); 
+            margin-bottom: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+        }
         .search-box {
-            width: 100%; max-width: 400px; padding: 10px; font-size: 16px;
-            border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;
+            flex: 1 1 100%; /* スマホでは幅いっぱい */
+            max-width: 600px;
+            padding: 10px; 
+            font-size: 16px; /* iOSでのズーム防止 */
+            border: 1px solid #ccc; 
+            border-radius: 4px; 
+            box-sizing: border-box;
+        }
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            width: 100%;
+            max-width: 600px;
         }
         .btn {
-            padding: 10px 20px; font-size: 16px; cursor: pointer;
+            flex: 1; /* ボタンを均等配置 */
+            padding: 10px; 
+            font-size: 14px; 
+            cursor: pointer;
             background-color: #007bff; color: white; border: none; border-radius: 4px;
-            margin-left: 5px;
+            text-align: center;
+            font-weight: bold;
         }
         .btn:hover { background-color: #0056b3; }
         .btn-reset { background-color: #6c757d; }
         .btn-reset:hover { background-color: #545b62; }
 
-        /* 件数表示用のスタイル */
+        /* 件数表示 */
         .count-display {
             text-align: right;
+            font-size: 0.9em;
             font-weight: bold;
-            margin-bottom: 5px;
             color: #555;
+            margin-right: 5px;
+            margin-bottom: 5px;
         }
 
         /* スクロールコンテナ */
         .table-wrapper {
-            max-height: 80vh;
-            overflow-y: auto;
+            /* 画面の高さからヘッダーなどの分(約220px)を引いた高さを確保 */
+            height: calc(100dvh - 220px); 
+            overflow: auto; /* 縦横スクロール */
             border: 1px solid #ddd;
+            background-color: #fff;
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            position: relative; /* Stickyの基準点 */
+            -webkit-overflow-scrolling: touch; /* iOSでの慣性スクロール */
         }
 
         /* テーブル設定 */
@@ -119,37 +162,53 @@ html_content = """
             border-collapse: separate; 
             border-spacing: 0; 
             width: 100%; 
-            font-size: 14px; 
+            font-size: 13px; 
+            min-width: 900px; /* ★スマホでもこれ以下の幅に潰れないようにする（重要） */
         }
         
         th, td { 
-            padding: 10px; 
+            padding: 8px; 
             text-align: left; 
-            border-right: 1px solid #ddd;
-            border-bottom: 1px solid #ddd;
+            border-right: 1px solid #eee;
+            border-bottom: 1px solid #eee;
+            vertical-align: middle;
+            line-height: 1.4;
         }
+
+        /* 特定の列の幅指定（見やすくするため） */
+        th:nth-child(1), td:nth-child(1) { width: 80px; min-width: 80px; } /* 部屋主 */
+        th:nth-child(2), td:nth-child(2) { width: 40px; min-width: 40px; text-align: center; } /* 順番 */
+        th:nth-child(3), td:nth-child(3) { min-width: 200px; } /* 曲名 */
         
+        /* ヘッダー固定設定 */
         th { 
-            background-color: #f2f2f2; 
+            background-color: #f8f9fa; /* 背景色をしっかりつける */
+            color: #333;
             position: sticky; 
             top: 0; 
             z-index: 10; 
             cursor: pointer;
-            border-top: none;
-            border-bottom: 1px solid #ccc;
-            box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.1);
-            user-select: none;
+            border-bottom: 2px solid #ddd; /* ヘッダー下線を太く */
+            white-space: nowrap; /* ヘッダー文字は折り返さない */
+        }
+
+        /* セル内の長い文字の処理 */
+        td {
+            word-break: break-all; /* 長い英単語も折り返す */
         }
 
         th:last-child, td:last-child { border-right: none; }
-        tr:last-child td { border-bottom: none; }
-        tr:nth-child(even) { background-color: #fff; }
-
-        .update-time { color: #666; font-size: 0.9em; margin-bottom: 10px; }
+        tr:nth-child(even) { background-color: #fcfcfc; }
         
+        /* スマホ向け微調整 */
         @media (max-width: 600px) {
-            .btn { width: 100%; margin: 5px 0 0 0; }
-            .table-wrapper { max-height: 70vh; }
+            body { padding: 5px; }
+            h1 { font-size: 1.2rem; }
+            .btn { font-size: 13px; padding: 8px; }
+            th, td { padding: 6px; font-size: 12px; }
+            .table-wrapper {
+                height: calc(100dvh - 200px); /* スマホ用に高さを微調整 */
+            }
         }
     </style>
 </head>
@@ -161,21 +220,21 @@ html_content += f'<div class="update-time">最終集計: {current_datetime_str}<
 
 html_content += f'''
     <div class="search-container">
-        <input type="text" id="searchInput" class="search-box" placeholder="キーワード・日付で検索 (例: 2026/01/11 King)...">
-        <button onclick="filterTable()" class="btn"><i class="fas fa-search"></i> 検索</button>
-        <button onclick="resetFilter()" class="btn btn-reset">リセット</button>
+        <input type="text" id="searchInput" class="search-box" placeholder="キーワード・日付で検索...">
+        <div class="btn-group">
+            <button onclick="filterTable()" class="btn"><i class="fas fa-search"></i> 検索</button>
+            <button onclick="resetFilter()" class="btn btn-reset">リセット</button>
+        </div>
     </div>
 '''
 
 if all_data_frames:
     final_df = pd.concat(all_data_frames, ignore_index=True)
 
-    # --- ソート設定の変更 ---
-    # 順番を数値に変換
     if '順番' in final_df.columns:
         final_df['順番'] = pd.to_numeric(final_df['順番'], errors='coerce')
     
-    # 並び替え: 1.取得日(降順/新しい順) -> 2.順番(降順/大きい順)
+    # ソート: 取得日(降順) -> 順番(降順)
     final_df = final_df.sort_values(by=['取得日', '順番'], ascending=[False, False])
 
     cols = list(final_df.columns)
@@ -183,7 +242,6 @@ if all_data_frames:
         cols.insert(0, cols.pop(cols.index('部屋主')))
         final_df = final_df[cols]
 
-    # --- 件数表示の追加 ---
     html_content += f'<div class="count-display">全 {len(final_df)} 件</div>'
 
     html_content += '<div class="table-wrapper"><table id="setlistTable">'
@@ -204,7 +262,7 @@ if all_data_frames:
 else:
     html_content += "<p>データの取得に失敗しました。</p>"
 
-# JavaScript (高速ソート版)
+# JavaScript
 html_content += """
 <script>
     function filterTable() {
@@ -240,9 +298,8 @@ html_content += """
             }
         }
         
-        // 検索結果件数の更新（オプション：検索時に件数を書き換える場合）
-        // const countDisplay = document.querySelector('.count-display');
-        // if(countDisplay) countDisplay.innerText = 'ヒット: ' + visibleCount + ' 件';
+        const countDisplay = document.querySelector('.count-display');
+        if(countDisplay) countDisplay.innerText = '表示: ' + visibleCount + ' 件 / 全 ' + (trs.length - 1) + ' 件';
     }
 
     document.getElementById("searchInput").addEventListener("keyup", function(event) {
