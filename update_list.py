@@ -126,14 +126,12 @@ else:
     print("新しいデータが取得できませんでした。過去のデータを使用します。")
 
 
-# --- 5. HTML表示用データの準備（特定の列を除外） ---
-# ★ここに「CSVには残すが、HTMLには表示したくない列名」を指定してください
-# 例: columns_to_hide = ['取得日', '順番']
-# 隠したい列がない場合は [] のままでOKです
-columns_to_hide = [] 
+# --- 5. HTML表示用データの準備 ---
+# ★ここで「コメント」列を除外設定しました★
+columns_to_hide = ['コメント'] 
 
 if not final_df.empty:
-    # 指定された列を削除したHTML用のデータを作成（元のfinal_dfは変わりません）
+    # 指定された列を削除したHTML用のデータを作成（CSV用のfinal_dfはそのまま）
     html_df = final_df.drop(columns=columns_to_hide, errors='ignore')
 else:
     html_df = pd.DataFrame()
@@ -255,8 +253,8 @@ html_content = f"""
             border-collapse: separate; 
             border-spacing: 0; 
             width: 100%; 
-            table-layout: fixed; /* 列幅を固定して制御しやすくする */
-            min-width: 900px; /* 全体の最小幅 */
+            table-layout: fixed; 
+            min-width: 900px; 
         }}
         
         th, td {{ 
@@ -265,8 +263,8 @@ html_content = f"""
             border-bottom: 1px solid #eee;
             vertical-align: middle;
             line-height: 1.3;
-            white-space: normal; /* 折り返し許可 */
-            word-break: break-all; /* 長い単語折り返し */
+            white-space: normal; 
+            word-break: break-all; 
             overflow-wrap: break-word;
         }}
 
@@ -284,33 +282,28 @@ html_content = f"""
         th:hover {{ background-color: #e9ecef; }}
 
         /* --- 列幅設定 --- */
-        /* ※注意: columns_to_hide で列を削除した場合、nth-childの番号がずれるため
-           幅の指定が意図しない列に適用される可能性があります。
-           列を隠す場合は、ここのnth-child番号も調整が必要になる場合があります。 */
+        /* 列の削除に伴い、nth-childの番号が変わるので幅指定も調整しました */
 
         /* 1. 部屋主 */
-        th:nth-child(1), td:nth-child(1) {{ width: 10%; min-width: 90px; }}
+        th:nth-child(1), td:nth-child(1) {{ width: 12%; min-width: 90px; }}
         
         /* 2. 順番 */
-        th:nth-child(2), td:nth-child(2) {{ width: 5%; min-width: 40px; text-align: center; }}
+        th:nth-child(2), td:nth-child(2) {{ width: 6%; min-width: 40px; text-align: center; }}
         
         /* 3. 曲名 */
-        th:nth-child(3), td:nth-child(3) {{ width: 20%; min-width: 180px; }}
+        th:nth-child(3), td:nth-child(3) {{ width: 25%; min-width: 200px; }}
 
         /* 4. 作品名 */
-        th:nth-child(4), td:nth-child(4) {{ width: 15%; min-width: 120px; }}
+        th:nth-child(4), td:nth-child(4) {{ width: 18%; min-width: 150px; }}
 
         /* 5. 歌手名 */
-        th:nth-child(5), td:nth-child(5) {{ width: 15%; min-width: 120px; }}
+        th:nth-child(5), td:nth-child(5) {{ width: 18%; min-width: 150px; }}
 
         /* 6. 歌った人 */
-        th:nth-child(6), td:nth-child(6) {{ width: 10%; min-width: 90px; }}
+        th:nth-child(6), td:nth-child(6) {{ width: 12%; min-width: 100px; }}
 
-        /* 7. コメント */
-        th:nth-child(7), td:nth-child(7) {{ width: 15%; min-width: 140px; }}
-
-        /* 8. 取得日 */
-        th:nth-child(8), td:nth-child(8) {{ width: 10%; min-width: 90px; }}
+        /* 7. 取得日 (コメントが消えたのでこれが7番目になります) */
+        th:nth-child(7), td:nth-child(7) {{ width: 10%; min-width: 90px; }}
 
         /* 行装飾 */
         tr:nth-child(even) {{ background-color: #fafafa; }}
@@ -353,7 +346,6 @@ if not html_df.empty:
     
     html_content += '<thead><tr>'
     for col in html_df.columns:
-        # 変数 {col} を表示（一重の波括弧）
         html_content += f'<th onclick="sortTable({list(html_df.columns).index(col)})">{col} <i class="fas fa-sort"></i></th>'
     html_content += '</tr></thead>'
     
@@ -361,7 +353,6 @@ if not html_df.empty:
     for _, row in html_df.iterrows():
         html_content += '<tr>'
         for val in row:
-            # 変数 {val} を表示（一重の波括弧）
             html_content += f'<td>{val}</td>'
         html_content += '</tr>'
     html_content += '</tbody></table></div>'
