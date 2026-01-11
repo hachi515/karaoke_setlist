@@ -52,7 +52,7 @@ history_file = "history.csv"
 if os.path.exists(history_file):
     try:
         history_df = pd.read_csv(history_file, encoding='utf-8-sig')
-        # ★ここでnanを消去（重要）
+        # nanを空欄に変換
         history_df = history_df.fillna("")
         if '順番' in history_df.columns:
             history_df['順番'] = pd.to_numeric(history_df['順番'], errors='coerce')
@@ -102,7 +102,7 @@ if new_data_frames:
     
     final_df = combined_df.drop_duplicates(subset=existing_cols, keep='last')
     
-    # 最終的なnan消去（念のため）
+    # 最終的なnan消去
     final_df = final_df.fillna("")
 
     # ソート
@@ -129,6 +129,8 @@ else:
 
 # --- HTML生成 ---
 # デザイン調整: 自動幅調整、フォント改善、件数右寄せ
+# CSS部分の {} は {{ }} にエスケープし、変数 {val} などは一重の { } で記述します。
+
 html_content = f"""
 <!DOCTYPE html>
 <html lang="ja">
@@ -147,7 +149,7 @@ html_content = f"""
             font-family: "Helvetica Neue", "Arial", "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Meiryo", sans-serif;
             background-color: #f8f9fa;
             color: #333;
-            font-size: 14px; /* 少し大きく */
+            font-size: 14px; 
             display: flex;
             flex-direction: column;
         }}
@@ -242,7 +244,7 @@ html_content = f"""
             padding-bottom: 20px;
         }}
 
-        /* テーブル設定 (自動幅調整のためtable-layout: autoを使用) */
+        /* テーブル設定 */
         table {{ 
             border-collapse: separate; 
             border-spacing: 0; 
@@ -275,12 +277,12 @@ html_content = f"""
         }}
         th:hover {{ background-color: #e9ecef; }}
 
-        /* --- 列幅の目安調整 (固定ではなく最小幅を指定) --- */
+        /* --- 列幅の目安調整 --- */
         
         /* 部屋主 */
         th:nth-child(1), td:nth-child(1) {{ 
             min-width: 100px; 
-            white-space: nowrap; /* 部屋主名は折り返さない */
+            white-space: nowrap; 
         }} 
         
         /* 順番 */
@@ -289,21 +291,21 @@ html_content = f"""
             text-align: center; 
         }} 
         
-        /* 曲名・作品名・歌手名 (均等な比重を持たせる) */
+        /* 曲名・作品名・歌手名 */
         th:nth-child(3), td:nth-child(3),
         th:nth-child(4), td:nth-child(4),
         th:nth-child(5), td:nth-child(5) {{
-            min-width: 150px; /* 最低限の幅 */
+            min-width: 150px; 
         }}
 
-        /* コメント (広く取る) */
+        /* コメント */
         th:nth-child(7), td:nth-child(7) {{
             min-width: 200px;
         }}
         
         /* 行の装飾 */
         tr:nth-child(even) {{ background-color: #fafafa; }}
-        tr:hover {{ background-color: #f1f8ff; }} /* ホバー時の色 */
+        tr:hover {{ background-color: #f1f8ff; }}
 
         /* --- スマホ向けレスポンシブ調整 --- */
         @media (max-width: 600px) {{
@@ -338,26 +340,30 @@ html_content = f"""
 """
 
 if not final_df.empty:
+    initial_count = len(final_df)
+    
     # スクロールエリア
     html_content += '<div class="table-wrapper"><table id="setlistTable">'
     
+    # ここから下は変数を埋め込むため、一重の { } を使います
     html_content += '<thead><tr>'
     for col in final_df.columns:
-        html_content += f'<th onclick="sortTable({{list(final_df.columns).index(col)}})">{{col}} <i class="fas fa-sort"></i></th>'
+        # {col} が正しい記述です
+        html_content += f'<th onclick="sortTable({list(final_df.columns).index(col)})">{col} <i class="fas fa-sort"></i></th>'
     html_content += '</tr></thead>'
     
     html_content += '<tbody>'
     for _, row in final_df.iterrows():
         html_content += '<tr>'
         for val in row:
-            html_content += f'<td>{{val}}</td>'
+            # {val} が正しい記述です
+            html_content += f'<td>{val}</td>'
         html_content += '</tr>'
     html_content += '</tbody></table></div>'
     
-    initial_count = len(final_df)
 else:
-    html_content += '<div style="padding:20px; text-align:center; color:#666;">データがありません。</div>'
     initial_count = 0
+    html_content += '<div style="padding:20px; text-align:center; color:#666;">データがありません。</div>'
 
 # JavaScript
 html_content += f"""
