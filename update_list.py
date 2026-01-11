@@ -71,8 +71,8 @@ for port in target_ports:
     except Exception as e:
         print(f"Port {port}: Error - {e}")
 
-# HTML生成 (修正箇所: f文字列に変更)
-html_content = f"""
+# HTML生成
+html_content = """
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -81,110 +81,123 @@ html_content = f"""
     <title>Karaoke setlist all</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        /* 全体レイアウト */
-        html, body {{
+        /* 全体レイアウト: 画面の高さ100%を使い切る設定 */
+        html, body {
             height: 100%;
             margin: 0;
             padding: 0;
-            overflow: hidden;
+            overflow: hidden; /* body自体のスクロールを禁止 */
             font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Hiragino Sans", "Hiragino Kaku Gothic ProN", Arial, sans-serif;
             background-color: #fcfcfc;
             color: #333;
             display: flex;
-            flex-direction: column;
-        }}
+            flex-direction: column; /* 縦並びのフレックスボックス */
+        }
 
-        /* ヘッダーエリア */
-        .header-area {{
-            flex: 0 0 auto;
-            padding: 10px 15px;
+        /* ヘッダーエリア（タイトル・検索） */
+        .header-area {
+            flex: 0 0 auto; /* 高さは中身に合わせて固定 */
+            padding: 15px 20px 10px 20px;
             background-color: #fff;
             border-bottom: 1px solid #ddd;
             box-shadow: 0 2px 4px rgba(0,0,0,0.03);
             z-index: 20;
-        }}
+        }
 
-        /* タイトルと日時を横並びにするなどコンパクト化 */
-        .title-row {{
-            display: flex;
-            justify-content: space-between;
-            align-items: baseline;
-            margin-bottom: 8px;
-        }}
+        h1 { 
+            margin: 0 0 5px 0; 
+            font-size: 1.5rem; 
+            text-align: left; /* 左寄せ */
+        }
         
-        h1 {{ margin: 0; font-size: 1.2rem; }}
-        .update-time {{ color: #888; font-size: 0.8em; }}
+        .update-time { 
+            color: #666; 
+            font-size: 0.85em; 
+            text-align: left; /* 左寄せ */
+            margin-bottom: 15px; 
+        }
 
-        /* 検索ボックスエリア */
-        .search-container {{
+        /* 検索ボックスエリア: シンプル・左寄せ・コンパクト */
+        .search-container {
             display: flex;
             flex-wrap: wrap;
-            gap: 8px;
+            gap: 10px;
             align-items: center;
-        }}
+            justify-content: flex-start; /* 左寄せ */
+        }
 
-        .search-box {{
-            width: 250px;
-            padding: 6px 10px;
+        .search-box {
+            width: 300px; /* PCでは適度な幅に固定 */
+            padding: 8px 12px;
             font-size: 14px;
             border: 1px solid #ccc;
             border-radius: 4px;
+            box-sizing: border-box;
             background-color: #f9f9f9;
-        }}
-        .search-box:focus {{ background-color: #fff; outline: 2px solid #007bff; }}
+        }
+        .search-box:focus {
+            background-color: #fff;
+            outline: 2px solid #007bff;
+        }
 
-        .btn-group {{ display: flex; gap: 5px; }}
-        .btn {{
-            padding: 6px 12px;
-            font-size: 13px;
+        .btn-group {
+            display: flex;
+            gap: 5px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            font-size: 14px;
             cursor: pointer;
             background-color: #007bff;
             color: white;
             border: none;
             border-radius: 4px;
             white-space: nowrap;
-        }}
-        .btn:hover {{ background-color: #0056b3; }}
-        .btn-reset {{ background-color: #6c757d; }}
-        .btn-reset:hover {{ background-color: #545b62; }}
+            transition: background-color 0.2s;
+        }
+        .btn:hover { background-color: #0056b3; }
+        .btn-reset { background-color: #6c757d; }
+        .btn-reset:hover { background-color: #545b62; }
 
-        /* 件数表示 (検索ボックスの右側に配置) */
-        .count-display {{
+        /* 件数表示 */
+        .count-display {
+            text-align: left; /* 左寄せ */
             font-size: 0.85em;
-            color: #555;
+            color: #666;
+            margin-top: 5px;
             font-weight: bold;
-            margin-left: auto; /* 右端に寄せる */
-        }}
+        }
 
-        /* テーブルラッパー */
-        .table-wrapper {{
-            flex: 1 1 auto;
-            overflow: auto;
+        /* テーブルラッパー: 残りの高さを全て使い、この中だけでスクロールさせる */
+        .table-wrapper {
+            flex: 1 1 auto; /* 残りのスペースを埋める */
+            overflow: auto; /* 縦横スクロール */
             position: relative;
             background-color: #fff;
-            -webkit-overflow-scrolling: touch;
-        }}
+            -webkit-overflow-scrolling: touch; /* iOS慣性スクロール */
+        }
 
         /* テーブル設定 */
-        table {{ 
+        table { 
             border-collapse: separate; 
             border-spacing: 0; 
             width: 100%; 
             font-size: 13px; 
-            min-width: 800px;
-        }}
+            min-width: 800px; /* スマホでも横につぶれないよう最小幅を確保 */
+        }
         
-        th, td {{ 
-            padding: 8px 10px;
+        th, td { 
+            padding: 10px 12px;
             text-align: left; 
             border-right: 1px solid #eee;
             border-bottom: 1px solid #eee;
             vertical-align: middle;
-            line-height: 1.4;
-        }}
+            line-height: 1.5;
+        }
 
         /* ヘッダー固定設定 */
-        th {{ 
+        th { 
             background-color: #f1f3f5;
             color: #444;
             font-weight: bold;
@@ -194,45 +207,48 @@ html_content = f"""
             cursor: pointer;
             border-bottom: 2px solid #ddd;
             white-space: nowrap;
-        }}
-        th:hover {{ background-color: #e9ecef; }}
+        }
+        th:hover { background-color: #e9ecef; }
 
         /* 列幅の調整 */
-        th:nth-child(1), td:nth-child(1) {{ min-width: 90px; }} /* 部屋主 */
-        th:nth-child(2), td:nth-child(2) {{ min-width: 50px; text-align: center; }} /* 順番 */
+        th:nth-child(1), td:nth-child(1) { min-width: 90px; } /* 部屋主 */
+        th:nth-child(2), td:nth-child(2) { min-width: 50px; text-align: center; } /* 順番 */
         
-        /* 作品名(4列目)と歌手名(5列目)の幅を合わせる */
-        th:nth-child(4), td:nth-child(4),
-        th:nth-child(5), td:nth-child(5) {{
-            min-width: 180px;
-        }}
+        td { word-break: break-all; } /* 長い文字を折り返す */
+        th:last-child, td:last-child { border-right: none; }
+        tr:nth-child(even) { background-color: #fafafa; }
         
-        td {{ word-break: break-all; }}
-        th:last-child, td:last-child {{ border-right: none; }}
-        tr:nth-child(even) {{ background-color: #fafafa; }}
-        
-        /* スマホ向けレスポンシブ調整 */
-        @media (max-width: 600px) {{
-            .header-area {{ padding: 8px 10px; }}
-            .title-row {{ margin-bottom: 5px; }}
-            h1 {{ font-size: 1.1rem; }}
-            .search-container {{ flex-wrap: wrap; }}
-            .search-box {{ width: 100%; font-size: 16px; order: 2; }} /* スマホでは検索箱を2段目へ */
-            .btn-group {{ order: 3; flex: 1; }}
-            .btn {{ flex: 1; text-align: center; padding: 8px; }}
-            .count-display {{ order: 1; width: 100%; text-align: right; margin-bottom: 5px; }} /* 件数をタイトルの横か下に */
+        /* --- スマホ向けレスポンシブ調整 --- */
+        @media (max-width: 600px) {
+            /* ヘッダー周りの余白を詰める */
+            .header-area { padding: 10px 12px; }
+            h1 { font-size: 1.3rem; }
+            .update-time { margin-bottom: 10px; }
             
-            th, td {{ padding: 8px; font-size: 12px; }}
-        }}
+            /* 検索ボックスをスマホ幅いっぱいにする */
+            .search-container { 
+                flex-direction: column; /* 縦並び */
+                align-items: stretch; /* 幅いっぱい */
+                gap: 8px;
+            }
+            .search-box { width: 100%; font-size: 16px; /* iOS拡大防止 */ }
+            
+            .btn-group { 
+                display: flex; 
+                gap: 8px; 
+            }
+            .btn { flex: 1; text-align: center; padding: 10px; } /* ボタン押しやすく */
+            
+            /* テーブル文字サイズ微調整 */
+            th, td { padding: 8px; font-size: 12px; }
+        }
     </style>
 </head>
 <body>
 
     <div class="header-area">
-        <div class="title-row">
-            <h1>Karaoke setlist all</h1>
-            <div class="update-time">最終集計: {current_datetime_str}</div>
-        </div>
+        <h1>Karaoke setlist all</h1>
+        <div class="update-time">最終集計: {current_datetime_str}</div>
         
         <div class="search-container">
             <input type="text" id="searchInput" class="search-box" placeholder="キーワード・日付 (例: 2026/01/11)...">
@@ -240,10 +256,8 @@ html_content = f"""
                 <button onclick="filterTable()" class="btn"><i class="fas fa-search"></i> 検索</button>
                 <button onclick="resetFilter()" class="btn btn-reset">リセット</button>
             </div>
-            <div class="count-display" id="countDisplay">読み込み中...</div>
         </div>
-    </div>
-"""
+        """
 
 if all_data_frames:
     final_df = pd.concat(all_data_frames, ignore_index=True)
@@ -257,6 +271,10 @@ if all_data_frames:
     if '部屋主' in cols:
         cols.insert(0, cols.pop(cols.index('部屋主')))
         final_df = final_df[cols]
+
+    # 件数表示
+    html_content += f'<div class="count-display">全 {len(final_df)} 件</div>'
+    html_content += '</div>' # header-area 終了
 
     # スクロールエリア
     html_content += '<div class="table-wrapper"><table id="setlistTable">'
@@ -273,21 +291,14 @@ if all_data_frames:
             html_content += f'<td>{val}</td>'
         html_content += '</tr>'
     html_content += '</tbody></table></div>'
-    
-    # 初期件数をJSに渡すための隠しデータ
-    initial_count = len(final_df)
 
 else:
-    html_content += '<p style="padding:20px;">データの取得に失敗しました。</p>'
-    initial_count = 0
+    html_content += '<p style="padding:20px;">データの取得に失敗しました。</p></div>'
 
 # JavaScript
-html_content += f"""
+html_content += """
 <script>
-    // 初期件数表示
-    document.getElementById('countDisplay').innerText = '全 {initial_count} 件';
-
-    function filterTable() {{
+    function filterTable() {
         const input = document.getElementById("searchInput");
         const filter = input.value.toUpperCase();
         const keywords = filter.replace(/　/g, " ").split(" ").filter(k => k.length > 0);
@@ -296,43 +307,44 @@ html_content += f"""
         const trs = table.getElementsByTagName("tr");
         let visibleCount = 0;
 
-        for (let i = 1; i < trs.length; i++) {{
+        for (let i = 1; i < trs.length; i++) {
             const tr = trs[i];
             let rowText = "";
             const tds = tr.getElementsByTagName("td");
-            for (let j = 0; j < tds.length; j++) {{
+            for (let j = 0; j < tds.length; j++) {
                 rowText += (tds[j].textContent || tds[j].innerText) + " ";
-            }}
+            }
             rowText = rowText.toUpperCase();
             
             let isMatch = true;
-            for (let k = 0; k < keywords.length; k++) {{
-                if (rowText.indexOf(keywords[k]) === -1) {{
+            for (let k = 0; k < keywords.length; k++) {
+                if (rowText.indexOf(keywords[k]) === -1) {
                     isMatch = false;
                     break;
-                }}
-            }}
-            if (isMatch || keywords.length === 0) {{
+                }
+            }
+            if (isMatch || keywords.length === 0) {
                 tr.style.display = "";
                 visibleCount++;
-            }} else {{
+            } else {
                 tr.style.display = "none";
-            }}
-        }}
+            }
+        }
         
-        document.getElementById('countDisplay').innerText = '表示: ' + visibleCount + ' 件 / 全 ' + (trs.length - 1) + ' 件';
-    }}
+        const countDisplay = document.querySelector('.count-display');
+        if(countDisplay) countDisplay.innerText = '表示: ' + visibleCount + ' 件 / 全 ' + (trs.length - 1) + ' 件';
+    }
 
-    document.getElementById("searchInput").addEventListener("keyup", function(event) {{
+    document.getElementById("searchInput").addEventListener("keyup", function(event) {
         if (event.key === "Enter") filterTable();
-    }});
+    });
 
-    function resetFilter() {{
+    function resetFilter() {
         document.getElementById("searchInput").value = "";
         filterTable();
-    }}
+    }
 
-    function sortTable(n) {{
+    function sortTable(n) {
         const table = document.getElementById("setlistTable");
         const tbody = table.querySelector('tbody');
         const rows = Array.from(tbody.rows);
@@ -343,23 +355,23 @@ html_content += f"""
         table.querySelectorAll('th').forEach(h => h.setAttribute('data-dir', ''));
         th.setAttribute('data-dir', dir);
 
-        rows.sort((a, b) => {{
+        rows.sort((a, b) => {
             const cellA = a.cells[n].innerText.trim();
             const cellB = b.cells[n].innerText.trim();
 
-            if (!isNaN(cellA) && !isNaN(cellB) && cellA !== '' && cellB !== '') {{
+            if (!isNaN(cellA) && !isNaN(cellB) && cellA !== '' && cellB !== '') {
                 const numA = parseFloat(cellA);
                 const numB = parseFloat(cellB);
                 return dir === 'asc' ? numA - numB : numB - numA;
-            }}
+            }
 
             return dir === 'asc' 
                 ? cellA.localeCompare(cellB, 'ja') 
                 : cellB.localeCompare(cellA, 'ja');
-        }});
+        });
 
         rows.forEach(row => tbody.appendChild(row));
-    }}
+    }
 </script>
 </body>
 </html>
