@@ -126,7 +126,7 @@ else:
 
 
 # --- HTML生成 ---
-# デザイン調整: 列幅の均等化、自動調整、フォント改善
+# CSSの {} は {{ }} にエスケープし、変数 {val} は一重の { } で記述します。
 
 html_content = f"""
 <!DOCTYPE html>
@@ -137,7 +137,7 @@ html_content = f"""
     <title>Karaoke setlist all</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        /* ベースフォント設定 */
+        /* ベース設定 */
         html, body {{
             height: 100%;
             margin: 0;
@@ -151,7 +151,7 @@ html_content = f"""
             flex-direction: column;
         }}
 
-        /* ヘッダーエリア */
+        /* ヘッダー */
         .header-area {{
             flex: 0 0 auto;
             padding: 12px 20px;
@@ -176,12 +176,9 @@ html_content = f"""
             color: #2c3e50;
         }}
         
-        .update-time {{ 
-            color: #7f8c8d; 
-            font-size: 0.9em; 
-        }}
+        .update-time {{ color: #7f8c8d; font-size: 0.9em; }}
 
-        /* コントロールエリア */
+        /* コントロール */
         .controls-row {{
             display: flex;
             flex-wrap: wrap;
@@ -222,7 +219,6 @@ html_content = f"""
         .btn:hover {{ opacity: 0.9; }}
         .btn-reset {{ background-color: #6c757d; }}
 
-        /* 件数表示 (右寄せ) */
         .count-display {{
             margin-left: auto;
             font-weight: bold;
@@ -245,21 +241,22 @@ html_content = f"""
             border-collapse: separate; 
             border-spacing: 0; 
             width: 100%; 
-            table-layout: auto; /* 自動調整を有効に */
-            min-width: 600px; 
+            table-layout: fixed; /* 列幅を固定して制御しやすくする */
+            min-width: 900px; /* 全体の最小幅 */
         }}
         
         th, td {{ 
-            padding: 12px 15px;
+            padding: 12px 10px;
             text-align: left; 
             border-bottom: 1px solid #eee;
             vertical-align: middle;
-            line-height: 1.6;
-            white-space: normal; /* 折り返しを許可 */
-            word-break: break-all; /* 長い単語も折り返す */
+            line-height: 1.5;
+            white-space: normal; /* 折り返し許可 */
+            word-break: break-all; /* 長い単語折り返し */
+            overflow-wrap: break-word;
         }}
 
-        /* ヘッダー固定設定 */
+        /* ヘッダー固定 */
         th {{ 
             background-color: #f1f3f5;
             color: #444;
@@ -269,56 +266,48 @@ html_content = f"""
             z-index: 10; 
             cursor: pointer;
             border-bottom: 2px solid #ddd;
-            white-space: nowrap; 
         }}
         th:hover {{ background-color: #e9ecef; }}
 
-        /* --- 列幅の調整 --- */
-        
-        /* 部屋主 */
-        th:nth-child(1), td:nth-child(1) {{ 
-            min-width: 90px; 
-            white-space: nowrap; 
-        }} 
-        
-        /* 順番 */
-        th:nth-child(2), td:nth-child(2) {{ 
-            min-width: 40px; 
-            text-align: center; 
-        }} 
-        
-        /* 曲名(3), 作品名(4), 歌手名(5), コメント(7) を同じバランスにする */
-        /* min-widthで最低限を確保し、max-widthで長すぎる場合に折り返しを強制する */
-        th:nth-child(3), td:nth-child(3),
-        th:nth-child(4), td:nth-child(4),
-        th:nth-child(5), td:nth-child(5),
-        th:nth-child(7), td:nth-child(7) {{
-            min-width: 160px; /* すべて同じ最小幅に */
-            max-width: 300px; /* これ以上は広がりすぎず折り返す */
-        }}
+        /* --- 列幅設定 --- */
+        /* 全体のバランスを見直しました */
 
-        /* 行の装飾 */
+        /* 1. 部屋主 (少し狭く) */
+        th:nth-child(1), td:nth-child(1) {{ width: 10%; min-width: 90px; }}
+        
+        /* 2. 順番 (狭く) */
+        th:nth-child(2), td:nth-child(2) {{ width: 5%; min-width: 40px; text-align: center; }}
+        
+        /* 3. 曲名 (メインなので広く) */
+        th:nth-child(3), td:nth-child(3) {{ width: 20%; min-width: 180px; }}
+
+        /* 4. 作品名 (曲名より少し狭く) */
+        th:nth-child(4), td:nth-child(4) {{ width: 15%; min-width: 120px; }}
+
+        /* 5. 歌手名 (作品名と同じくらい) */
+        th:nth-child(5), td:nth-child(5) {{ width: 15%; min-width: 120px; }}
+
+        /* 6. 歌った人 */
+        th:nth-child(6), td:nth-child(6) {{ width: 10%; min-width: 90px; }}
+
+        /* 7. コメント (曲名と同じくらいの幅に制限) */
+        th:nth-child(7), td:nth-child(7) {{ width: 20%; min-width: 140px; }}
+
+        /* 8. 取得日 */
+        th:nth-child(8), td:nth-child(8) {{ width: 5%; min-width: 80px; }}
+
+        /* 行装飾 */
         tr:nth-child(even) {{ background-color: #fafafa; }}
         tr:hover {{ background-color: #f1f8ff; }}
 
-        /* --- スマホ向けレスポンシブ調整 --- */
+        /* スマホ向け */
         @media (max-width: 600px) {{
             .header-area {{ padding: 10px; }}
-            h1 {{ font-size: 1.2rem; }}
             .controls-row {{ flex-direction: column; align-items: stretch; }}
             .search-container {{ max-width: 100%; }}
             .count-display {{ margin-left: 0; text-align: right; margin-top: 5px; }}
             
-            th, td {{ padding: 8px 10px; font-size: 12px; }}
-            
-            /* スマホでは少し幅を詰める */
-            th:nth-child(3), td:nth-child(3),
-            th:nth-child(4), td:nth-child(4),
-            th:nth-child(5), td:nth-child(5),
-            th:nth-child(7), td:nth-child(7) {{
-                min-width: 120px;
-                max-width: 200px;
-            }}
+            th, td {{ padding: 8px; font-size: 12px; }}
         }}
     </style>
 </head>
@@ -348,16 +337,16 @@ if not final_df.empty:
     
     html_content += '<thead><tr>'
     for col in final_df.columns:
-        # 変数 {col} を表示
-        html_content += f'<th onclick="sortTable({{list(final_df.columns).index(col)}})">{{col}} <i class="fas fa-sort"></i></th>'
+        # 変数 {col} を表示（一重の波括弧）
+        html_content += f'<th onclick="sortTable({list(final_df.columns).index(col)})">{col} <i class="fas fa-sort"></i></th>'
     html_content += '</tr></thead>'
     
     html_content += '<tbody>'
     for _, row in final_df.iterrows():
         html_content += '<tr>'
         for val in row:
-            # 変数 {val} を表示
-            html_content += f'<td>{{val}}</td>'
+            # 変数 {val} を表示（一重の波括弧）
+            html_content += f'<td>{val}</td>'
         html_content += '</tr>'
     html_content += '</tbody></table></div>'
     
@@ -368,7 +357,6 @@ else:
 # JavaScript
 html_content += f"""
 <script>
-    // 初期件数
     document.getElementById('countDisplay').innerText = '全 {initial_count} 件';
 
     function filterTable() {{
