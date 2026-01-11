@@ -52,7 +52,6 @@ history_file = "history.csv"
 if os.path.exists(history_file):
     try:
         history_df = pd.read_csv(history_file, encoding='utf-8-sig')
-        # 数値型を保証
         if '順番' in history_df.columns:
             history_df['順番'] = pd.to_numeric(history_df['順番'], errors='coerce')
     except Exception as e:
@@ -93,24 +92,24 @@ if new_data_frames:
         new_df['順番'] = pd.to_numeric(new_df['順番'], errors='coerce')
 
     # --- 3. 過去データと結合 & 重複排除 ---
-    # 結合
     combined_df = pd.concat([history_df, new_df], ignore_index=True)
     
-    # 重複削除のルール:
-    # 「取得日」「部屋主」「曲名」「歌った人」「歌手名」「作品名」がすべて同じなら、重複とみなして1つにする
-    # (これにより、1日に何度もスクリプトが動いても、同じ曲は1日1回しか記録されません)
-    # ※「順番」や「コメント」が変わった場合も別登録したい場合は、subsetに加えてください
+    # 重複判定の基準列
     subset_cols = ['取得日', '部屋主', '曲名（ファイル名）', '歌った人', '作品名', '歌手名']
-    
-    # 必要な列が存在するか確認してから重複削除
     existing_cols = [c for c in subset_cols if c in combined_df.columns]
-    final_df = combined_df.drop_duplicates(subset=existing_cols, keep='last') # last: 新しい情報を優先
+    
+    # 重複削除（新しいデータを優先して残す）
+    final_df = combined_df.drop_duplicates(subset=existing_cols, keep='last')
 
-    # ソート: 取得日(降順) -> 部屋主 -> 順番
+    # ソート: 取得日(降順) -> 順番(降順)
+    # ※順番が数値になっていないと並び替えがおかしくなるので念のため変換
+    if '順番' in final_df.columns:
+        final_df['順番'] = pd.to_numeric(final_df['順番'], errors='coerce')
+        
     sort_cols = ['取得日', '順番']
     final_df = final_df.sort_values(by=sort_cols, ascending=[False, False])
     
-    # 列の並び順整理
+    # 列の整理
     cols = list(final_df.columns)
     if '部屋主' in cols:
         cols.insert(0, cols.pop(cols.index('部屋主')))
@@ -121,13 +120,12 @@ if new_data_frames:
     print("履歴ファイルを更新しました。")
 
 else:
-    # 新しいデータが取れなかった場合は、既存の履歴を表示に使用
     final_df = history_df
     print("新しいデータが取得できませんでした。過去のデータを使用します。")
 
 
 # --- HTML生成 ---
-# (変数を埋め込むため f-string を使用。CSS/JSの {} は {{}} でエスケープ)
+# ここでは f-string を使い、CSS内の {} は {{ }} にエスケープし、変数は { } で埋め込みます
 html_content = f"""
 <!DOCTYPE html>
 <html lang="ja">
@@ -325,8 +323,8 @@ html_content = f"""
         """
 
 if not final_df.empty:
-    # 件数表示
-    html_content += f'<div class="count-display">全 {{len(final_df)}} 件</div>'
+    # 件数表示：ここでは一重のカッコ { } を使います
+    html_content += f'<div class="count-display">全 {len(final_df)} 件</div>'
     html_content += '</div>' # header-area 終了
 
     # スクロールエリア
@@ -334,20 +332,22 @@ if not final_df.empty:
     
     html_content += '<thead><tr>'
     for col in final_df.columns:
-        html_content += f'<th onclick="sortTable({{list(final_df.columns).index(col)}})">{{col}} <i class="fas fa-sort"></i></th>'
+        # ここも一重のカッコ { }
+        html_content += f'<th onclick="sortTable({list(final_df.columns).index(col)})">{col} <i class="fas fa-sort"></i></th>'
     html_content += '</tr></thead>'
     
     html_content += '<tbody>'
     for _, row in final_df.iterrows():
         html_content += '<tr>'
         for val in row:
-            html_content += f'<td>{{val}}</td>'
+            # ここも一重のカッコ { }
+            html_content += f'<td>{val}</td>'
         html_content += '</tr>'
     html_content += '</tbody></table></div>'
 else:
     html_content += '<p style="padding:20px;">データがありません。</p></div>'
 
-# JavaScript
+# JavaScript部分は変数を埋め込まないので、通常の文字列（fなし）で記述します
 html_content += """
 <script>
     function filterTable() {
