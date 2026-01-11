@@ -25,7 +25,6 @@ room_map = {
     11028: "タマ部屋",
     11058: "すみた部屋",
     11059: "つぼはち部屋",
-    11060: "れん部屋",
     11063: "なぎ部屋",
     11064: "naoo部屋",
     11066: "芝ちゃん部屋",
@@ -82,174 +81,162 @@ html_content = """
     <title>Karaoke setlist all</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        /* レイアウトの基礎設定 */
+        /* 全体レイアウト */
         html, body {
             height: 100%;
             margin: 0;
             padding: 0;
-            overflow: hidden; /* 画面全体のスクロールを禁止 */
+            overflow: hidden;
             font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Hiragino Sans", "Hiragino Kaku Gothic ProN", Arial, sans-serif;
             background-color: #fcfcfc;
             color: #333;
             display: flex;
-            flex-direction: column; /* 縦並びのレイアウト */
+            flex-direction: column;
         }
 
-        /* ヘッダーエリア（固定部分） */
-        header {
-            flex-shrink: 0; /* 縮まないようにする */
-            padding: 15px 20px 0 20px;
-            background-color: #fcfcfc;
+        /* ヘッダーエリア */
+        .header-area {
+            flex: 0 0 auto;
+            padding: 15px 20px 10px 20px;
+            background-color: #fff;
+            border-bottom: 1px solid #ddd;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+            z-index: 20;
         }
 
-        h1 { 
-            margin: 0 0 5px 0; 
-            font-size: 1.5rem; 
-            text-align: left; /* 左寄せ */
-        }
-        
-        .update-time { 
-            color: #666; 
-            font-size: 0.85em; 
-            text-align: left; /* 左寄せ */
-            margin-bottom: 15px; 
-        }
+        h1 { margin: 0 0 5px 0; font-size: 1.5rem; text-align: left; }
+        .update-time { color: #666; font-size: 0.85em; text-align: left; margin-bottom: 15px; }
 
-        /* 検索エリアのデザイン */
+        /* 検索ボックスエリア */
         .search-container {
             display: flex;
+            flex-wrap: wrap;
             gap: 10px;
             align-items: center;
-            margin-bottom: 10px;
-            flex-wrap: wrap;
+            justify-content: flex-start;
         }
 
         .search-box {
-            width: 300px; /* PCでの基本幅 */
-            padding: 6px 10px;
+            width: 300px;
+            padding: 8px 12px;
             font-size: 14px;
             border: 1px solid #ccc;
             border-radius: 4px;
-            height: 36px; /* 高さを固定してスマートに */
             box-sizing: border-box;
+            background-color: #f9f9f9;
         }
+        .search-box:focus { background-color: #fff; outline: 2px solid #007bff; }
 
-        .btn-group {
-            display: flex;
-            gap: 5px;
-        }
-
+        .btn-group { display: flex; gap: 5px; }
         .btn {
-            padding: 0 15px;
-            height: 36px; /* 検索ボックスと同じ高さ */
-            line-height: 36px; /* 文字を垂直中央に */
+            padding: 8px 16px;
             font-size: 14px;
             cursor: pointer;
-            background-color: #007bff; 
-            color: white; 
-            border: none; 
+            background-color: #007bff;
+            color: white;
+            border: none;
             border-radius: 4px;
             white-space: nowrap;
+            transition: background-color 0.2s;
         }
         .btn:hover { background-color: #0056b3; }
         .btn-reset { background-color: #6c757d; }
         .btn-reset:hover { background-color: #545b62; }
 
+        /* 件数表示 */
         .count-display {
-            text-align: right;
+            text-align: left;
             font-size: 0.85em;
-            color: #555;
-            margin-bottom: 5px;
-            padding-right: 20px;
+            color: #666;
+            margin-top: 5px;
+            font-weight: bold;
         }
 
-        /* テーブルエリア（スクロール部分） */
+        /* テーブルラッパー */
         .table-wrapper {
-            flex-grow: 1; /* 余ったスペースを全部使う */
-            overflow: auto; /* ここだけスクロールさせる */
-            margin: 0 20px 20px 20px; /* 余白 */
-            border: 1px solid #ddd;
-            background-color: #fff;
+            flex: 1 1 auto;
+            overflow: auto;
             position: relative;
+            background-color: #fff;
             -webkit-overflow-scrolling: touch;
         }
 
+        /* テーブル設定 */
         table { 
             border-collapse: separate; 
             border-spacing: 0; 
             width: 100%; 
             font-size: 13px; 
-            min-width: 800px; /* スマホで横スクロールさせるための最小幅 */
+            min-width: 800px;
         }
         
         th, td { 
-            padding: 8px 10px; 
+            padding: 10px 12px;
             text-align: left; 
             border-right: 1px solid #eee;
             border-bottom: 1px solid #eee;
             vertical-align: middle;
+            line-height: 1.5;
         }
 
-        /* ヘッダー固定 */
+        /* ヘッダー固定設定 */
         th { 
-            background-color: #f1f3f5; 
+            background-color: #f1f3f5;
+            color: #444;
+            font-weight: bold;
             position: sticky; 
             top: 0; 
             z-index: 10; 
-            border-bottom: 1px solid #ccc;
+            cursor: pointer;
+            border-bottom: 2px solid #ddd;
             white-space: nowrap;
         }
+        th:hover { background-color: #e9ecef; }
 
         /* 列幅の調整 */
         th:nth-child(1), td:nth-child(1) { min-width: 90px; } /* 部屋主 */
-        th:nth-child(2), td:nth-child(2) { min-width: 40px; text-align: center; } /* 順番 */
-        th:nth-child(3), td:nth-child(3) { min-width: 200px; } /* 曲名 */
-
+        th:nth-child(2), td:nth-child(2) { min-width: 50px; text-align: center; } /* 順番 */
+        
+        /* ★ここを追加: 作品名(4列目)と歌手名(5列目)の幅を合わせる */
+        th:nth-child(4), td:nth-child(4),
+        th:nth-child(5), td:nth-child(5) {
+            min-width: 180px;
+        }
+        
+        td { word-break: break-all; }
         th:last-child, td:last-child { border-right: none; }
-        tr:last-child td { border-bottom: none; }
-        tr:nth-child(even) { background-color: #f9f9f9; }
-
-        /* スマホ用レスポンシブ設定 */
+        tr:nth-child(even) { background-color: #fafafa; }
+        
+        /* スマホ向けレスポンシブ調整 */
         @media (max-width: 600px) {
-            header { padding: 10px 10px 0 10px; }
-            
-            h1 { font-size: 1.2rem; }
-            
-            .search-container {
-                flex-direction: column; /* 縦並び */
-                align-items: stretch; /* 横幅いっぱい */
-                gap: 8px;
-            }
-            .search-box { width: 100%; }
-            .btn-group { width: 100%; }
-            .btn { flex: 1; text-align: center; } /* ボタンを均等幅に */
-            
-            .table-wrapper { margin: 0 10px 10px 10px; }
-            .count-display { padding-right: 10px; }
+            .header-area { padding: 10px 12px; }
+            h1 { font-size: 1.3rem; }
+            .update-time { margin-bottom: 10px; }
+            .search-container { flex-direction: column; align-items: stretch; gap: 8px; }
+            .search-box { width: 100%; font-size: 16px; }
+            .btn-group { display: flex; gap: 8px; }
+            .btn { flex: 1; text-align: center; padding: 10px; }
+            th, td { padding: 8px; font-size: 12px; }
         }
     </style>
 </head>
 <body>
-    <header>
+
+    <div class="header-area">
         <h1>Karaoke setlist all</h1>
-"""
-
-html_content += f'<div class="update-time">最終集計: {current_datetime_str}</div>'
-
-html_content += f'''
+        <div class="update-time">最終集計: {current_datetime_str}</div>
+        
         <div class="search-container">
-            <input type="text" id="searchInput" class="search-box" placeholder="キーワード・日付で検索...">
+            <input type="text" id="searchInput" class="search-box" placeholder="キーワード・日付 (例: 2026/01/11)...">
             <div class="btn-group">
                 <button onclick="filterTable()" class="btn"><i class="fas fa-search"></i> 検索</button>
                 <button onclick="resetFilter()" class="btn btn-reset">リセット</button>
             </div>
         </div>
-        <div class="count-display"></div> </header>
-'''
+        """
 
 if all_data_frames:
     final_df = pd.concat(all_data_frames, ignore_index=True)
-
     if '順番' in final_df.columns:
         final_df['順番'] = pd.to_numeric(final_df['順番'], errors='coerce')
     
@@ -261,6 +248,11 @@ if all_data_frames:
         cols.insert(0, cols.pop(cols.index('部屋主')))
         final_df = final_df[cols]
 
+    # 件数表示
+    html_content += f'<div class="count-display">全 {len(final_df)} 件</div>'
+    html_content += '</div>' # header-area 終了
+
+    # スクロールエリア
     html_content += '<div class="table-wrapper"><table id="setlistTable">'
     
     html_content += '<thead><tr>'
@@ -277,33 +269,11 @@ if all_data_frames:
     html_content += '</tbody></table></div>'
 
 else:
-    html_content += "<p style='padding:20px;'>データの取得に失敗しました。</p>"
+    html_content += '<p style="padding:20px;">データの取得に失敗しました。</p></div>'
 
 # JavaScript
 html_content += """
 <script>
-    // 初期表示時に件数をカウント
-    document.addEventListener('DOMContentLoaded', function() {
-        updateCount();
-    });
-
-    function updateCount() {
-        const table = document.getElementById("setlistTable");
-        const trs = table.getElementsByTagName("tr");
-        let visibleCount = 0;
-        // ヘッダー行(0)を除く
-        for (let i = 1; i < trs.length; i++) {
-            if (trs[i].style.display !== "none") {
-                visibleCount++;
-            }
-        }
-        const total = trs.length - 1;
-        const display = document.querySelector('.count-display');
-        if(display) {
-            display.innerText = '表示: ' + visibleCount + ' 件 / 全 ' + total + ' 件';
-        }
-    }
-
     function filterTable() {
         const input = document.getElementById("searchInput");
         const filter = input.value.toUpperCase();
@@ -311,6 +281,7 @@ html_content += """
         
         const table = document.getElementById("setlistTable");
         const trs = table.getElementsByTagName("tr");
+        let visibleCount = 0;
 
         for (let i = 1; i < trs.length; i++) {
             const tr = trs[i];
@@ -328,9 +299,16 @@ html_content += """
                     break;
                 }
             }
-            tr.style.display = (isMatch || keywords.length === 0) ? "" : "none";
+            if (isMatch || keywords.length === 0) {
+                tr.style.display = "";
+                visibleCount++;
+            } else {
+                tr.style.display = "none";
+            }
         }
-        updateCount();
+        
+        const countDisplay = document.querySelector('.count-display');
+        if(countDisplay) countDisplay.innerText = '表示: ' + visibleCount + ' 件 / 全 ' + (trs.length - 1) + ' 件';
     }
 
     document.getElementById("searchInput").addEventListener("keyup", function(event) {
@@ -377,4 +355,3 @@ html_content += """
 
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
-
