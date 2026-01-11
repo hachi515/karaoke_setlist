@@ -1,0 +1,38 @@
+name: Update List
+
+on:
+  schedule:
+    # 30分ごとに実行 (cron構文)
+    - cron: '*/30 * * * *'
+  workflow_dispatch: # 手動実行ボタンも有効にする
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          pip install pandas requests lxml html5lib
+
+      - name: Run script
+        run: python update_list.py
+
+      - name: Commit and push if changed
+        run: |
+          git config --global user.name 'GitHub Action'
+          git config --global user.email 'action@github.com'
+          git add index.html
+          # 変更がある場合のみコミット
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto update list" && git push)
