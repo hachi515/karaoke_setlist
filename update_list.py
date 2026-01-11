@@ -8,7 +8,7 @@ now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
 current_date_str = now.strftime("%Y/%m/%d") # 日付のみ（例: 2026/01/11）
 current_datetime_str = now.strftime("%Y/%m/%d %H:%M") # 日時（例: 2026/01/11 14:00）
 
-# --- ① 設定: ポート番号と部屋主の名前の対応表 ---
+# --- 設定: ポート番号と部屋主の名前の対応表 ---
 room_map = {
     11000: "ゆーふうりん部屋",
     11001: "ゆーふうりん部屋",
@@ -51,8 +51,8 @@ target_ports = list(room_map.keys())
 all_data_frames = []
 
 for port in target_ports:
-    # URL設定: requestlist_only.php
-    url = f"http://Ykr.moe:{port}/requestlist_only.php"
+    # URL設定: simplelist.php に戻しました
+    url = f"http://Ykr.moe:{port}/simplelist.php"
     try:
         response = requests.get(url, timeout=10)
         response.raise_for_status()
