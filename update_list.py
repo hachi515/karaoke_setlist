@@ -3,10 +3,10 @@ import requests
 import datetime
 import re
 
-# --- 時刻設定（データ取得日として使用） ---
+# --- 時刻設定 ---
 now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
-current_date_str = now.strftime("%Y/%m/%d") # 日付のみ（例: 2026/01/11）
-current_datetime_str = now.strftime("%Y/%m/%d %H:%M") # 日時（例: 2026/01/11 14:00）
+current_date_str = now.strftime("%Y/%m/%d") 
+current_datetime_str = now.strftime("%Y/%m/%d %H:%M")
 
 # --- 設定: ポート番号と部屋主の名前の対応表 ---
 room_map = {
@@ -51,7 +51,6 @@ target_ports = list(room_map.keys())
 all_data_frames = []
 
 for port in target_ports:
-    # URL設定: simplelist.php に戻しました
     url = f"http://Ykr.moe:{port}/simplelist.php"
     try:
         response = requests.get(url, timeout=10)
@@ -60,7 +59,7 @@ for port in target_ports:
         dfs = pd.read_html(response.content)
         if dfs:
             df = dfs[0]
-            df = df.fillna("") # 空欄処理
+            df = df.fillna("") 
             
             # 項目追加
             df['部屋主'] = room_map[port]
@@ -70,7 +69,6 @@ for port in target_ports:
             print(f"Port {port} ({room_map[port]}): OK")
             
     except Exception as e:
-        # エラーが出ても止まらずに次のポートへ
         print(f"Port {port}: Error - {e}")
 
 # HTML生成
@@ -86,7 +84,6 @@ html_content = """
         body { font-family: "Helvetica Neue", Arial, sans-serif; padding: 20px; color: #333; }
         h1 { margin-bottom: 10px; }
         
-        /* 検索ボックスエリア */
         .search-container { margin-bottom: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
         .search-box {
             width: 100%; max-width: 400px; padding: 10px; font-size: 16px;
@@ -101,27 +98,53 @@ html_content = """
         .btn-reset { background-color: #6c757d; }
         .btn-reset:hover { background-color: #545b62; }
 
-        /* スクロール表示用のコンテナ */
+        /* スクロールコンテナ */
         .table-wrapper {
-            max-height: 80vh; /* 画面の高さの80%まで表示、それ以上はスクロール */
-            overflow-y: auto; /* 縦スクロールを有効化 */
-            border: 1px solid #ddd;
+            max-height: 80vh;
+            overflow-y: auto;
+            border: 1px solid #ddd; /* 外枠 */
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
 
-        table { border-collapse: collapse; width: 100%; font-size: 14px; }
-        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        /* テーブル設定（隙間対策のため separate に変更） */
+        table { 
+            border-collapse: separate; 
+            border-spacing: 0; 
+            width: 100%; 
+            font-size: 14px; 
+        }
         
-        /* ヘッダー固定 */
+        /* セルの枠線設定（separateにしたので個別に線を引く） */
+        th, td { 
+            padding: 10px; 
+            text-align: left; 
+            border-right: 1px solid #ddd;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        /* ヘッダー固有設定 */
         th { 
             background-color: #f2f2f2; 
             position: sticky; 
             top: 0; 
             z-index: 10; 
             cursor: pointer;
+            border-top: none; /* 上の線はwrapperの線に任せる */
+            border-bottom: 1px solid #ccc; /* ヘッダーの下線は少し濃く */
             box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.1);
+            user-select: none;
         }
-        th:hover { background-color: #e2e2e2; }
+
+        /* 右端の線はwrapperの線と重複するので消す */
+        th:last-child, td:last-child {
+            border-right: none;
+        }
+        
+        /* 最後の行の下線も消す */
+        tr:last-child td {
+            border-bottom: none;
+        }
+
         tr:nth-child(even) { background-color: #fff; }
 
         .update-time { color: #666; font-size: 0.9em; margin-bottom: 10px; }
@@ -149,27 +172,22 @@ html_content += f'''
 if all_data_frames:
     final_df = pd.concat(all_data_frames, ignore_index=True)
 
-    # 順番でソート
     if '順番' in final_df.columns:
         final_df['順番'] = pd.to_numeric(final_df['順番'], errors='coerce')
         final_df = final_df.sort_values(by=['順番'], ascending=True)
 
-    # カラム並び替え: 部屋主を先頭へ
     cols = list(final_df.columns)
     if '部屋主' in cols:
         cols.insert(0, cols.pop(cols.index('部屋主')))
         final_df = final_df[cols]
 
-    # テーブル作成（スクロール枠で囲む）
     html_content += '<div class="table-wrapper"><table id="setlistTable">'
     
-    # ヘッダー
     html_content += '<thead><tr>'
     for col in final_df.columns:
         html_content += f'<th onclick="sortTable({list(final_df.columns).index(col)})">{col} <i class="fas fa-sort"></i></th>'
     html_content += '</tr></thead>'
     
-    # ボディ
     html_content += '<tbody>'
     for _, row in final_df.iterrows():
         html_content += '<tr>'
@@ -181,37 +199,34 @@ if all_data_frames:
 else:
     html_content += "<p>データの取得に失敗しました。</p>"
 
-# JavaScript (検索・ソート)
+# JavaScript (高速ソート版)
 html_content += """
 <script>
     function filterTable() {
-        var input = document.getElementById("searchInput");
-        var filter = input.value.toUpperCase();
-        var keywords = filter.replace(/　/g, " ").split(" ").filter(k => k.length > 0);
+        const input = document.getElementById("searchInput");
+        const filter = input.value.toUpperCase();
+        const keywords = filter.replace(/　/g, " ").split(" ").filter(k => k.length > 0);
         
-        var table = document.getElementById("setlistTable");
-        var tr = table.getElementsByTagName("tr");
+        const table = document.getElementById("setlistTable");
+        const trs = table.getElementsByTagName("tr");
 
-        for (var i = 1; i < tr.length; i++) {
-            var td = tr[i].getElementsByTagName("td");
-            var rowText = "";
-            for (var j = 0; j < td.length; j++) {
-                rowText += td[j].textContent || td[j].innerText;
+        for (let i = 1; i < trs.length; i++) {
+            const tr = trs[i];
+            let rowText = "";
+            const tds = tr.getElementsByTagName("td");
+            for (let j = 0; j < tds.length; j++) {
+                rowText += (tds[j].textContent || tds[j].innerText) + " ";
             }
             rowText = rowText.toUpperCase();
             
-            var isMatch = true;
-            for (var k = 0; k < keywords.length; k++) {
+            let isMatch = true;
+            for (let k = 0; k < keywords.length; k++) {
                 if (rowText.indexOf(keywords[k]) === -1) {
                     isMatch = false;
                     break;
                 }
             }
-            if (isMatch || keywords.length === 0) {
-                tr[i].style.display = "";
-            } else {
-                tr[i].style.display = "none";
-            }
+            tr.style.display = (isMatch || keywords.length === 0) ? "" : "none";
         }
     }
 
@@ -225,35 +240,32 @@ html_content += """
     }
 
     function sortTable(n) {
-        var table, rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
-        table = document.getElementById("setlistTable");
-        switching = true;
-        dir = "asc"; 
-        while (switching) {
-            switching = false;
-            rows = table.rows;
-            for (i = 1; i < (rows.length - 1); i++) {
-                shouldSwitch = false;
-                x = rows[i].getElementsByTagName("TD")[n];
-                y = rows[i + 1].getElementsByTagName("TD")[n];
-                var xContent = x.innerText.toLowerCase();
-                var yContent = y.innerText.toLowerCase();
-                if (!isNaN(xContent) && !isNaN(yContent) && xContent !== "" && yContent !== "") {
-                     if (dir == "asc") { if (Number(xContent) > Number(yContent)) { shouldSwitch = true; break; } }
-                     else if (dir == "desc") { if (Number(xContent) < Number(yContent)) { shouldSwitch = true; break; } }
-                } else {
-                    if (dir == "asc") { if (xContent > yContent) { shouldSwitch = true; break; } }
-                    else if (dir == "desc") { if (xContent < yContent) { shouldSwitch = true; break; } }
-                }
+        const table = document.getElementById("setlistTable");
+        const tbody = table.querySelector('tbody');
+        const rows = Array.from(tbody.rows);
+        const th = table.querySelectorAll('th')[n];
+        
+        let dir = th.getAttribute('data-dir') === 'asc' ? 'desc' : 'asc';
+        
+        table.querySelectorAll('th').forEach(h => h.setAttribute('data-dir', ''));
+        th.setAttribute('data-dir', dir);
+
+        rows.sort((a, b) => {
+            const cellA = a.cells[n].innerText.trim();
+            const cellB = b.cells[n].innerText.trim();
+
+            if (!isNaN(cellA) && !isNaN(cellB) && cellA !== '' && cellB !== '') {
+                const numA = parseFloat(cellA);
+                const numB = parseFloat(cellB);
+                return dir === 'asc' ? numA - numB : numB - numA;
             }
-            if (shouldSwitch) {
-                rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
-                switching = true;
-                switchcount ++;      
-            } else {
-                if (switchcount == 0 && dir == "asc") { dir = "desc"; switching = true; }
-            }
-        }
+
+            return dir === 'asc' 
+                ? cellA.localeCompare(cellB, 'ja') 
+                : cellB.localeCompare(cellA, 'ja');
+        });
+
+        rows.forEach(row => tbody.appendChild(row));
     }
 </script>
 </body>
