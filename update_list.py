@@ -3,74 +3,91 @@ import requests
 import datetime
 import re
 
+# --- 時刻設定（データ取得日として使用） ---
+now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
+current_date_str = now.strftime("%Y/%m/%d") # 日付のみ（例: 2026/01/11）
+current_datetime_str = now.strftime("%Y/%m/%d %H:%M") # 日時（例: 2026/01/11 14:00）
+
 # --- ① 設定: ポート番号と部屋主の名前の対応表 ---
 room_map = {
+    11000: "ゆーふうりん部屋",
+    11001: "ゆーふうりん部屋",
+    11002: "ゆーふうりん部屋",
+    11003: "ゆーふうりん部屋",
+    11004: "ゆーふうりん部屋",
+    11005: "ゆーふうりん部屋",
+    11006: "ゆーふうりん部屋",
+    11007: "ゆーふうりん部屋",
+    11008: "ゆーふうりん部屋",
+    11009: "ゆーふうりん部屋",
     11021: "成田部屋",
+    11022: "成田部屋",
     11028: "タマ部屋",
     11058: "すみた部屋",
     11059: "つぼはち部屋",
     11063: "なぎ部屋",
     11064: "naoo部屋",
     11066: "芝ちゃん部屋",
+    11067: "crom部屋",
     11068: "けんしん部屋",
     11069: "けんちぃ部屋",
     11070: "黒河部屋",
+    11071: "黒河部屋",
     11074: "tukinowa部屋",
     11077: "v3部屋",
     11078: "のんでるん部屋",
     11079: "まどか部屋",
     11084: "タカヒロ部屋",
+    11085: "タカヒロ部屋",
+    11086: "タカヒロ部屋",
     11088: "ほっしー部屋",
     11101: "えみち部屋",
+    11102: "るえ部屋",
     11103: "ながし部屋",
     11106: "冨塚部屋"
 }
 
-# 取得対象のポート（対応表のキーをそのまま使う）
 target_ports = list(room_map.keys())
-
 all_data_frames = []
 
 for port in target_ports:
-    url = f"http://Ykr.moe:{port}/simplelist.php"
+    # URL設定: requestlist_only.php
+    url = f"http://Ykr.moe:{port}/requestlist_only.php"
     try:
-        # データ取得
         response = requests.get(url, timeout=10)
         response.raise_for_status()
         
-        # HTMLの表を読み込み
         dfs = pd.read_html(response.content)
         if dfs:
             df = dfs[0]
+            df = df.fillna("") # 空欄処理
             
-            # ③ コメントが無い場合はNaNではなく空欄にする
-            df = df.fillna("")
-            
-            # ④ 項目名のsourceを「部屋主」に変更し、名前を入れる
-            # まず列を追加
+            # 項目追加
             df['部屋主'] = room_map[port]
+            df['取得日'] = current_date_str
             
-            # DataFrameをリストに追加
             all_data_frames.append(df)
             print(f"Port {port} ({room_map[port]}): OK")
             
     except Exception as e:
+        # エラーが出ても止まらずに次のポートへ
         print(f"Port {port}: Error - {e}")
 
-# HTML生成の準備
+# HTML生成
 html_content = """
 <!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Karaoke setlist all</title> <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <title>Karaoke setlist all</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        body { font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", sans-serif; padding: 20px; color: #333; }
+        body { font-family: "Helvetica Neue", Arial, sans-serif; padding: 20px; color: #333; }
         h1 { margin-bottom: 10px; }
         
-        /* ⑦ 検索ボックスとボタンのデザイン */
-        .search-container { margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        /* 検索ボックスエリア */
+        .search-container { margin-bottom: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
         .search-box {
             width: 100%; max-width: 400px; padding: 10px; font-size: 16px;
             border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;
@@ -78,31 +95,40 @@ html_content = """
         .btn {
             padding: 10px 20px; font-size: 16px; cursor: pointer;
             background-color: #007bff; color: white; border: none; border-radius: 4px;
-            text-decoration: none; display: inline-block;
+            margin-left: 5px;
         }
         .btn:hover { background-color: #0056b3; }
-        .btn-update { background-color: #28a745; margin-left: 10px; font-size: 14px; }
-        .btn-update:hover { background-color: #218838; }
+        .btn-reset { background-color: #6c757d; }
+        .btn-reset:hover { background-color: #545b62; }
 
-        /* テーブルのデザイン */
-        table { border-collapse: collapse; width: 100%; font-size: 14px; margin-top: 10px; }
+        /* スクロール表示用のコンテナ */
+        .table-wrapper {
+            max-height: 80vh; /* 画面の高さの80%まで表示、それ以上はスクロール */
+            overflow-y: auto; /* 縦スクロールを有効化 */
+            border: 1px solid #ddd;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        table { border-collapse: collapse; width: 100%; font-size: 14px; }
         th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
-        th { background-color: #f2f2f2; position: sticky; top: 0; z-index: 1; cursor: pointer; }
+        
+        /* ヘッダー固定 */
+        th { 
+            background-color: #f2f2f2; 
+            position: sticky; 
+            top: 0; 
+            z-index: 10; 
+            cursor: pointer;
+            box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.1);
+        }
         th:hover { background-color: #e2e2e2; }
         tr:nth-child(even) { background-color: #fff; }
-        
-        /* ⑤ 今日の日付の行の色分け */
-        tr.today-row { background-color: #e3f2fd !important; } /* 薄い青 */
-        tr.today-row:nth-child(even) { background-color: #bbdefb !important; } /* 少し濃い青 */
 
-        .update-time { color: #666; font-size: 0.9em; margin-bottom: 5px; }
-        .hidden { display: none; }
+        .update-time { color: #666; font-size: 0.9em; margin-bottom: 10px; }
         
-        /* レスポンシブ対応 */
         @media (max-width: 600px) {
-            table { font-size: 12px; }
-            td, th { padding: 6px; }
-            .btn { width: 100%; margin-top: 5px; margin-left: 0; }
+            .btn { width: 100%; margin: 5px 0 0 0; }
+            .table-wrapper { max-height: 70vh; }
         }
     </style>
 </head>
@@ -110,42 +136,32 @@ html_content = """
     <h1>Karaoke setlist all</h1>
 """
 
-# 更新時刻の取得（日本時間）
-now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
-today_str = now.strftime("%Y/%m/%d") # 今日の日付文字列（例: 2026/01/11）
-html_content += f'<div class="update-time">最終集計: {now.strftime("%Y/%m/%d %H:%M:%S")}</div>'
+html_content += f'<div class="update-time">最終集計: {current_datetime_str}</div>'
 
-# ⑥ 手動更新ボタン（GitHub Actionsへのリンク）
-# ※セキュリティ上、静的ページから直接スクリプトを動かすことはできないため、実行ページへのリンクとします
-repo_url = "https://github.com/hachi515/karaoke_setlist/actions/workflows/update.yml" 
 html_content += f'''
     <div class="search-container">
-        <input type="text" id="searchInput" class="search-box" placeholder="キーワードを入力 (スペースで複数検索)...">
+        <input type="text" id="searchInput" class="search-box" placeholder="キーワード・日付で検索 (例: 2026/01/11 King)...">
         <button onclick="filterTable()" class="btn"><i class="fas fa-search"></i> 検索</button>
-        <button onclick="resetFilter()" class="btn" style="background-color: #6c757d;">リセット</button>
-        <a href="{repo_url}" target="_blank" class="btn btn-update"><i class="fas fa-sync-alt"></i> 更新画面へ</a>
-        <p style="font-size:0.8em; color:#666; margin-top:5px;">※「更新画面へ」→「Run workflow」で手動更新できます</p>
+        <button onclick="resetFilter()" class="btn btn-reset">リセット</button>
     </div>
 '''
 
 if all_data_frames:
-    # データを結合
     final_df = pd.concat(all_data_frames, ignore_index=True)
 
-    # ④ 順番で並び替え（古い順）
-    # '順番'カラムを数値として扱うために変換（エラー回避）
+    # 順番でソート
     if '順番' in final_df.columns:
         final_df['順番'] = pd.to_numeric(final_df['順番'], errors='coerce')
         final_df = final_df.sort_values(by=['順番'], ascending=True)
 
-    # ④ 部屋主カラムを左端に持ってくるためにカラム順序を入れ替え
+    # カラム並び替え: 部屋主を先頭へ
     cols = list(final_df.columns)
     if '部屋主' in cols:
         cols.insert(0, cols.pop(cols.index('部屋主')))
         final_df = final_df[cols]
 
-    # HTMLテーブルの手動構築（色分けクラスを付与するため）
-    html_content += '<table id="setlistTable">'
+    # テーブル作成（スクロール枠で囲む）
+    html_content += '<div class="table-wrapper"><table id="setlistTable">'
     
     # ヘッダー
     html_content += '<thead><tr>'
@@ -156,28 +172,21 @@ if all_data_frames:
     # ボディ
     html_content += '<tbody>'
     for _, row in final_df.iterrows():
-        # ⑤ 日付判定（行のデータ全体を見て、今日の日付が含まれていればクラスを付与）
-        row_str = " ".join(row.astype(str))
-        row_class = "today-row" if today_str in row_str else ""
-        
-        html_content += f'<tr class="{row_class}">'
+        html_content += '<tr>'
         for val in row:
             html_content += f'<td>{val}</td>'
         html_content += '</tr>'
-    html_content += '</tbody></table>'
+    html_content += '</tbody></table></div>'
 
 else:
     html_content += "<p>データの取得に失敗しました。</p>"
 
-# ⑦ 検索・ソート用JavaScript
+# JavaScript (検索・ソート)
 html_content += """
 <script>
-    // 検索フィルター機能（全角・半角スペース対応）
     function filterTable() {
         var input = document.getElementById("searchInput");
         var filter = input.value.toUpperCase();
-        
-        // 全角スペースを半角に変換し、スペースで区切ってキーワードリストを作成
         var keywords = filter.replace(/　/g, " ").split(" ").filter(k => k.length > 0);
         
         var table = document.getElementById("setlistTable");
@@ -191,7 +200,6 @@ html_content += """
             }
             rowText = rowText.toUpperCase();
             
-            // すべてのキーワードが含まれているかチェック (AND検索)
             var isMatch = true;
             for (var k = 0; k < keywords.length; k++) {
                 if (rowText.indexOf(keywords[k]) === -1) {
@@ -199,7 +207,6 @@ html_content += """
                     break;
                 }
             }
-            
             if (isMatch || keywords.length === 0) {
                 tr[i].style.display = "";
             } else {
@@ -208,20 +215,15 @@ html_content += """
         }
     }
 
-    // Enterキーで検索実行
     document.getElementById("searchInput").addEventListener("keyup", function(event) {
-        if (event.key === "Enter") {
-            filterTable();
-        }
+        if (event.key === "Enter") filterTable();
     });
 
-    // リセット機能
     function resetFilter() {
         document.getElementById("searchInput").value = "";
         filterTable();
     }
 
-    // 簡易ソート機能（ヘッダークリックで動作）
     function sortTable(n) {
         var table, rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
         table = document.getElementById("setlistTable");
@@ -234,23 +236,14 @@ html_content += """
                 shouldSwitch = false;
                 x = rows[i].getElementsByTagName("TD")[n];
                 y = rows[i + 1].getElementsByTagName("TD")[n];
-                
-                var xContent = x.innerHTML.toLowerCase();
-                var yContent = y.innerHTML.toLowerCase();
-                
-                // 数値の場合は数値として比較
+                var xContent = x.innerText.toLowerCase();
+                var yContent = y.innerText.toLowerCase();
                 if (!isNaN(xContent) && !isNaN(yContent) && xContent !== "" && yContent !== "") {
-                     if (dir == "asc") {
-                        if (Number(xContent) > Number(yContent)) { shouldSwitch = true; break; }
-                    } else if (dir == "desc") {
-                        if (Number(xContent) < Number(yContent)) { shouldSwitch = true; break; }
-                    }
+                     if (dir == "asc") { if (Number(xContent) > Number(yContent)) { shouldSwitch = true; break; } }
+                     else if (dir == "desc") { if (Number(xContent) < Number(yContent)) { shouldSwitch = true; break; } }
                 } else {
-                    if (dir == "asc") {
-                        if (xContent > yContent) { shouldSwitch = true; break; }
-                    } else if (dir == "desc") {
-                        if (xContent < yContent) { shouldSwitch = true; break; }
-                    }
+                    if (dir == "asc") { if (xContent > yContent) { shouldSwitch = true; break; } }
+                    else if (dir == "desc") { if (xContent < yContent) { shouldSwitch = true; break; } }
                 }
             }
             if (shouldSwitch) {
@@ -258,10 +251,7 @@ html_content += """
                 switching = true;
                 switchcount ++;      
             } else {
-                if (switchcount == 0 && dir == "asc") {
-                    dir = "desc";
-                    switching = true;
-                }
+                if (switchcount == 0 && dir == "asc") { dir = "desc"; switching = true; }
             }
         }
     }
@@ -270,6 +260,5 @@ html_content += """
 </html>
 """
 
-# index.html として保存
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
