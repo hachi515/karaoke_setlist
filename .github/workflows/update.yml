@@ -33,7 +33,7 @@ jobs:
         run: |
           git config --global user.name 'GitHub Action'
           git config --global user.email 'action@github.com'
-          git add index.html
+          git add index.html history.csv
           # 変更がある場合のみコミット
           if ! git diff --quiet || ! git diff --staged --quiet; then
             git commit -m "Auto update list"
