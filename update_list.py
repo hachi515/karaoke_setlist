@@ -71,8 +71,8 @@ for port in target_ports:
     except Exception as e:
         print(f"Port {port}: Error - {e}")
 
-# HTML生成
-html_content = """
+# HTML生成 (f-stringを使用し、変数を展開。CSS/JSの{}は{{}}でエスケープ)
+html_content = f"""
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -81,71 +81,71 @@ html_content = """
     <title>Karaoke setlist all</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        /* 全体レイアウト: 画面の高さ100%を使い切る設定 */
-        html, body {
+        /* 全体レイアウト */
+        html, body {{
             height: 100%;
             margin: 0;
             padding: 0;
-            overflow: hidden; /* body自体のスクロールを禁止 */
+            overflow: hidden;
             font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Hiragino Sans", "Hiragino Kaku Gothic ProN", Arial, sans-serif;
             background-color: #fcfcfc;
             color: #333;
             display: flex;
-            flex-direction: column; /* 縦並びのフレックスボックス */
-        }
+            flex-direction: column;
+        }}
 
-        /* ヘッダーエリア（タイトル・検索） */
-        .header-area {
-            flex: 0 0 auto; /* 高さは中身に合わせて固定 */
+        /* ヘッダーエリア */
+        .header-area {{
+            flex: 0 0 auto;
             padding: 15px 20px 10px 20px;
             background-color: #fff;
             border-bottom: 1px solid #ddd;
             box-shadow: 0 2px 4px rgba(0,0,0,0.03);
             z-index: 20;
-        }
+        }}
 
-        h1 { 
+        h1 {{ 
             margin: 0 0 5px 0; 
             font-size: 1.5rem; 
-            text-align: left; /* 左寄せ */
-        }
+            text-align: left;
+        }}
         
-        .update-time { 
+        .update-time {{ 
             color: #666; 
             font-size: 0.85em; 
-            text-align: left; /* 左寄せ */
+            text-align: left;
             margin-bottom: 15px; 
-        }
+        }}
 
-        /* 検索ボックスエリア: シンプル・左寄せ・コンパクト */
-        .search-container {
+        /* 検索ボックスエリア */
+        .search-container {{
             display: flex;
             flex-wrap: wrap;
             gap: 10px;
             align-items: center;
-            justify-content: flex-start; /* 左寄せ */
-        }
+            justify-content: flex-start;
+        }}
 
-        .search-box {
-            width: 300px; /* PCでは適度な幅に固定 */
+        .search-box {{
+            width: 300px;
             padding: 8px 12px;
             font-size: 14px;
             border: 1px solid #ccc;
             border-radius: 4px;
             box-sizing: border-box;
             background-color: #f9f9f9;
-        }
-        .search-box:focus {
+        }}
+        .search-box:focus {{
             background-color: #fff;
             outline: 2px solid #007bff;
-        }
+        }}
 
-        .btn-group {
+        .btn-group {{
             display: flex;
             gap: 5px;
-        }
+        }}
 
-        .btn {
+        .btn {{
             padding: 8px 16px;
             font-size: 14px;
             cursor: pointer;
@@ -155,49 +155,49 @@ html_content = """
             border-radius: 4px;
             white-space: nowrap;
             transition: background-color 0.2s;
-        }
-        .btn:hover { background-color: #0056b3; }
-        .btn-reset { background-color: #6c757d; }
-        .btn-reset:hover { background-color: #545b62; }
+        }}
+        .btn:hover {{ background-color: #0056b3; }}
+        .btn-reset {{ background-color: #6c757d; }}
+        .btn-reset:hover {{ background-color: #545b62; }}
 
         /* 件数表示 */
-        .count-display {
-            text-align: left; /* 左寄せ */
+        .count-display {{
+            text-align: left;
             font-size: 0.85em;
             color: #666;
             margin-top: 5px;
             font-weight: bold;
-        }
+        }}
 
-        /* テーブルラッパー: 残りの高さを全て使い、この中だけでスクロールさせる */
-        .table-wrapper {
-            flex: 1 1 auto; /* 残りのスペースを埋める */
-            overflow: auto; /* 縦横スクロール */
+        /* テーブルラッパー */
+        .table-wrapper {{
+            flex: 1 1 auto;
+            overflow: auto;
             position: relative;
             background-color: #fff;
-            -webkit-overflow-scrolling: touch; /* iOS慣性スクロール */
-        }
+            -webkit-overflow-scrolling: touch;
+        }}
 
         /* テーブル設定 */
-        table { 
+        table {{ 
             border-collapse: separate; 
             border-spacing: 0; 
             width: 100%; 
             font-size: 13px; 
-            min-width: 800px; /* スマホでも横につぶれないよう最小幅を確保 */
-        }
+            min-width: 800px;
+        }}
         
-        th, td { 
+        th, td {{ 
             padding: 10px 12px;
             text-align: left; 
             border-right: 1px solid #eee;
             border-bottom: 1px solid #eee;
             vertical-align: middle;
             line-height: 1.5;
-        }
+        }}
 
         /* ヘッダー固定設定 */
-        th { 
+        th {{ 
             background-color: #f1f3f5;
             color: #444;
             font-weight: bold;
@@ -207,41 +207,50 @@ html_content = """
             cursor: pointer;
             border-bottom: 2px solid #ddd;
             white-space: nowrap;
-        }
-        th:hover { background-color: #e9ecef; }
+        }}
+        th:hover {{ background-color: #e9ecef; }}
 
-        /* 列幅の調整 */
-        th:nth-child(1), td:nth-child(1) { min-width: 90px; } /* 部屋主 */
-        th:nth-child(2), td:nth-child(2) { min-width: 50px; text-align: center; } /* 順番 */
+        /* --- 列幅の調整エリア --- */
+        th:nth-child(1), td:nth-child(1) {{ min-width: 90px; }} /* 部屋主 */
+        th:nth-child(2), td:nth-child(2) {{ min-width: 50px; text-align: center; }} /* 順番 */
         
-        td { word-break: break-all; } /* 長い文字を折り返す */
-        th:last-child, td:last-child { border-right: none; }
-        tr:nth-child(even) { background-color: #fafafa; }
+        /* 4列目(作品名)と5列目(歌手名)の幅を同じ比率・同じ最小幅にする */
+        th:nth-child(4), td:nth-child(4),
+        th:nth-child(5), td:nth-child(5) {{
+            min-width: 170px; /* 最小幅を統一 */
+            width: 18%;       /* 画面幅に余裕がある場合、同じ比率で広がるように指定 */
+        }}
+
+        /* 7列目(コメント)を広くする */
+        th:nth-child(7), td:nth-child(7) {{
+            min-width: 250px; /* 他の列より大きく確保 */
+        }}
+        
+        td {{ word-break: break-all; }}
+        th:last-child, td:last-child {{ border-right: none; }}
+        tr:nth-child(even) {{ background-color: #fafafa; }}
         
         /* --- スマホ向けレスポンシブ調整 --- */
-        @media (max-width: 600px) {
-            /* ヘッダー周りの余白を詰める */
-            .header-area { padding: 10px 12px; }
-            h1 { font-size: 1.3rem; }
-            .update-time { margin-bottom: 10px; }
+        @media (max-width: 600px) {{
+            .header-area {{ padding: 10px 12px; }}
+            h1 {{ font-size: 1.3rem; }}
+            .update-time {{ margin-bottom: 10px; }}
             
-            /* 検索ボックスをスマホ幅いっぱいにする */
-            .search-container { 
-                flex-direction: column; /* 縦並び */
-                align-items: stretch; /* 幅いっぱい */
+            .search-container {{ 
+                flex-direction: column;
+                align-items: stretch;
                 gap: 8px;
-            }
-            .search-box { width: 100%; font-size: 16px; /* iOS拡大防止 */ }
+            }}
+            .search-box {{ width: 100%; font-size: 16px; }}
             
-            .btn-group { 
+            .btn-group {{ 
                 display: flex; 
                 gap: 8px; 
-            }
-            .btn { flex: 1; text-align: center; padding: 10px; } /* ボタン押しやすく */
+            }}
+            .btn {{ flex: 1; text-align: center; padding: 10px; }}
             
-            /* テーブル文字サイズ微調整 */
-            th, td { padding: 8px; font-size: 12px; }
-        }
+            th, td {{ padding: 8px; font-size: 12px; }}
+        }}
     </style>
 </head>
 <body>
@@ -273,7 +282,7 @@ if all_data_frames:
         final_df = final_df[cols]
 
     # 件数表示
-    html_content += f'<div class="count-display">全 {len(final_df)} 件</div>'
+    html_content += f'<div class="count-display">全 {{len(final_df)}} 件</div>'
     html_content += '</div>' # header-area 終了
 
     # スクロールエリア
@@ -281,14 +290,14 @@ if all_data_frames:
     
     html_content += '<thead><tr>'
     for col in final_df.columns:
-        html_content += f'<th onclick="sortTable({list(final_df.columns).index(col)})">{col} <i class="fas fa-sort"></i></th>'
+        html_content += f'<th onclick="sortTable({{list(final_df.columns).index(col)}})">{{col}} <i class="fas fa-sort"></i></th>'
     html_content += '</tr></thead>'
     
     html_content += '<tbody>'
     for _, row in final_df.iterrows():
         html_content += '<tr>'
         for val in row:
-            html_content += f'<td>{val}</td>'
+            html_content += f'<td>{{val}}</td>'
         html_content += '</tr>'
     html_content += '</tbody></table></div>'
 
@@ -346,36 +355,4 @@ html_content += """
 
     function sortTable(n) {
         const table = document.getElementById("setlistTable");
-        const tbody = table.querySelector('tbody');
-        const rows = Array.from(tbody.rows);
-        const th = table.querySelectorAll('th')[n];
-        
-        let dir = th.getAttribute('data-dir') === 'asc' ? 'desc' : 'asc';
-        
-        table.querySelectorAll('th').forEach(h => h.setAttribute('data-dir', ''));
-        th.setAttribute('data-dir', dir);
-
-        rows.sort((a, b) => {
-            const cellA = a.cells[n].innerText.trim();
-            const cellB = b.cells[n].innerText.trim();
-
-            if (!isNaN(cellA) && !isNaN(cellB) && cellA !== '' && cellB !== '') {
-                const numA = parseFloat(cellA);
-                const numB = parseFloat(cellB);
-                return dir === 'asc' ? numA - numB : numB - numA;
-            }
-
-            return dir === 'asc' 
-                ? cellA.localeCompare(cellB, 'ja') 
-                : cellB.localeCompare(cellA, 'ja');
-        });
-
-        rows.forEach(row => tbody.appendChild(row));
-    }
-</script>
-</body>
-</html>
-"""
-
-with open("index.html", "w", encoding="utf-8") as f:
-    f.write(html_content)
+        const tbody = table
