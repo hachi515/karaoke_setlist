@@ -98,15 +98,23 @@ html_content = """
         .btn-reset { background-color: #6c757d; }
         .btn-reset:hover { background-color: #545b62; }
 
+        /* 件数表示用のスタイル */
+        .count-display {
+            text-align: right;
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #555;
+        }
+
         /* スクロールコンテナ */
         .table-wrapper {
             max-height: 80vh;
             overflow-y: auto;
-            border: 1px solid #ddd; /* 外枠 */
+            border: 1px solid #ddd;
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
 
-        /* テーブル設定（隙間対策のため separate に変更） */
+        /* テーブル設定 */
         table { 
             border-collapse: separate; 
             border-spacing: 0; 
@@ -114,7 +122,6 @@ html_content = """
             font-size: 14px; 
         }
         
-        /* セルの枠線設定（separateにしたので個別に線を引く） */
         th, td { 
             padding: 10px; 
             text-align: left; 
@@ -122,29 +129,20 @@ html_content = """
             border-bottom: 1px solid #ddd;
         }
         
-        /* ヘッダー固有設定 */
         th { 
             background-color: #f2f2f2; 
             position: sticky; 
             top: 0; 
             z-index: 10; 
             cursor: pointer;
-            border-top: none; /* 上の線はwrapperの線に任せる */
-            border-bottom: 1px solid #ccc; /* ヘッダーの下線は少し濃く */
+            border-top: none;
+            border-bottom: 1px solid #ccc;
             box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.1);
             user-select: none;
         }
 
-        /* 右端の線はwrapperの線と重複するので消す */
-        th:last-child, td:last-child {
-            border-right: none;
-        }
-        
-        /* 最後の行の下線も消す */
-        tr:last-child td {
-            border-bottom: none;
-        }
-
+        th:last-child, td:last-child { border-right: none; }
+        tr:last-child td { border-bottom: none; }
         tr:nth-child(even) { background-color: #fff; }
 
         .update-time { color: #666; font-size: 0.9em; margin-bottom: 10px; }
@@ -172,14 +170,21 @@ html_content += f'''
 if all_data_frames:
     final_df = pd.concat(all_data_frames, ignore_index=True)
 
+    # --- ソート設定の変更 ---
+    # 順番を数値に変換
     if '順番' in final_df.columns:
         final_df['順番'] = pd.to_numeric(final_df['順番'], errors='coerce')
-        final_df = final_df.sort_values(by=['順番'], ascending=True)
+    
+    # 並び替え: 1.取得日(降順/新しい順) -> 2.順番(降順/大きい順)
+    final_df = final_df.sort_values(by=['取得日', '順番'], ascending=[False, False])
 
     cols = list(final_df.columns)
     if '部屋主' in cols:
         cols.insert(0, cols.pop(cols.index('部屋主')))
         final_df = final_df[cols]
+
+    # --- 件数表示の追加 ---
+    html_content += f'<div class="count-display">全 {len(final_df)} 件</div>'
 
     html_content += '<div class="table-wrapper"><table id="setlistTable">'
     
@@ -209,6 +214,7 @@ html_content += """
         
         const table = document.getElementById("setlistTable");
         const trs = table.getElementsByTagName("tr");
+        let visibleCount = 0;
 
         for (let i = 1; i < trs.length; i++) {
             const tr = trs[i];
@@ -226,8 +232,17 @@ html_content += """
                     break;
                 }
             }
-            tr.style.display = (isMatch || keywords.length === 0) ? "" : "none";
+            if (isMatch || keywords.length === 0) {
+                tr.style.display = "";
+                visibleCount++;
+            } else {
+                tr.style.display = "none";
+            }
         }
+        
+        // 検索結果件数の更新（オプション：検索時に件数を書き換える場合）
+        // const countDisplay = document.querySelector('.count-display');
+        // if(countDisplay) countDisplay.innerText = 'ヒット: ' + visibleCount + ' 件';
     }
 
     document.getElementById("searchInput").addEventListener("keyup", function(event) {
