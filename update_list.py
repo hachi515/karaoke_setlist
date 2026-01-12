@@ -104,14 +104,20 @@ if new_data_frames:
     final_df = combined_df.drop_duplicates(subset=existing_cols, keep='last')
     final_df = final_df.fillna("")
 
-    # ソート
+    # --- ソート処理の強化 ---
     if '順番' in final_df.columns:
         final_df['順番'] = pd.to_numeric(final_df['順番'], errors='coerce')
         
-    sort_cols = ['取得日', '順番']
-    final_df = final_df.sort_values(by=sort_cols, ascending=[False, False])
+    # 日付文字列を一時的にdatetime型に変換してソートキーにする（書式揺れ対策＆確実な日付順）
+    final_df['temp_date'] = pd.to_datetime(final_df['取得日'], errors='coerce')
     
-    # 列の整理
+    # ソート: 日付(新しい順) > 順番(大きい順)
+    final_df = final_df.sort_values(by=['temp_date', '順番'], ascending=[False, False])
+    
+    # 一時的な列を削除
+    final_df = final_df.drop(columns=['temp_date'])
+    
+    # 列の整理（部屋主を先頭に）
     cols = list(final_df.columns)
     if '部屋主' in cols:
         cols.insert(0, cols.pop(cols.index('部屋主')))
@@ -123,7 +129,9 @@ if new_data_frames:
     print("履歴ファイルを更新しました。")
 
 else:
+    # データ取得がなかった場合は既存データを使用（並び替えは行わない）
     final_df = history_df
+    # ただしHTML表示用に一度並び替えた方が良い場合は、ここで同様のソート処理を入れてもOK
     print("新しいデータが取得できませんでした。過去のデータを使用します。")
 
 
@@ -447,4 +455,3 @@ html_content += f"""
 
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
-
