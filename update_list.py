@@ -40,6 +40,7 @@ room_map = {
     11084: "タカヒロ部屋",
     11085: "タカヒロ部屋",
     11086: "タカヒロ部屋",
+    11087: "MiO部屋",
     11088: "ほっしー部屋",
     11101: "えみち部屋",
     11102: "るえ部屋",
@@ -446,3 +447,4 @@ html_content += f"""
 
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
+
