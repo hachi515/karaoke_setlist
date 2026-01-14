@@ -117,6 +117,7 @@ if new_data_frames:
     final_df = final_df.sort_values(by=['temp_date', '順番'], ascending=[False, False])
     final_df = final_df.drop(columns=['temp_date'])
     
+    # 列整理
     cols = list(final_df.columns)
     if '部屋主' in cols:
         cols.insert(0, cols.pop(cols.index('部屋主')))
@@ -282,7 +283,7 @@ if cool_file and os.path.exists(cool_file):
 
 
 # ==========================================
-# HTML生成 (UI修正版)
+# HTML生成 (UI修正: 行幅縮小、スクロール復活)
 # ==========================================
 
 columns_to_hide = ['コメント'] 
@@ -312,6 +313,7 @@ html_content = f"""
     <title>Karaoke Dashboard</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
+        /* ベース設定 */
         :root {{
             --primary-color: #2c3e50;
             --accent-color: #3498db;
@@ -326,6 +328,7 @@ html_content = f"""
             font-family: "Helvetica Neue", Arial, sans-serif;
             background-color: var(--bg-color);
             color: var(--text-color);
+            font-size: 13px; /* ベース文字サイズを少し小さく */
             display: flex; flex-direction: column;
         }}
 
@@ -337,77 +340,80 @@ html_content = f"""
             z-index: 100;
         }}
         .header-inner {{
-            padding: 10px 20px; display: flex; justify-content: space-between; align-items: center;
+            padding: 8px 15px; display: flex; justify-content: space-between; align-items: center;
         }}
-        h1 {{ margin: 0; font-size: 1.4rem; color: var(--primary-color); }}
-        .update-time {{ font-size: 0.9rem; color: #7f8c8d; }}
+        h1 {{ margin: 0; font-size: 1.2rem; color: var(--primary-color); }}
+        .update-time {{ font-size: 0.8rem; color: #7f8c8d; }}
 
         .tabs {{
-            display: flex; padding: 0 20px; border-bottom: 1px solid var(--border-color);
+            display: flex; padding: 0 15px; border-bottom: 1px solid var(--border-color);
         }}
         .tab-btn {{
-            padding: 12px 25px; cursor: pointer; border: none; background: none;
+            padding: 10px 20px; cursor: pointer; border: none; background: none;
             font-weight: bold; color: #7f8c8d; border-bottom: 3px solid transparent;
-            font-size: 16px;
+            font-size: 14px;
         }}
         .tab-btn.active {{ color: var(--accent-color); border-bottom-color: var(--accent-color); }}
 
         /* 検索ボックスエリア */
         .controls-row {{
-            padding: 10px 20px; display: flex; gap: 10px; align-items: center;
+            padding: 8px 15px; display: flex; gap: 8px; align-items: center;
             background-color: #fff; border-bottom: 1px solid var(--border-color);
         }}
         .search-box {{
-            padding: 8px 15px; border: 1px solid #ccc; border-radius: 20px;
-            width: 300px; font-size: 16px; outline: none;
+            padding: 6px 12px; border: 1px solid #ccc; border-radius: 4px;
+            width: 250px; font-size: 13px; outline: none;
         }}
         .btn {{
-            padding: 8px 15px; border-radius: 20px; border: none; cursor: pointer;
-            color: #fff; background-color: var(--accent-color); font-size: 1rem;
-            font-weight: bold;
+            padding: 6px 12px; border-radius: 4px; border: none; cursor: pointer;
+            color: #fff; background-color: var(--accent-color); font-size: 13px;
+            font-weight: bold; white-space: nowrap;
         }}
         .btn:hover {{ opacity: 0.9; }}
-        .count-display {{ margin-left: auto; font-weight: bold; font-size: 1rem; }}
+        .count-display {{ margin-left: auto; font-weight: bold; font-size: 13px; }}
 
         /* --- Scrollable Content Area --- */
         .content-area {{
             flex: 1; 
             position: relative; 
-            overflow: hidden; /* 子要素でスクロール */
+            overflow: hidden; /* 子要素でスクロールさせる */
         }}
         .tab-content {{
             display: none; 
             height: 100%; 
             overflow-y: auto; /* ここでスクロール */
             -webkit-overflow-scrolling: touch;
-            padding: 0 20px 50px 20px;
+            padding: 0 15px 40px 15px;
         }}
         .tab-content.active {{ display: block; }}
 
-        /* Table Styles */
+        /* Table Styles (Compact) */
         table {{
             width: 100%; border-collapse: separate; border-spacing: 0;
-            background: #fff; border-radius: 8px; margin-top: 15px; margin-bottom: 30px;
+            background: #fff; border-radius: 4px; margin-top: 10px; margin-bottom: 20px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }}
         th, td {{
-            padding: 12px 15px; text-align: left; border-bottom: 1px solid #eee;
-            font-size: 16px; vertical-align: middle; line-height: 1.5;
+            padding: 5px 8px; /* パディングを狭くしてコンパクトに */
+            text-align: left; border-bottom: 1px solid #eee;
+            font-size: 13px; /* 文字サイズ小さめ */
+            vertical-align: middle; line-height: 1.3;
         }}
         th {{
-            background-color: var(--primary-color); color: #fff;
-            position: sticky; top: 0; z-index: 10; font-weight: 600;
+            background-color: #f8f9fa; color: #444;
+            position: sticky; top: 0; z-index: 10; font-weight: bold;
+            border-bottom: 2px solid #ddd;
         }}
-        tr:nth-child(even) {{ background-color: #f8f9fa; }}
-        tr:hover {{ background-color: #eaf2f8; }}
+        tr:nth-child(even) {{ background-color: #fafafa; }}
+        tr:hover {{ background-color: #f1f8ff; }}
         tr.hidden {{ display: none !important; }}
 
         /* Analysis Styles */
         .category-header {{
-            margin-top: 25px; padding: 12px 15px;
+            margin-top: 20px; padding: 10px 15px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white; border-radius: 8px;
-            font-weight: bold; font-size: 1.3rem; cursor: pointer;
+            color: white; border-radius: 6px;
+            font-weight: bold; font-size: 1.1rem; cursor: pointer;
             user-select: none;
         }}
         .category-header:hover {{ opacity: 0.9; }}
@@ -417,11 +423,11 @@ html_content = f"""
         tr.zero-count {{ color: #ccc; }}
         tr.has-count {{ background-color: #fff; font-weight: 600; color: #333; }}
         
-        .count-wrapper {{ display: flex; align-items: center; gap: 10px; }}
-        .count-num {{ width: 30px; text-align: right; font-size:1.2rem; }}
+        .count-wrapper {{ display: flex; align-items: center; gap: 8px; }}
+        .count-num {{ width: 25px; text-align: right; font-size:1.1rem; }}
         .bar-chart {{
-            height: 12px; background: linear-gradient(90deg, #3498db, #2980b9);
-            border-radius: 6px;
+            height: 10px; background: linear-gradient(90deg, #3498db, #2980b9);
+            border-radius: 5px;
         }}
     </style>
 </head>
