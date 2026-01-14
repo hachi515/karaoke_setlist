@@ -3,6 +3,7 @@ import requests
 import datetime
 import os
 import re
+import glob
 
 # --- 時刻設定 ---
 now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
@@ -49,6 +50,15 @@ room_map = {
     11106: "冨塚部屋"
 }
 
+# --- 関数: 文字列から括弧と中身を除去して正規化 ---
+def normalize_text(text):
+    if not isinstance(text, str):
+        return str(text)
+    # 全角・半角の [], (), {}, 【】 とその中身を除去
+    text = re.sub(r'[\[\(\{【].*?[\]\)\}】]', '', text)
+    # 前後の空白を除去し、全角スペースを半角に
+    return text.replace('　', ' ').strip()
+
 # --- 1. 過去のデータ(history.csv)を読み込む ---
 history_file = "history.csv"
 if os.path.exists(history_file):
@@ -81,22 +91,20 @@ for port in target_ports:
             new_data_frames.append(df)
             
     except Exception as e:
-        pass # エラーは無視
+        pass 
 
 # 新しいデータがある場合のみ処理
 if new_data_frames:
     new_df = pd.concat(new_data_frames, ignore_index=True)
     combined_df = pd.concat([history_df, new_df], ignore_index=True)
 
-    # --- クリーニング (ヘッダー行の混入除去) ---
+    # --- クリーニング ---
     clean_check_cols = ['部屋主', '曲名（ファイル名）', '作品名', '歌手名']
     for col in clean_check_cols:
         if col in combined_df.columns:
             combined_df = combined_df[combined_df[col] != col]
 
     # --- 重複排除 (keep='first' で過去の日付を維持) ---
-    # これにより、日付が変わってもリストに残り続けている曲は、
-    # 新しい日付で上書きされず、最初に取得した日付のまま残ります。
     subset_cols = ['部屋主', '順番', '曲名（ファイル名）', '歌った人']
     existing_cols = [c for c in subset_cols if c in combined_df.columns]
     
@@ -126,31 +134,26 @@ else:
 
 
 # ==========================================
-# ★修正: クール集計表の処理 (CSV構造に対応)
+# ★修正: クール集計表の処理 (括弧除外・カテゴリ判定強化)
 # ==========================================
 analysis_html_content = "" 
 cool_data_exists = False
-cool_file = "cool_analysis.csv" # 指定されたファイル名
+cool_file = "cool_analysis.csv" 
 
-# ファイル存在チェック（なければ似た名前を探す）
+# ファイル検索
 if not os.path.exists(cool_file):
-    print(f"{cool_file} が見つかりません。代替ファイルを探します...")
     possible_files = [f for f in os.listdir('.') if f.endswith('.csv') and 'history' not in f]
     if possible_files:
         cool_file = possible_files[0]
-        print(f"-> {cool_file} を使用します。")
-    else:
-        cool_file = None
 
-if cool_file:
+if cool_file and os.path.exists(cool_file):
     try:
         # 文字コード対応読み込み
         raw_df = None
         for enc in ['utf-8-sig', 'cp932', 'shift_jis']:
             try:
-                # header=Noneで読み込み、行ごとに解析する
                 raw_df = pd.read_csv(cool_file, header=None, encoding=enc)
-                print(f"集計表をエンコーディング {enc} で読み込みました。")
+                print(f"集計表({cool_file})をエンコーディング {enc} で読み込みました。")
                 break
             except UnicodeDecodeError:
                 continue
@@ -158,22 +161,25 @@ if cool_file:
         if raw_df is not None:
             raw_df = raw_df.fillna("")
             
-            # 集計用の履歴データ準備 (2026/1/1 - 2026/3/31)
+            # 集計用の履歴データ準備 (期間指定)
             start_date = pd.to_datetime("2026/01/01")
             end_date = pd.to_datetime("2026/03/31")
             
             analysis_source_df = final_df.copy()
             analysis_source_df['dt_obj'] = pd.to_datetime(analysis_source_df['取得日'], errors='coerce')
+            
+            # ★ここで履歴データの曲名を事前に正規化（括弧除去）しておく（検索高速化と精度向上）
+            analysis_source_df['normalized_song'] = analysis_source_df['曲名（ファイル名）'].apply(normalize_text)
+            
             target_history = analysis_source_df[
                 (analysis_source_df['dt_obj'] >= start_date) & 
                 (analysis_source_df['dt_obj'] <= end_date)
             ]
 
-            # --- CSV解析 & HTML生成ループ ---
+            # --- CSV解析 ---
             categorized_data = {}
             current_category = "未分類"
             
-            # 行ごとの解析
             for idx, row in raw_df.iterrows():
                 # 空行スキップ
                 if not any(str(x).strip() for x in row):
@@ -181,26 +187,27 @@ if cool_file:
 
                 col0 = str(row[0]).strip()
                 
-                # カテゴリ判定 (「20xx年」や「アニメ」を含み、かつ「作品名」ではない)
-                # ファイル構造に合わせて柔軟に判定
-                if ("年" in col0 or "アニメ" in col0) and "作品名" not in col0:
+                # ★カテゴリ判定ロジック強化
+                # 1列目に文字があり、かつ「作品名」ではなく、2列目以降がほぼ空の場合など
+                # 「年」や「アニメ」が含まれる行をカテゴリとみなす
+                is_header_row = "作品名" in col0
+                is_likely_category = ("年" in col0 or "アニメ" in col0) and not is_header_row
+                
+                if is_likely_category:
                     current_category = col0
                     if current_category not in categorized_data:
                         categorized_data[current_category] = []
                     continue
                 
-                # ヘッダー行スキップ
-                if "作品名" in col0:
+                if is_header_row:
                     continue
                     
-                # データ行 (列インデックス: 0=作品名, 1=OP/ED, 2=歌手, 3=曲名)
-                # エラー回避のため長さをチェック
+                # データ行取得
                 anime = str(row[0]).strip() if len(row) > 0 else ""
                 type_ = str(row[1]).strip() if len(row) > 1 else ""
                 artist = str(row[2]).strip() if len(row) > 2 else ""
                 song = str(row[3]).strip() if len(row) > 3 else ""
                 
-                # データが空ならスキップ
                 if not anime and not song:
                     continue
 
@@ -211,10 +218,14 @@ if cool_file:
                     "anime": anime, "type": type_, "artist": artist, "song": song
                 })
 
-            # HTML組み立て
+            # --- HTML組み立て ---
             for category, items in categorized_data.items():
+                # カテゴリヘッダー（クリックイベント追加）
                 analysis_html_content += f"""
-                <div class="category-header">{category}</div>
+                <div class="category-header" onclick="toggleCategory(this)">
+                    {category} <i class="fas fa-chevron-down" style="float:right;"></i>
+                </div>
+                <div class="category-content">
                 <table class="analysisTable">
                     <thead>
                         <tr>
@@ -229,23 +240,23 @@ if cool_file:
                 """
                 
                 for item in items:
-                    # マッチング処理
+                    # ★マッチング処理 (括弧を除外した状態で比較)
                     mask = pd.Series([False] * len(target_history))
                     
-                    # 曲名で検索
-                    if item["song"]:
-                        # 特殊文字のエスケープ処理をして部分一致検索
-                        safe_song = re.escape(item["song"])
-                        mask = mask | target_history['曲名（ファイル名）'].str.contains(safe_song, case=False, na=False)
+                    target_song_norm = normalize_text(item["song"])
+                    target_anime_norm = normalize_text(item["anime"])
                     
-                    # 作品名で検索
-                    if item["anime"]:
-                        safe_anime = re.escape(item["anime"])
-                        mask = mask | target_history['曲名（ファイル名）'].str.contains(safe_anime, case=False, na=False)
+                    if target_song_norm:
+                        # 曲名がある場合: 正規化した履歴の中から、正規化したターゲット曲名を含むものを探す
+                        # escapeして正規表現エラーを防ぐ
+                        safe_song = re.escape(target_song_norm)
+                        mask = mask | target_history['normalized_song'].str.contains(safe_song, case=False, na=False)
+                    elif target_anime_norm:
+                        # 曲名がなく作品名のみの場合（例外対応）
+                        safe_anime = re.escape(target_anime_norm)
+                        mask = mask | target_history['normalized_song'].str.contains(safe_anime, case=False, na=False)
                     
                     count = len(target_history[mask])
-                    
-                    # 0回でも表示
                     row_class = "zero-count" if count == 0 else "has-count"
                     
                     # グラフバー
@@ -264,7 +275,7 @@ if cool_file:
                     analysis_html_content += f'</td>'
                     analysis_html_content += '</tr>'
                 
-                analysis_html_content += "</tbody></table>"
+                analysis_html_content += "</tbody></table></div>" # div.category-content close
 
             cool_data_exists = True
             print("クール集計処理が完了しました。")
@@ -278,7 +289,7 @@ if cool_file:
 
 
 # ==========================================
-# HTML生成 (UI調整: 文字サイズ大、高速検索)
+# HTML生成 (折りたたみ機能・UI調整)
 # ==========================================
 
 columns_to_hide = ['コメント'] 
@@ -287,7 +298,6 @@ if not final_df.empty:
 else:
     html_df = pd.DataFrame()
 
-# セットリスト行生成
 setlist_rows = ""
 for _, row in html_df.iterrows():
     setlist_rows += '<tr>'
@@ -328,14 +338,11 @@ html_content = f"""
 
         /* Header */
         .header-area {{
-            flex: 0 0 auto; 
-            background-color: var(--header-bg);
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-            z-index: 100;
+            flex: 0 0 auto; background-color: var(--header-bg);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05); z-index: 100;
         }}
         .header-inner {{
-            padding: 10px 20px;
-            display: flex; justify-content: space-between; align-items: center;
+            padding: 10px 20px; display: flex; justify-content: space-between; align-items: center;
         }}
         h1 {{ margin: 0; font-size: 1.4rem; color: var(--primary-color); }}
         .update-time {{ font-size: 0.9rem; color: #7f8c8d; }}
@@ -383,7 +390,7 @@ html_content = f"""
         }}
         .tab-content.active {{ display: block; }}
 
-        /* Table (Setlist) */
+        /* Table (Common) */
         table {{
             width: 100%; border-collapse: separate; border-spacing: 0;
             background: #fff; border-radius: 8px; overflow: hidden;
@@ -400,18 +407,30 @@ html_content = f"""
         }}
         tr:nth-child(even) {{ background-color: #f8f9fa; }}
         tr:hover {{ background-color: #eaf2f8; }}
-        
-        /* 高速検索用非表示クラス */
         tr.hidden {{ display: none !important; }}
 
-        /* Analysis Table Styles */
+        /* Analysis Specific */
         .category-header {{
-            margin-top: 30px; margin-bottom: 10px; padding: 10px 15px;
+            margin-top: 20px; margin-bottom: 5px; padding: 12px 15px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white; border-radius: 8px;
             font-weight: bold; font-size: 1.3rem;
             box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            cursor: pointer; /* クリック可能に */
+            user-select: none;
+            transition: opacity 0.2s;
         }}
+        .category-header:hover {{ opacity: 0.9; }}
+        
+        .category-content {{
+            /* 折りたたみ用コンテナ */
+            display: block; 
+            transition: all 0.3s;
+        }}
+        .category-content.collapsed {{
+            display: none;
+        }}
+
         tr.zero-count {{ color: #ccc; }}
         tr.has-count {{ background-color: #fff; font-weight: 600; color: #333; }}
         tr.has-count:nth-child(even) {{ background-color: #f0f8ff; }}
@@ -462,21 +481,37 @@ html_content = f"""
             <div class="analysis-header">
                 <div style="font-size:0.9rem; color:#7f8c8d; margin-bottom:10px; text-align:right;">集計対象: 2026/01/01 - 2026/03/31</div>
             </div>
-            {analysis_html_content if cool_data_exists else '<div style="padding:20px;text-align:center;color:#e74c3c;">集計データがありません。<br>cool_analysis.csvを確認してください。</div>'}
+            {analysis_html_content if cool_data_exists else '<div style="padding:20px;text-align:center;color:#e74c3c;">集計データがありません。<br>cool_analysis.csvの形式を確認してください。</div>'}
         </div>
     </div>
 
 <script>
     function openTab(tabName) {{
         document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         document.getElementById(tabName).classList.add('active');
+        
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         const btnIndex = tabName === 'setlist' ? 0 : 1;
         document.querySelectorAll('.tab-btn')[btnIndex].classList.add('active');
+        
         document.getElementById('setlist-controls').style.display = tabName === 'setlist' ? 'flex' : 'none';
     }}
 
-    // --- 高速検索ロジック (Cache + Debounce) ---
+    // --- 折りたたみ機能 ---
+    function toggleCategory(header) {{
+        const content = header.nextElementSibling;
+        content.classList.toggle('collapsed');
+        const icon = header.querySelector('i');
+        if (content.classList.contains('collapsed')) {{
+            icon.classList.remove('fa-chevron-down');
+            icon.classList.add('fa-chevron-right');
+        }} else {{
+            icon.classList.remove('fa-chevron-right');
+            icon.classList.add('fa-chevron-down');
+        }}
+    }}
+
+    // --- 検索ロジック ---
     const searchInput = document.getElementById("searchInput");
     const table = document.getElementById("setlistTable");
     const countDisplay = document.getElementById('countDisplay');
@@ -489,7 +524,6 @@ html_content = f"""
         const tbody = table.tBodies[0];
         if (tbody) {{
             tbodyRows = Array.from(tbody.rows);
-            // 事前にテキストをキャッシュ (大文字変換済み)
             tableData = tbodyRows.map(row => row.innerText.toUpperCase());
             countDisplay.innerText = '全 ' + tbodyRows.length + ' 件';
         }}
@@ -497,16 +531,15 @@ html_content = f"""
 
     searchInput.addEventListener("keyup", function() {{
         clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(performSearch, 200); // 200ms遅延
+        debounceTimer = setTimeout(performSearch, 200);
     }});
 
     function performSearch() {{
         const filter = searchInput.value.toUpperCase();
         const keywords = filter.replace(/　/g, " ").split(" ").filter(k => k.length > 0);
         let visibleCount = 0;
-        
-        // DOMアクセスを最小限にして高速化
         const total = tableData.length;
+        
         for (let i = 0; i < total; i++) {{
             let isMatch = true;
             const rowText = tableData[i];
@@ -550,8 +583,6 @@ html_content = f"""
         }});
         
         rows.forEach(row => tbody.appendChild(row));
-        
-        // ソート後にキャッシュ再構築
         tbodyRows = rows;
         tableData = tbodyRows.map(row => row.innerText.toUpperCase());
     }}
