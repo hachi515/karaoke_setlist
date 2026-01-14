@@ -3,7 +3,7 @@ import requests
 import datetime
 import os
 import re
-from itertools import groupby # 行統合のために追加
+from itertools import groupby
 
 # --- 時刻設定 ---
 now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
@@ -132,7 +132,7 @@ else:
 
 
 # ==========================================
-# ★集計処理 (行結合・配色修正・AND検索)
+# ★集計処理
 # ==========================================
 analysis_html_content = "" 
 cool_data_exists = False
@@ -232,7 +232,6 @@ if cool_file and os.path.exists(cool_file):
                     <tbody>
                 """
                 
-                # itertools.groupby で作品名ごとにグループ化して rowspan を計算
                 def get_anime_key(x): return x['anime']
                 
                 for anime_name, group_iter in groupby(items, key=get_anime_key):
@@ -240,7 +239,6 @@ if cool_file and os.path.exists(cool_file):
                     rowspan = len(group_items)
                     
                     for i, item in enumerate(group_items):
-                        # 集計
                         target_song_norm = normalize_text(item["song"])
                         target_anime_norm = normalize_text(item["anime"])
                         
@@ -271,7 +269,6 @@ if cool_file and os.path.exists(cool_file):
                         
                         analysis_html_content += f'<tr class="{row_class}">'
                         
-                        # ★ここが行結合(rowspan)処理
                         if i == 0:
                             analysis_html_content += f'<td rowspan="{rowspan}">{item["anime"]}</td>'
                             
@@ -295,7 +292,7 @@ if cool_file and os.path.exists(cool_file):
 
 
 # ==========================================
-# HTML生成 (UI修正: 黒系ヘッダー、行幅、スクロール)
+# HTML生成 (CSS修正: 文字太さ、色)
 # ==========================================
 
 columns_to_hide = ['コメント'] 
@@ -327,7 +324,7 @@ html_content = f"""
     <style>
         /* ベース設定 */
         :root {{
-            --primary-color: #2c3e50; /* 元の黒系ネイビー */
+            --primary-color: #2c3e50;
             --accent-color: #3498db;
             --bg-color: #f4f7f6;
             --text-color: #333;
@@ -340,7 +337,7 @@ html_content = f"""
             font-family: "Helvetica Neue", Arial, sans-serif;
             background-color: var(--bg-color);
             color: var(--text-color);
-            font-size: 13px; /* セットリストに合わせた文字サイズ */
+            font-size: 13px; 
             display: flex; flex-direction: column;
         }}
 
@@ -399,20 +396,19 @@ html_content = f"""
         }}
         .tab-content.active {{ display: block; }}
 
-        /* Table Styles (Compact & Dark Headers) */
+        /* Table Styles */
         table {{
             width: 100%; border-collapse: separate; border-spacing: 0;
             background: #fff; border-radius: 4px; margin-top: 10px; margin-bottom: 20px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }}
         th, td {{
-            padding: 5px 8px; /* パディングを狭く */
+            padding: 5px 8px; 
             text-align: left; border-bottom: 1px solid #eee;
             font-size: 13px; 
             vertical-align: middle; line-height: 1.3;
         }}
         th {{
-            /* ★ヘッダーを黒系に戻す */
             background-color: var(--primary-color); 
             color: #fff;
             position: sticky; top: 0; z-index: 10; font-weight: bold;
@@ -434,7 +430,6 @@ html_content = f"""
         .category-content.collapsed {{ display: none; }}
         
         tr.zero-count {{ color: #ccc; }}
-        /* ★太文字(font-weight:600)を削除し、セットリストと同じ太さに */
         tr.has-count {{ background-color: #fff; color: #333; }}
         
         .count-wrapper {{ display: flex; align-items: center; gap: 8px; }}
@@ -444,13 +439,13 @@ html_content = f"""
             border-radius: 5px;
         }}
         
-        /* 結合セルのスタイル調整 */
+        /* ★修正: 結合セル(作品名)を通常文字・通常色に */
         td[rowspan] {{
             background-color: #fff;
             border-right: 1px solid #eee;
             vertical-align: middle;
-            font-weight: bold; /* 作品名だけは見やすいように少し太くしても良いが、要望通りならnormal */
-            color: var(--primary-color);
+            font-weight: normal; /* 太字解除 */
+            color: inherit;      /* 通常色 */
         }}
     </style>
 </head>
