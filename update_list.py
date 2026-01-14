@@ -131,7 +131,7 @@ else:
 
 
 # ==========================================
-# ★集計処理 (前回と同じロジック)
+# ★集計処理 (カテゴリ厳格化・AND検索・テスト除外)
 # ==========================================
 analysis_html_content = "" 
 cool_data_exists = False
@@ -156,7 +156,6 @@ if cool_file and os.path.exists(cool_file):
         if raw_df is not None:
             raw_df = raw_df.fillna("")
             
-            # 履歴データ準備
             start_date = pd.to_datetime("2026/01/01")
             end_date = pd.to_datetime("2026/03/31")
             
@@ -180,7 +179,6 @@ if cool_file and os.path.exists(cool_file):
                 (~analysis_source_df['歌った人'].astype(str).apply(lambda x: any(k in x for k in exclude_keywords)))
             ]
 
-            # CSV解析 (カテゴリ厳格化)
             categorized_data = {}
             ALLOWED_CATEGORIES = ["2026年冬アニメ", "2025年秋アニメ"]
             current_category = None
@@ -211,7 +209,6 @@ if cool_file and os.path.exists(cool_file):
                     "anime": anime, "type": type_, "artist": artist, "song": song
                 })
 
-            # HTML生成
             for category, items in categorized_data.items():
                 analysis_html_content += f"""
                 <div class="category-header" onclick="toggleCategory(this)">
@@ -235,7 +232,6 @@ if cool_file and os.path.exists(cool_file):
                     target_song_norm = normalize_text(item["song"])
                     target_anime_norm = normalize_text(item["anime"])
                     
-                    # AND検索ロジック
                     mask = pd.Series([False] * len(target_history))
                     safe_song = re.escape(target_song_norm)
                     song_match_mask = target_history['norm_filename'].str.contains(safe_song, case=False, na=False)
@@ -283,7 +279,7 @@ if cool_file and os.path.exists(cool_file):
 
 
 # ==========================================
-# HTML生成 (UI修正: 行幅縮小、スクロール復活)
+# HTML生成 (UI修正: スクロール確実化)
 # ==========================================
 
 columns_to_hide = ['コメント'] 
@@ -328,7 +324,7 @@ html_content = f"""
             font-family: "Helvetica Neue", Arial, sans-serif;
             background-color: var(--bg-color);
             color: var(--text-color);
-            font-size: 13px; /* ベース文字サイズを少し小さく */
+            font-size: 13px; /* ベース文字サイズ */
             display: flex; flex-direction: column;
         }}
 
@@ -372,15 +368,16 @@ html_content = f"""
         .btn:hover {{ opacity: 0.9; }}
         .count-display {{ margin-left: auto; font-weight: bold; font-size: 13px; }}
 
-        /* --- Scrollable Content Area --- */
+        /* --- Scrollable Content Area (Absolute Positioning for Stability) --- */
         .content-area {{
             flex: 1; 
             position: relative; 
-            overflow: hidden; /* 子要素でスクロールさせる */
+            overflow: hidden; /* 親はスクロールさせない */
         }}
         .tab-content {{
             display: none; 
-            height: 100%; 
+            position: absolute; /* 絶対配置で領域いっぱいに広げる */
+            top: 0; left: 0; right: 0; bottom: 0;
             overflow-y: auto; /* ここでスクロール */
             -webkit-overflow-scrolling: touch;
             padding: 0 15px 40px 15px;
@@ -394,7 +391,7 @@ html_content = f"""
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }}
         th, td {{
-            padding: 5px 8px; /* パディングを狭くしてコンパクトに */
+            padding: 5px 8px; /* パディングを狭く */
             text-align: left; border-bottom: 1px solid #eee;
             font-size: 13px; /* 文字サイズ小さめ */
             vertical-align: middle; line-height: 1.3;
