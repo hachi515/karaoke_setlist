@@ -3,6 +3,7 @@ import requests
 import datetime
 import os
 import re
+from itertools import groupby # 行統合のために追加
 
 # --- 時刻設定 ---
 now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
@@ -131,7 +132,7 @@ else:
 
 
 # ==========================================
-# ★集計処理 (カテゴリ厳格化・AND検索・テスト除外)
+# ★集計処理 (行結合・配色修正・AND検索)
 # ==========================================
 analysis_html_content = "" 
 cool_data_exists = False
@@ -156,6 +157,7 @@ if cool_file and os.path.exists(cool_file):
         if raw_df is not None:
             raw_df = raw_df.fillna("")
             
+            # 履歴データ準備
             start_date = pd.to_datetime("2026/01/01")
             end_date = pd.to_datetime("2026/03/31")
             
@@ -179,6 +181,7 @@ if cool_file and os.path.exists(cool_file):
                 (~analysis_source_df['歌った人'].astype(str).apply(lambda x: any(k in x for k in exclude_keywords)))
             ]
 
+            # CSV解析 (カテゴリ厳格化)
             categorized_data = {}
             ALLOWED_CATEGORIES = ["2026年冬アニメ", "2025年秋アニメ"]
             current_category = None
@@ -209,6 +212,7 @@ if cool_file and os.path.exists(cool_file):
                     "anime": anime, "type": type_, "artist": artist, "song": song
                 })
 
+            # HTML生成 (行結合ロジック)
             for category, items in categorized_data.items():
                 analysis_html_content += f"""
                 <div class="category-header" onclick="toggleCategory(this)">
@@ -228,42 +232,54 @@ if cool_file and os.path.exists(cool_file):
                     <tbody>
                 """
                 
-                for item in items:
-                    target_song_norm = normalize_text(item["song"])
-                    target_anime_norm = normalize_text(item["anime"])
+                # itertools.groupby で作品名ごとにグループ化して rowspan を計算
+                def get_anime_key(x): return x['anime']
+                
+                for anime_name, group_iter in groupby(items, key=get_anime_key):
+                    group_items = list(group_iter)
+                    rowspan = len(group_items)
                     
-                    mask = pd.Series([False] * len(target_history))
-                    safe_song = re.escape(target_song_norm)
-                    song_match_mask = target_history['norm_filename'].str.contains(safe_song, case=False, na=False)
-                    
-                    safe_anime = re.escape(target_anime_norm)
-                    anime_match_mask = (
-                        target_history['norm_filename'].str.contains(safe_anime, case=False, na=False) |
-                        target_history['norm_workname'].str.contains(safe_anime, case=False, na=False)
-                    )
-                    
-                    if target_song_norm and target_anime_norm:
-                        final_mask = song_match_mask & anime_match_mask
-                    elif target_song_norm:
-                        final_mask = song_match_mask
-                    elif target_anime_norm:
-                        final_mask = anime_match_mask
-                    else:
-                        final_mask = pd.Series([False] * len(target_history))
+                    for i, item in enumerate(group_items):
+                        # 集計
+                        target_song_norm = normalize_text(item["song"])
+                        target_anime_norm = normalize_text(item["anime"])
+                        
+                        mask = pd.Series([False] * len(target_history))
+                        safe_song = re.escape(target_song_norm)
+                        song_match_mask = target_history['norm_filename'].str.contains(safe_song, case=False, na=False)
+                        
+                        safe_anime = re.escape(target_anime_norm)
+                        anime_match_mask = (
+                            target_history['norm_filename'].str.contains(safe_anime, case=False, na=False) |
+                            target_history['norm_workname'].str.contains(safe_anime, case=False, na=False)
+                        )
+                        
+                        if target_song_norm and target_anime_norm:
+                            final_mask = song_match_mask & anime_match_mask
+                        elif target_song_norm:
+                            final_mask = song_match_mask
+                        elif target_anime_norm:
+                            final_mask = anime_match_mask
+                        else:
+                            final_mask = pd.Series([False] * len(target_history))
 
-                    count = len(target_history[final_mask])
-                    row_class = "zero-count" if count == 0 else "has-count"
-                    
-                    bar_width = min(count * 20, 150)
-                    bar_html = f'<div class="bar-chart" style="width:{bar_width}px;"></div>' if count > 0 else ""
-                    
-                    analysis_html_content += f'<tr class="{row_class}">'
-                    analysis_html_content += f'<td>{item["anime"]}</td>'
-                    analysis_html_content += f'<td align="center">{item["type"]}</td>'
-                    analysis_html_content += f'<td>{item["artist"]}</td>'
-                    analysis_html_content += f'<td>{item["song"]}</td>'
-                    analysis_html_content += f'<td class="count-cell"><div class="count-wrapper"><span class="count-num">{count}</span>{bar_html}</div></td>'
-                    analysis_html_content += '</tr>'
+                        count = len(target_history[final_mask])
+                        row_class = "zero-count" if count == 0 else "has-count"
+                        
+                        bar_width = min(count * 20, 150)
+                        bar_html = f'<div class="bar-chart" style="width:{bar_width}px;"></div>' if count > 0 else ""
+                        
+                        analysis_html_content += f'<tr class="{row_class}">'
+                        
+                        # ★ここが行結合(rowspan)処理
+                        if i == 0:
+                            analysis_html_content += f'<td rowspan="{rowspan}">{item["anime"]}</td>'
+                            
+                        analysis_html_content += f'<td align="center">{item["type"]}</td>'
+                        analysis_html_content += f'<td>{item["artist"]}</td>'
+                        analysis_html_content += f'<td>{item["song"]}</td>'
+                        analysis_html_content += f'<td class="count-cell"><div class="count-wrapper"><span class="count-num">{count}</span>{bar_html}</div></td>'
+                        analysis_html_content += '</tr>'
                 
                 analysis_html_content += "</tbody></table></div>"
 
@@ -279,7 +295,7 @@ if cool_file and os.path.exists(cool_file):
 
 
 # ==========================================
-# HTML生成 (UI修正: スクロール確実化)
+# HTML生成 (UI修正: 黒系ヘッダー、行幅、スクロール)
 # ==========================================
 
 columns_to_hide = ['コメント'] 
@@ -311,7 +327,7 @@ html_content = f"""
     <style>
         /* ベース設定 */
         :root {{
-            --primary-color: #2c3e50;
+            --primary-color: #2c3e50; /* 元の黒系ネイビー */
             --accent-color: #3498db;
             --bg-color: #f4f7f6;
             --text-color: #333;
@@ -320,15 +336,15 @@ html_content = f"""
         }}
         html, body {{
             height: 100%; margin: 0; padding: 0;
-            overflow: hidden; /* 全体スクロールを禁止 */
+            overflow: hidden; 
             font-family: "Helvetica Neue", Arial, sans-serif;
             background-color: var(--bg-color);
             color: var(--text-color);
-            font-size: 13px; /* ベース文字サイズ */
+            font-size: 13px; /* セットリストに合わせた文字サイズ */
             display: flex; flex-direction: column;
         }}
 
-        /* --- Top Section (Header + Controls) --- */
+        /* --- Top Section --- */
         .top-section {{
             flex: 0 0 auto;
             background-color: var(--header-bg);
@@ -351,7 +367,6 @@ html_content = f"""
         }}
         .tab-btn.active {{ color: var(--accent-color); border-bottom-color: var(--accent-color); }}
 
-        /* 検索ボックスエリア */
         .controls-row {{
             padding: 8px 15px; display: flex; gap: 8px; align-items: center;
             background-color: #fff; border-bottom: 1px solid var(--border-color);
@@ -368,23 +383,23 @@ html_content = f"""
         .btn:hover {{ opacity: 0.9; }}
         .count-display {{ margin-left: auto; font-weight: bold; font-size: 13px; }}
 
-        /* --- Scrollable Content Area (Absolute Positioning for Stability) --- */
+        /* --- Scrollable Content Area --- */
         .content-area {{
             flex: 1; 
             position: relative; 
-            overflow: hidden; /* 親はスクロールさせない */
+            overflow: hidden; 
         }}
         .tab-content {{
             display: none; 
-            position: absolute; /* 絶対配置で領域いっぱいに広げる */
+            position: absolute; 
             top: 0; left: 0; right: 0; bottom: 0;
-            overflow-y: auto; /* ここでスクロール */
+            overflow-y: auto; 
             -webkit-overflow-scrolling: touch;
             padding: 0 15px 40px 15px;
         }}
         .tab-content.active {{ display: block; }}
 
-        /* Table Styles (Compact) */
+        /* Table Styles (Compact & Dark Headers) */
         table {{
             width: 100%; border-collapse: separate; border-spacing: 0;
             background: #fff; border-radius: 4px; margin-top: 10px; margin-bottom: 20px;
@@ -393,13 +408,14 @@ html_content = f"""
         th, td {{
             padding: 5px 8px; /* パディングを狭く */
             text-align: left; border-bottom: 1px solid #eee;
-            font-size: 13px; /* 文字サイズ小さめ */
+            font-size: 13px; 
             vertical-align: middle; line-height: 1.3;
         }}
         th {{
-            background-color: #f8f9fa; color: #444;
+            /* ★ヘッダーを黒系に戻す */
+            background-color: var(--primary-color); 
+            color: #fff;
             position: sticky; top: 0; z-index: 10; font-weight: bold;
-            border-bottom: 2px solid #ddd;
         }}
         tr:nth-child(even) {{ background-color: #fafafa; }}
         tr:hover {{ background-color: #f1f8ff; }}
@@ -418,13 +434,23 @@ html_content = f"""
         .category-content.collapsed {{ display: none; }}
         
         tr.zero-count {{ color: #ccc; }}
-        tr.has-count {{ background-color: #fff; font-weight: 600; color: #333; }}
+        /* ★太文字(font-weight:600)を削除し、セットリストと同じ太さに */
+        tr.has-count {{ background-color: #fff; color: #333; }}
         
         .count-wrapper {{ display: flex; align-items: center; gap: 8px; }}
         .count-num {{ width: 25px; text-align: right; font-size:1.1rem; }}
         .bar-chart {{
             height: 10px; background: linear-gradient(90deg, #3498db, #2980b9);
             border-radius: 5px;
+        }}
+        
+        /* 結合セルのスタイル調整 */
+        td[rowspan] {{
+            background-color: #fff;
+            border-right: 1px solid #eee;
+            vertical-align: middle;
+            font-weight: bold; /* 作品名だけは見やすいように少し太くしても良いが、要望通りならnormal */
+            color: var(--primary-color);
         }}
     </style>
 </head>
@@ -470,7 +496,6 @@ html_content = f"""
         const btnIndex = tabName === 'setlist' ? 0 : 1;
         document.querySelectorAll('.tab-btn')[btnIndex].classList.add('active');
         
-        // 検索ボックスの表示切り替え
         const controls = document.getElementById('setlist-controls');
         if(tabName === 'setlist') {{
             controls.style.display = 'flex';
@@ -497,13 +522,11 @@ html_content = f"""
         const tbody = table.tBodies[0];
         if (tbody) {{
             tbodyRows = Array.from(tbody.rows);
-            // キャッシュ作成
             tableData = tbodyRows.map(row => row.innerText.toUpperCase());
             countDisplay.innerText = '全 ' + tbodyRows.length + ' 件';
         }}
     }});
 
-    // Enterキーでも検索実行
     searchInput.addEventListener("keyup", function(event) {{
         if (event.key === "Enter") performSearch();
     }});
@@ -556,7 +579,7 @@ html_content = f"""
             return dir === 'asc' ? valA.localeCompare(valB,'ja') : valB.localeCompare(valA,'ja');
         }});
         rows.forEach(row => tbody.appendChild(row));
-        tbodyRows = rows; // ソート後にキャッシュ更新
+        tbodyRows = rows;
         tableData = tbodyRows.map(row => row.innerText.toUpperCase());
     }}
 </script>
