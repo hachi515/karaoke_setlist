@@ -49,15 +49,14 @@ room_map = {
     11106: "冨塚部屋"
 }
 
-# --- 関数: テキスト正規化 (括弧除去・記号除去) ---
+# --- 関数: テキスト正規化 (括弧除去) ---
 def normalize_text(text):
     if not isinstance(text, str):
         return str(text)
-    # 1. [], (), {}, 【】 とその中身を削除 (例: "曲名[LIVE]" -> "曲名")
+    # [], (), {}, 【】 とその中身を除去
     text = re.sub(r'[\[\(\{【].*?[\]\)\}】]', '', text)
-    # 2. 前後の空白除去、全角スペースを半角に
-    text = text.replace('　', ' ').strip()
-    return text
+    # 前後の空白を除去し、全角スペースを半角に
+    return text.replace('　', ' ').strip()
 
 # --- 1. 過去のデータ(history.csv)を読み込む ---
 history_file = "history.csv"
@@ -131,7 +130,7 @@ else:
 
 
 # ==========================================
-# ★修正: クール集計表処理 (AND検索・テスト除外・カテゴリ厳格化)
+# ★集計処理 (前回と同じロジック)
 # ==========================================
 analysis_html_content = "" 
 cool_data_exists = False
@@ -156,35 +155,32 @@ if cool_file and os.path.exists(cool_file):
         if raw_df is not None:
             raw_df = raw_df.fillna("")
             
-            # --- 履歴データ準備 ---
+            # 履歴データ準備
             start_date = pd.to_datetime("2026/01/01")
             end_date = pd.to_datetime("2026/03/31")
             
             analysis_source_df = final_df.copy()
             analysis_source_df['dt_obj'] = pd.to_datetime(analysis_source_df['取得日'], errors='coerce')
             
-            # 1. 検索対象データの正規化（ファイル名 & 作品名）
-            # ファイル名から括弧を除去
+            # 正規化
             analysis_source_df['norm_filename'] = analysis_source_df['曲名（ファイル名）'].apply(normalize_text)
-            # 作品名列からも括弧を除去 (履歴データに作品名列がある場合)
             if '作品名' in analysis_source_df.columns:
                 analysis_source_df['norm_workname'] = analysis_source_df['作品名'].apply(normalize_text)
             else:
                 analysis_source_df['norm_workname'] = ""
 
-            # 2. 除外ワード (歌った人)
+            # 除外ワード
             exclude_keywords = ['test', 'テスト', 'システム', 'admin', 'System']
             
-            # 3. フィルタリング (期間 AND 除外ワードなし)
+            # フィルタリング
             target_history = analysis_source_df[
                 (analysis_source_df['dt_obj'] >= start_date) & 
                 (analysis_source_df['dt_obj'] <= end_date) &
                 (~analysis_source_df['歌った人'].astype(str).apply(lambda x: any(k in x for k in exclude_keywords)))
             ]
 
-            # --- CSV解析 ---
+            # CSV解析 (カテゴリ厳格化)
             categorized_data = {}
-            # カテゴリの許可リスト
             ALLOWED_CATEGORIES = ["2026年冬アニメ", "2025年秋アニメ"]
             current_category = None
             
@@ -192,7 +188,6 @@ if cool_file and os.path.exists(cool_file):
                 if not any(str(x).strip() for x in row): continue
                 col0 = str(row[0]).strip()
 
-                # カテゴリ判定 (完全一致に近い判定)
                 is_category_line = any(cat in col0 for cat in ALLOWED_CATEGORIES) and "作品名" not in col0
 
                 if is_category_line:
@@ -204,7 +199,6 @@ if cool_file and os.path.exists(cool_file):
                 if "作品名" in col0: continue
                 if current_category is None: continue
 
-                # データ読み込み
                 anime = str(row[0]).strip() if len(row) > 0 else ""
                 type_ = str(row[1]).strip() if len(row) > 1 else ""
                 artist = str(row[2]).strip() if len(row) > 2 else ""
@@ -216,7 +210,7 @@ if cool_file and os.path.exists(cool_file):
                     "anime": anime, "type": type_, "artist": artist, "song": song
                 })
 
-            # --- HTML生成 ---
+            # HTML生成
             for category, items in categorized_data.items():
                 analysis_html_content += f"""
                 <div class="category-header" onclick="toggleCategory(this)">
@@ -237,33 +231,25 @@ if cool_file and os.path.exists(cool_file):
                 """
                 
                 for item in items:
-                    # 正規化したターゲット文字列
                     target_song_norm = normalize_text(item["song"])
                     target_anime_norm = normalize_text(item["anime"])
                     
-                    # --- ★厳密なマッチングロジック (AND条件) ---
-                    # 1. 曲名一致 (必須条件)
-                    # 履歴の「ファイル名」に、ターゲット曲名が含まれているか？
+                    # AND検索ロジック
+                    mask = pd.Series([False] * len(target_history))
                     safe_song = re.escape(target_song_norm)
                     song_match_mask = target_history['norm_filename'].str.contains(safe_song, case=False, na=False)
                     
-                    # 2. 作品名一致 (条件)
-                    # 履歴の「ファイル名」OR「作品名列」に、ターゲット作品名が含まれているか？
                     safe_anime = re.escape(target_anime_norm)
                     anime_match_mask = (
                         target_history['norm_filename'].str.contains(safe_anime, case=False, na=False) |
                         target_history['norm_workname'].str.contains(safe_anime, case=False, na=False)
                     )
                     
-                    # 3. 結合ロジック
                     if target_song_norm and target_anime_norm:
-                        # 両方ある場合: 曲名 AND 作品名
                         final_mask = song_match_mask & anime_match_mask
                     elif target_song_norm:
-                        # 曲名のみある場合: 曲名一致
                         final_mask = song_match_mask
                     elif target_anime_norm:
-                        # 作品名のみある場合: 作品名一致
                         final_mask = anime_match_mask
                     else:
                         final_mask = pd.Series([False] * len(target_history))
@@ -296,7 +282,7 @@ if cool_file and os.path.exists(cool_file):
 
 
 # ==========================================
-# HTML生成 (検索・スクロール・デザイン修正)
+# HTML生成 (UI修正版)
 # ==========================================
 
 columns_to_hide = ['コメント'] 
@@ -336,15 +322,15 @@ html_content = f"""
         }}
         html, body {{
             height: 100%; margin: 0; padding: 0;
-            overflow: hidden; 
+            overflow: hidden; /* 全体スクロールを禁止 */
             font-family: "Helvetica Neue", Arial, sans-serif;
             background-color: var(--bg-color);
             color: var(--text-color);
             display: flex; flex-direction: column;
         }}
 
-        /* --- Fixed Header Area --- */
-        .top-container {{
+        /* --- Top Section (Header + Controls) --- */
+        .top-section {{
             flex: 0 0 auto;
             background-color: var(--header-bg);
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
@@ -366,6 +352,7 @@ html_content = f"""
         }}
         .tab-btn.active {{ color: var(--accent-color); border-bottom-color: var(--accent-color); }}
 
+        /* 検索ボックスエリア */
         .controls-row {{
             padding: 10px 20px; display: flex; gap: 10px; align-items: center;
             background-color: #fff; border-bottom: 1px solid var(--border-color);
@@ -377,19 +364,21 @@ html_content = f"""
         .btn {{
             padding: 8px 15px; border-radius: 20px; border: none; cursor: pointer;
             color: #fff; background-color: var(--accent-color); font-size: 1rem;
+            font-weight: bold;
         }}
+        .btn:hover {{ opacity: 0.9; }}
         .count-display {{ margin-left: auto; font-weight: bold; font-size: 1rem; }}
 
-        /* --- Scrollable Content --- */
+        /* --- Scrollable Content Area --- */
         .content-area {{
             flex: 1; 
             position: relative; 
-            overflow: hidden;
+            overflow: hidden; /* 子要素でスクロール */
         }}
         .tab-content {{
             display: none; 
             height: 100%; 
-            overflow-y: auto; /* Scroll enabled here */
+            overflow-y: auto; /* ここでスクロール */
             -webkit-overflow-scrolling: touch;
             padding: 0 20px 50px 20px;
         }}
@@ -403,8 +392,7 @@ html_content = f"""
         }}
         th, td {{
             padding: 12px 15px; text-align: left; border-bottom: 1px solid #eee;
-            font-size: 16px; /* Unified font size */
-            vertical-align: middle; line-height: 1.5;
+            font-size: 16px; vertical-align: middle; line-height: 1.5;
         }}
         th {{
             background-color: var(--primary-color); color: #fff;
@@ -423,7 +411,7 @@ html_content = f"""
             user-select: none;
         }}
         .category-header:hover {{ opacity: 0.9; }}
-        .category-content {{ display: block; }}
+        .category-content {{ display: block; transition: all 0.3s; }}
         .category-content.collapsed {{ display: none; }}
         
         tr.zero-count {{ color: #ccc; }}
@@ -438,7 +426,7 @@ html_content = f"""
     </style>
 </head>
 <body>
-    <div class="top-container">
+    <div class="top-section">
         <div class="header-inner">
             <h1>Karaoke Dashboard</h1>
             <div class="update-time">{current_datetime_str} 更新</div>
@@ -448,7 +436,8 @@ html_content = f"""
             <button class="tab-btn" onclick="openTab('analysis')">クール集計</button>
         </div>
         <div id="setlist-controls" class="controls-row">
-            <input type="text" id="searchInput" class="search-box" placeholder="キーワード検索...">
+            <input type="text" id="searchInput" class="search-box" placeholder="キーワード (例: 曲名 歌手)...">
+            <button onclick="performSearch()" class="btn"><i class="fas fa-search"></i> 検索</button>
             <button onclick="resetFilter()" class="btn" style="background:#95a5a6"><i class="fas fa-undo"></i></button>
             <div class="count-display" id="countDisplay">読み込み中...</div>
         </div>
@@ -478,6 +467,7 @@ html_content = f"""
         const btnIndex = tabName === 'setlist' ? 0 : 1;
         document.querySelectorAll('.tab-btn')[btnIndex].classList.add('active');
         
+        // 検索ボックスの表示切り替え
         const controls = document.getElementById('setlist-controls');
         if(tabName === 'setlist') {{
             controls.style.display = 'flex';
@@ -499,20 +489,20 @@ html_content = f"""
     const countDisplay = document.getElementById('countDisplay');
     let tableData = [];
     let tbodyRows = [];
-    let debounceTimer;
 
     window.addEventListener('DOMContentLoaded', () => {{
         const tbody = table.tBodies[0];
         if (tbody) {{
             tbodyRows = Array.from(tbody.rows);
+            // キャッシュ作成
             tableData = tbodyRows.map(row => row.innerText.toUpperCase());
             countDisplay.innerText = '全 ' + tbodyRows.length + ' 件';
         }}
     }});
 
-    searchInput.addEventListener("keyup", function() {{
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(performSearch, 200);
+    // Enterキーでも検索実行
+    searchInput.addEventListener("keyup", function(event) {{
+        if (event.key === "Enter") performSearch();
     }});
 
     function performSearch() {{
@@ -563,7 +553,7 @@ html_content = f"""
             return dir === 'asc' ? valA.localeCompare(valB,'ja') : valB.localeCompare(valA,'ja');
         }});
         rows.forEach(row => tbody.appendChild(row));
-        tbodyRows = rows;
+        tbodyRows = rows; // ソート後にキャッシュ更新
         tableData = tbodyRows.map(row => row.innerText.toUpperCase());
     }}
 </script>
