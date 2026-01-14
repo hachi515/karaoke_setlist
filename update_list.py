@@ -85,19 +85,31 @@ for port in target_ports:
 # 新しいデータがある場合のみ処理
 if new_data_frames:
     new_df = pd.concat(new_data_frames, ignore_index=True)
-    combined_df = pd.concat([history_df, new_df], ignore_index=True)
     
-    # 重複排除
-    subset_cols = ['取得日', '部屋主', '曲名（ファイル名）', '歌った人', '作品名', '歌手名']
+    # 結合順序: history(過去) + new(現在)
+    combined_df = pd.concat([history_df, new_df], ignore_index=True)
+
+    # --- クリーニング: ヘッダー行がデータとして混入している場合を除去 ---
+    clean_check_cols = ['部屋主', '曲名（ファイル名）', '作品名', '歌手名']
+    for col in clean_check_cols:
+        if col in combined_df.columns:
+            combined_df = combined_df[combined_df[col] != col]
+
+    # --- ★修正ポイント: 重複排除ロジック ---
+    # keep='first' にすることで、先に結合した history_df のデータ（古い日付）を残します。
+    # これにより、日付が変わってもリストが開いたままの曲が、新しい日付で上書きされるのを防ぎます。
+    subset_cols = ['部屋主', '順番', '曲名（ファイル名）', '歌った人']
     existing_cols = [c for c in subset_cols if c in combined_df.columns]
-    final_df = combined_df.drop_duplicates(subset=existing_cols, keep='last')
+    
+    final_df = combined_df.drop_duplicates(subset=existing_cols, keep='first')
     final_df = final_df.fillna("")
 
-    # ソート処理
+    # ソート処理 (最新が上に来るように表示順だけ整える)
     if '順番' in final_df.columns:
         final_df['順番'] = pd.to_numeric(final_df['順番'], errors='coerce')
         
     final_df['temp_date'] = pd.to_datetime(final_df['取得日'], errors='coerce')
+    # 表示用ソート: 日付(降順), 順番(降順)
     final_df = final_df.sort_values(by=['temp_date', '順番'], ascending=[False, False])
     final_df = final_df.drop(columns=['temp_date'])
     
@@ -114,28 +126,38 @@ if new_data_frames:
 else:
     final_df = history_df
     print("新しいデータなし。過去データを使用。")
+    # 念の為クリーニング
+    clean_check_cols = ['部屋主', '曲名（ファイル名）', '作品名', '歌手名']
+    for col in clean_check_cols:
+        if col in final_df.columns:
+            final_df = final_df[final_df[col] != col]
 
 
 # ==========================================
-# ★修正: クール集計表(CSV)の読み込み処理
+# ★修正: クール集計表の処理 (全件表示 & グラフ化)
 # ==========================================
 analysis_html_rows = ""
-# ★ GitHub運用に合わせてCSVファイル名を指定 (日本語ファイル名でもOKですが、英数字推奨)
-cool_file = "クール集計表.csv" 
 cool_data_exists = False
+cool_file = None
 
-# ファイルが存在しない場合、日本語ファイル名も試行するフェイルセーフ
-if not os.path.exists(cool_file) and os.path.exists("クール集計表.csv"):
-    cool_file = "クール集計表.csv"
+candidate_files = [
+    "cool_analysis.csv", 
+    "クール集計表.csv",
+    "クール集計表.xlsx - Sheet1.csv"
+]
 
-if os.path.exists(cool_file):
+for f in candidate_files:
+    if os.path.exists(f):
+        cool_file = f
+        break
+
+if cool_file:
     try:
-        # ★ CSVとして読み込み
-        # header=1: 2行目(index 1)をヘッダーとして読み込む設定（1行目は「2026年冬アニメ」などのタイトルのため）
+        # CSV読み込み
         cool_df = pd.read_csv(cool_file, header=1, encoding='utf-8-sig')
         cool_df = cool_df.fillna("")
         
-        # 集計対象期間の設定 (2026/1/1 - 2026/3/31)
+        # 集計対象期間の設定
         start_date = pd.to_datetime("2026/01/01")
         end_date = pd.to_datetime("2026/03/31")
         
@@ -148,46 +170,41 @@ if os.path.exists(cool_file):
             (analysis_source_df['dt_obj'] <= end_date)
         ]
         
-        # マッチング処理
-        counts = []
-        singers_list = [] 
-        
+        # HTML生成用リスト
+        # CSVにある行はすべて出力するため、フィルタリングせずループします
         for idx, row in cool_df.iterrows():
             target_song = str(row.get('曲名', '')).strip()
             target_anime = str(row.get('作品名', '')).strip()
             
+            # 検索条件
             mask = pd.Series([False] * len(target_history))
-            
             if target_song:
                 mask = mask | target_history['曲名（ファイル名）'].str.contains(pd.escape(target_song), case=False, na=False)
-            
             if target_anime:
                 mask = mask | target_history['曲名（ファイル名）'].str.contains(pd.escape(target_anime), case=False, na=False)
             
-            hit_rows = target_history[mask]
-            count = len(hit_rows)
+            # カウント
+            count = len(target_history[mask])
             
-            singers = sorted(list(set(hit_rows['歌った人'].astype(str).tolist())))
-            singers_str = ", ".join(singers)
-            
-            counts.append(count)
-            singers_list.append(singers_str)
-            
-        cool_df['歌唱数'] = counts
-        cool_df['歌った人'] = singers_list
-        
-        # HTML行の生成
-        for idx, row in cool_df.iterrows():
-            count = row['歌唱数']
+            # 行のデザイン判定
             row_class = "zero-count" if count == 0 else "has-count"
             
+            # ★修正: グラフ表示用HTML
+            # バーの長さは count * 20px (最大幅あり)
+            bar_width = min(count * 20, 200) 
+            bar_html = ""
+            if count > 0:
+                bar_html = f'<div class="bar-chart" style="width:{bar_width}px;"></div>'
+            
+            # テーブル行の構築 (歌った人列は削除し、歌唱数列にグラフを統合)
             analysis_html_rows += f'<tr class="{row_class}">'
             analysis_html_rows += f'<td>{row.get("作品名","")}</td>'
-            analysis_html_rows += f'<td>{row.get("OP/ED","")}</td>'
+            analysis_html_rows += f'<td align="center">{row.get("OP/ED","")}</td>'
             analysis_html_rows += f'<td>{row.get("歌手","")}</td>'
             analysis_html_rows += f'<td>{row.get("曲名","")}</td>'
-            analysis_html_rows += f'<td class="count-cell">{count}</td>'
-            analysis_html_rows += f'<td class="singer-cell">{row.get("歌った人","")}</td>'
+            analysis_html_rows += f'<td class="count-cell">'
+            analysis_html_rows += f'  <div class="count-wrapper"><span class="count-num">{count}</span>{bar_html}</div>'
+            analysis_html_rows += f'</td>'
             analysis_html_rows += '</tr>'
             
         cool_data_exists = True
@@ -196,11 +213,11 @@ if os.path.exists(cool_file):
     except Exception as e:
         print(f"クール集計表の処理エラー: {e}")
 else:
-    print(f"クール集計表ファイル(cool_analysis.csv または クール集計表.csv) が見つかりません。")
+    print(f"集計ファイルが見つかりません。")
 
 
 # ==========================================
-# HTML生成 (タブ切り替え対応)
+# HTML生成
 # ==========================================
 
 # セットリスト用データ
@@ -243,15 +260,17 @@ html_content = f"""
         }}
         html, body {{
             height: 100%; margin: 0; padding: 0;
-            overflow: hidden;
+            overflow: hidden; 
             font-family: "Helvetica Neue", Arial, sans-serif;
             background-color: var(--bg-color);
             color: var(--text-color);
+            display: flex;
+            flex-direction: column;
         }}
 
         /* --- Header Area --- */
         .header-area {{
-            flex: 0 0 auto;
+            flex: 0 0 auto; 
             background-color: var(--header-bg);
             box-shadow: 0 2px 10px rgba(0,0,0,0.05);
             z-index: 100;
@@ -271,7 +290,7 @@ html_content = f"""
             border-bottom: 1px solid var(--border-color);
         }}
         .tab-btn {{
-            padding: 12px 24px;
+            padding: 10px 20px;
             cursor: pointer;
             border: none;
             background: none;
@@ -288,18 +307,19 @@ html_content = f"""
 
         /* --- Controls (Search) --- */
         .controls-row {{
-            padding: 10px 20px;
+            padding: 8px 20px;
             display: flex; gap: 10px; align-items: center;
             background-color: #fff;
             border-bottom: 1px solid var(--border-color);
+            flex: 0 0 auto;
         }}
         .search-box {{
-            padding: 8px 12px; border: 1px solid #ccc; border-radius: 20px;
+            padding: 6px 12px; border: 1px solid #ccc; border-radius: 20px;
             width: 250px; outline: none; transition: 0.3s;
         }}
         .search-box:focus {{ border-color: var(--accent-color); box-shadow: 0 0 5px rgba(52,152,219,0.3); }}
         .btn {{
-            padding: 6px 15px; border-radius: 20px; border: none; cursor: pointer;
+            padding: 5px 15px; border-radius: 20px; border: none; cursor: pointer;
             color: #fff; background-color: var(--accent-color); font-size: 0.9rem;
         }}
         .btn:hover {{ opacity: 0.9; }}
@@ -307,15 +327,19 @@ html_content = f"""
 
         /* --- Main Content Area --- */
         .content-area {{
-            flex: 1; overflow: hidden; position: relative;
+            flex: 1; 
+            display: flex; 
+            flex-direction: column;
+            min-height: 0;
+            position: relative;
         }}
         
         .tab-content {{
             display: none;
-            height: 100%;
+            flex: 1; 
             overflow: auto;
             -webkit-overflow-scrolling: touch;
-            padding: 20px;
+            padding: 10px 20px 40px 20px; 
             box-sizing: border-box;
         }}
         .tab-content.active {{ display: block; }}
@@ -325,11 +349,14 @@ html_content = f"""
             width: 100%; border-collapse: separate; border-spacing: 0;
             background: #fff; border-radius: 8px; overflow: hidden;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            margin-bottom: 40px;
+            margin-bottom: 20px;
         }}
         th, td {{
-            padding: 12px 15px; text-align: left;
+            padding: 6px 10px; 
+            text-align: left;
             border-bottom: 1px solid #eee;
+            font-size: 13px;
+            vertical-align: middle;
         }}
         th {{
             background-color: var(--primary-color);
@@ -354,18 +381,27 @@ html_content = f"""
             border-radius: 4px; font-size: 0.85rem;
         }}
         
-        tr.zero-count {{ color: #aaa; }}
-        tr.has-count {{ background-color: #e3f2fd; font-weight: 600; color: #1565c0; }}
-        tr.has-count:nth-child(even) {{ background-color: #bbdefb; }}
+        tr.zero-count {{ color: #ccc; }} /* 0回は薄く表示 */
+        tr.has-count {{ background-color: #fff; font-weight: 600; color: #333; }}
+        tr.has-count:nth-child(even) {{ background-color: #f8f9fa; }}
         
-        .count-cell {{ font-size: 1.2rem; text-align: center; color: #d35400; }}
-        .singer-cell {{ font-size: 0.9rem; color: #555; }}
+        /* グラフ用のスタイル */
+        .count-cell {{ width: 150px; }}
+        .count-wrapper {{ display: flex; align-items: center; gap: 8px; }}
+        .count-num {{ width: 20px; text-align: right; display:inline-block; }}
+        .bar-chart {{
+            height: 10px;
+            background: linear-gradient(90deg, #3498db, #2980b9);
+            border-radius: 5px;
+            transition: width 0.5s ease;
+        }}
 
         @media (max-width: 600px) {{
             .search-box {{ width: 150px; }}
             .tabs {{ padding: 0 5px; }}
-            .tab-btn {{ padding: 10px 15px; font-size: 0.9rem; }}
-            th, td {{ padding: 8px 10px; font-size: 12px; }}
+            .tab-btn {{ padding: 10px 10px; font-size: 0.8rem; }}
+            th, td {{ padding: 5px 6px; font-size: 11px; }}
+            .content-area {{ min-height: 0; }} 
         }}
     </style>
 </head>
@@ -407,19 +443,18 @@ html_content = f"""
             <table id="analysisTable">
                 <thead>
                     <tr>
-                        <th width="20%">作品名</th>
+                        <th width="25%">作品名</th>
                         <th width="10%">OP/ED</th>
-                        <th width="15%">歌手</th>
+                        <th width="20%">歌手</th>
                         <th width="25%">曲名</th>
-                        <th width="10%">歌唱数</th>
-                        <th width="20%">歌った人</th>
+                        <th width="20%">歌唱数</th>
                     </tr>
                 </thead>
                 <tbody>
                     {analysis_html_rows}
                 </tbody>
             </table>
-            {"" if cool_data_exists else '<div style="padding:20px;text-align:center">集計データが見つかりません。cool_analysis.csv (または クール集計表.csv) を配置してください。</div>'}
+            {"" if cool_data_exists else '<div style="padding:20px;text-align:center;color:#e74c3c;">【エラー】集計ファイルが見つかりません。<br>「cool_analysis.csv」または「クール集計表.csv」をスクリプトと同じ場所に配置してください。</div>'}
         </div>
     </div>
 
