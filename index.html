@@ -48,7 +48,7 @@
             border-bottom: 1px solid var(--border-color);
         }
         .tab-btn {
-            padding: 10px 20px;
+            padding: 12px 24px;
             cursor: pointer;
             border: none;
             background: none;
@@ -56,6 +56,7 @@
             color: #7f8c8d;
             border-bottom: 3px solid transparent;
             transition: all 0.3s;
+            font-size: 16px; /* タブ文字も大きく */
         }
         .tab-btn:hover { color: var(--accent-color); }
         .tab-btn.active {
@@ -65,23 +66,24 @@
 
         /* --- Controls (Search) --- */
         .controls-row {
-            padding: 8px 20px;
+            padding: 10px 20px;
             display: flex; gap: 10px; align-items: center;
             background-color: #fff;
             border-bottom: 1px solid var(--border-color);
             flex: 0 0 auto;
         }
         .search-box {
-            padding: 6px 12px; border: 1px solid #ccc; border-radius: 20px;
-            width: 250px; outline: none; transition: 0.3s;
+            padding: 8px 12px; border: 1px solid #ccc; border-radius: 20px;
+            width: 300px; outline: none; transition: 0.3s;
+            font-size: 16px; /* 検索窓の文字も大きく */
         }
         .search-box:focus { border-color: var(--accent-color); box-shadow: 0 0 5px rgba(52,152,219,0.3); }
         .btn {
-            padding: 5px 15px; border-radius: 20px; border: none; cursor: pointer;
-            color: #fff; background-color: var(--accent-color); font-size: 0.9rem;
+            padding: 8px 20px; border-radius: 20px; border: none; cursor: pointer;
+            color: #fff; background-color: var(--accent-color); font-size: 1rem;
         }
         .btn:hover { opacity: 0.9; }
-        .count-display { margin-left: auto; font-weight: bold; font-size: 0.9rem; }
+        .count-display { margin-left: auto; font-weight: bold; font-size: 1rem; }
 
         /* --- Main Content Area --- */
         .content-area {
@@ -97,68 +99,69 @@
             flex: 1; 
             overflow: auto;
             -webkit-overflow-scrolling: touch;
-            padding: 10px 20px 40px 20px; 
+            padding: 10px 20px 50px 20px; 
             box-sizing: border-box;
         }
         .tab-content.active { display: block; }
 
-        /* --- Table Styling --- */
+        /* --- Table Styling (Setlist) --- */
         table {
             width: 100%; border-collapse: separate; border-spacing: 0;
             background: #fff; border-radius: 8px; overflow: hidden;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             margin-bottom: 20px;
         }
+        
+        /* ★修正: 文字サイズを大きく設定 */
         th, td {
-            padding: 6px 10px; 
+            padding: 10px 12px; 
             text-align: left;
             border-bottom: 1px solid #eee;
-            font-size: 13px;
+            font-size: 16px; /* 13px -> 16px に拡大 */
             vertical-align: middle;
+            line-height: 1.5;
         }
         th {
             background-color: var(--primary-color);
             color: #fff;
             position: sticky; top: 0; z-index: 10;
-            font-weight: 500;
+            font-weight: 600;
         }
         tr:last-child td { border-bottom: none; }
         tr:nth-child(even) { background-color: #f8f9fa; }
         tr:hover { background-color: #eaf2f8; }
 
         /* --- Specific Styles for Analysis Table --- */
-        .analysis-header {
-            margin-bottom: 15px; padding: 10px;
+        .category-header {
+            margin-top: 30px; margin-bottom: 10px;
+            padding: 10px 15px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white; border-radius: 8px;
-            display: flex; justify-content: space-between; align-items: center;
-        }
-        .analysis-title { font-weight: bold; font-size: 1.1rem; }
-        .period-badge {
-            background: rgba(255,255,255,0.2); padding: 4px 10px;
-            border-radius: 4px; font-size: 0.85rem;
+            font-weight: bold; font-size: 1.3rem;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
         }
         
         tr.zero-count { color: #ccc; } /* 0回は薄く表示 */
         tr.has-count { background-color: #fff; font-weight: 600; color: #333; }
-        tr.has-count:nth-child(even) { background-color: #f8f9fa; }
+        tr.has-count:nth-child(even) { background-color: #f0f8ff; }
         
-        /* グラフ用のスタイル */
-        .count-cell { width: 150px; }
-        .count-wrapper { display: flex; align-items: center; gap: 8px; }
-        .count-num { width: 20px; text-align: right; display:inline-block; }
+        .count-cell { width: 200px; }
+        .count-wrapper { display: flex; align-items: center; gap: 10px; }
+        .count-num { width: 30px; text-align: right; display:inline-block; font-size:1.2rem; }
         .bar-chart {
-            height: 10px;
+            height: 12px;
             background: linear-gradient(90deg, #3498db, #2980b9);
-            border-radius: 5px;
-            transition: width 0.5s ease;
+            border-radius: 6px;
         }
+
+        /* 検索高速化用: hiddenクラス */
+        tr.hidden { display: none !important; }
 
         @media (max-width: 600px) {
             .search-box { width: 150px; }
             .tabs { padding: 0 5px; }
-            .tab-btn { padding: 10px 10px; font-size: 0.8rem; }
-            th, td { padding: 5px 6px; font-size: 11px; }
+            .tab-btn { padding: 10px 10px; font-size: 0.9rem; }
+            th, td { padding: 8px 8px; font-size: 13px; }
             .content-area { min-height: 0; } 
         }
     </style>
@@ -168,17 +171,16 @@
     <div class="header-area">
         <div class="header-inner">
             <h1>Karaoke Dashboard</h1>
-            <div class="update-time">2026/01/15 00:03 更新</div>
+            <div class="update-time">2026/01/15 00:13 更新</div>
         </div>
         <div class="tabs">
             <button class="tab-btn active" onclick="openTab('setlist')">セットリスト</button>
-            <button class="tab-btn" onclick="openTab('analysis')">クール集計 (2025秋-2026冬)</button>
+            <button class="tab-btn" onclick="openTab('analysis')">クール集計</button>
         </div>
     </div>
 
     <div id="setlist-controls" class="controls-row">
         <input type="text" id="searchInput" class="search-box" placeholder="キーワード検索...">
-        <button onclick="filterTable()" class="btn"><i class="fas fa-search"></i></button>
         <button onclick="resetFilter()" class="btn" style="background:#95a5a6"><i class="fas fa-undo"></i></button>
         <div class="count-display" id="countDisplay">読み込み中...</div>
     </div>
@@ -194,24 +196,9 @@
 
         <div id="analysis" class="tab-content">
             <div class="analysis-header">
-                <div class="analysis-title"><i class="fas fa-chart-pie"></i> アニメソング集計状況</div>
-                <div class="period-badge">対象期間: 2026/01/01 - 2026/03/31</div>
+                <div style="font-size:0.9rem; color:#7f8c8d; margin-bottom:10px; text-align:right;">集計対象: 2026/01/01 - 2026/03/31</div>
             </div>
             
-            <table id="analysisTable">
-                <thead>
-                    <tr>
-                        <th width="25%">作品名</th>
-                        <th width="10%">OP/ED</th>
-                        <th width="20%">歌手</th>
-                        <th width="25%">曲名</th>
-                        <th width="20%">歌唱数</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    
-                </tbody>
-            </table>
             <div style="padding:20px;text-align:center;color:#e74c3c;">【エラー】集計ファイルが見つかりません。<br>「cool_analysis.csv」または「クール集計表.csv」をスクリプトと同じ場所に配置してください。</div>
         </div>
     </div>
@@ -229,51 +216,70 @@
         document.getElementById('setlist-controls').style.display = tabName === 'setlist' ? 'flex' : 'none';
     }
 
-    const initialCount = document.getElementById("setlistTable").tBodies[0].rows.length;
-    document.getElementById('countDisplay').innerText = '全 ' + initialCount + ' 件';
+    // --- ★高速化対応済みの検索ロジック ---
+    const searchInput = document.getElementById("searchInput");
+    const table = document.getElementById("setlistTable");
+    const countDisplay = document.getElementById('countDisplay');
+    
+    // データキャッシュ（DOMアクセスを減らすため、テキストデータをメモリに保持）
+    let tableData = [];
+    let tbodyRows = [];
 
-    function filterTable() {
-        const input = document.getElementById("searchInput");
-        const filter = input.value.toUpperCase();
+    // 初期化処理
+    window.addEventListener('DOMContentLoaded', () => {
+        const tbody = table.tBodies[0];
+        if (tbody) {
+            tbodyRows = Array.from(tbody.rows);
+            // 事前に全行のテキストを大文字にして保存しておく
+            tableData = tbodyRows.map(row => row.innerText.toUpperCase());
+            countDisplay.innerText = '全 ' + tbodyRows.length + ' 件';
+        }
+    });
+
+    let debounceTimer;
+
+    // デバウンス処理付きの検索イベント
+    searchInput.addEventListener("keyup", function() {
+        clearTimeout(debounceTimer);
+        // 入力が止まってから300ms後に検索を実行（カクつき防止）
+        debounceTimer = setTimeout(performSearch, 300);
+    });
+
+    function performSearch() {
+        const filter = searchInput.value.toUpperCase();
         const keywords = filter.replace(/　/g, " ").split(" ").filter(k => k.length > 0);
         
-        const table = document.getElementById("setlistTable");
-        const trs = table.tBodies[0].rows;
         let visibleCount = 0;
-
-        for (let i = 0; i < trs.length; i++) {
-            const tr = trs[i];
-            let rowText = "";
-            for (let j = 0; j < tr.cells.length; j++) {
-                rowText += tr.cells[j].innerText + " ";
-            }
-            rowText = rowText.toUpperCase();
-            
+        
+        // キャッシュデータを使って判定
+        for (let i = 0; i < tableData.length; i++) {
             let isMatch = true;
+            const rowText = tableData[i];
+            
             for (let k = 0; k < keywords.length; k++) {
                 if (rowText.indexOf(keywords[k]) === -1) {
                     isMatch = false; break;
                 }
             }
+            
+            // classList.toggleで表示/非表示を切り替え（style操作より高速）
             if (isMatch || keywords.length === 0) {
-                tr.style.display = ""; visibleCount++;
+                tbodyRows[i].classList.remove('hidden');
+                visibleCount++;
             } else {
-                tr.style.display = "none";
+                tbodyRows[i].classList.add('hidden');
             }
         }
-        document.getElementById('countDisplay').innerText = '表示: ' + visibleCount + ' / ' + trs.length;
+        
+        countDisplay.innerText = '表示: ' + visibleCount + ' / ' + tableData.length;
     }
 
-    document.getElementById("searchInput").addEventListener("keyup", function(e) {
-        if (e.key === "Enter") filterTable();
-    });
     function resetFilter() {
-        document.getElementById("searchInput").value = "";
-        filterTable();
+        searchInput.value = "";
+        performSearch();
     }
 
     function sortTable(n) {
-        const table = document.getElementById("setlistTable");
         const tbody = table.tBodies[0];
         const rows = Array.from(tbody.rows);
         const th = table.querySelectorAll('th')[n];
@@ -291,7 +297,11 @@
             }
             return dir === 'asc' ? valA.localeCompare(valB,'ja') : valB.localeCompare(valA,'ja');
         });
+        
+        // ソート後はキャッシュと行の順番がずれるので再構築
         rows.forEach(row => tbody.appendChild(row));
+        tbodyRows = rows;
+        tableData = tbodyRows.map(row => row.innerText.toUpperCase());
     }
 </script>
 </body>
