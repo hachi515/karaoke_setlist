@@ -51,7 +51,7 @@
         .controls-row {
             padding: 8px 15px; display: flex; gap: 8px; align-items: center;
             background-color: #fff; border-bottom: 1px solid var(--border-color);
-            height: 40px; /* 高さ固定でチラつき防止 */
+            height: 40px; 
         }
         .search-box {
             padding: 6px 12px; border: 1px solid #ccc; border-radius: 4px;
@@ -86,12 +86,17 @@
             width: 100%; border-collapse: separate; border-spacing: 0;
             background: #fff; border-radius: 4px; margin-top: 10px; margin-bottom: 20px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            page-break-inside: auto;
+            /* ★修正: PDF見切れ対策 (幅固定と折り返し強制) */
+            table-layout: fixed;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
         }
-        tr { page-break-inside: avoid; page-break-after: auto; }
         th, td {
             padding: 5px 8px; text-align: left; border-bottom: 1px solid #eee;
             font-size: 13px; vertical-align: middle; line-height: 1.3;
+            /* ★修正: PDF見切れ対策 (セル内の折り返し) */
+            word-break: break-all;
+            white-space: normal;
         }
         th {
             background-color: var(--primary-color); color: #fff;
@@ -101,7 +106,6 @@
         tr:hover { background-color: #f1f8ff; }
         tr.hidden { display: none !important; }
 
-        /* Analysis Styles */
         .category-header {
             margin-top: 20px; padding: 10px 15px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -127,13 +131,21 @@
             vertical-align: middle;
             font-weight: normal; color: inherit;      
         }
+        
+        /* PDF出力用のスタイル調整 (PDF化の際のみ適用されるCSSではないが、レイアウト補助) */
+        #pdf-target {
+            width: 100%;
+        }
+        #pdf-target table {
+            font-size: 11px; /* PDFでは少し小さくして収まりよくする */
+        }
     </style>
 </head>
 <body>
     <div class="top-section">
         <div class="header-inner">
             <h1>Karaoke Dashboard</h1>
-            <div class="update-time">2026/01/15 10:54 更新</div>
+            <div class="update-time">2026/01/15 11:23 更新</div>
         </div>
         <div class="tabs">
             <button class="tab-btn active" onclick="openTab('setlist')">セットリスト</button>
@@ -234,7 +246,7 @@
     function exportPDF() {
         const element = document.getElementById('pdf-target');
         
-        // PDF化のために一時的にすべての折りたたみを開く
+        // 一時的に全て開く
         const hiddenContents = element.querySelectorAll('.category-content.collapsed');
         hiddenContents.forEach(el => el.classList.remove('collapsed'));
         
@@ -242,14 +254,12 @@
             margin:       10,
             filename:     'karaoke_cool_analysis.pdf',
             image:        { type: 'jpeg', quality: 0.98 },
-            html2canvas:  { scale: 2, logging: true },
+            html2canvas:  { scale: 2, logging: true, useCORS: true },
             jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
         };
 
-        // PDF生成実行
         html2pdf().set(opt).from(element).save().then(function() {
-            // 生成後に元の状態に戻す（必要なら）
-            // hiddenContents.forEach(el => el.classList.add('collapsed'));
+            // 必要なら閉じる処理をここに追加
         });
     }
 
