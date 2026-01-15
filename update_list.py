@@ -51,7 +51,7 @@ room_map = {
     11106: "冨塚部屋"
 }
 
-# --- 関数: テキスト正規化 ---
+# --- 関数: テキスト正規化 (提供されたコードベース) ---
 def normalize_text(text):
     if not isinstance(text, str):
         return str(text)
@@ -62,13 +62,15 @@ def normalize_text(text):
     # 2. 拡張子の削除
     text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
     
-    # 3. 括弧の処理: 記号だけスペースに (中身は残す)
-    # 作品名やバージョン情報が検索に必要なので、中身は消さない
-    text = re.sub(r'[\[\(\{【\]\)\}】『』「」]', ' ', text)
+    # 3. 括弧と中身を除去 (提供コードの仕様: 中身ごと消すことでヒット率を高める)
+    text = re.sub(r'[\[\(\{【].*?[\]\)\}】]', ' ', text)
     
     # 4. キー変更情報を削除
     text = re.sub(r'(key|KEY)?\s*[\+\-]\s*[0-9]+', ' ', text)
     text = re.sub(r'原キー', ' ', text)
+    
+    # ★追加: 「キー変更」という日本語文字やコロンも削除して、純粋な曲名に近づける
+    text = re.sub(r'(キー)?変更[:：]?', ' ', text)
     
     # 5. 記号をスペースに置換
     text = re.sub(r'[~〜～\-_=,.]', ' ', text)
@@ -218,18 +220,12 @@ if cool_file and os.path.exists(cool_file):
                 
                 if not anime and not song: continue
 
-                # ★修正: 救済ロジックの強化
-                # 判定: ハイフン(-, −)、空文字、"nan" の場合に発動
-                # 動作: 曲名から【】や()で囲まれた部分を探し、(OP)などは除外して作品名として採用
-                if anime in ["-", "−", "", "nan"] and song:
-                    # すべての括弧内の文字を抽出
-                    matches = re.findall(r'(?:【|\[|『|（|\()(.*?)(?:】|\]|』|）|\))', song)
-                    for candidate in matches:
-                        candidate = candidate.strip()
-                        # (OP) (ED) (Live) などの短い属性情報はスキップする
-                        if len(candidate) > 0 and candidate.upper() not in ["OP", "ED", "MV", "PV", "LIVE", "OFF VOCAL", "INST"]:
-                            anime = candidate
-                            break # 最初に見つかった有力な候補を採用
+                # ★修正: 救済ロジック
+                # 「作品名がハイフンまたは空」の場合のみ、曲名の【】等から作品名を取得
+                if (anime == "-" or not anime) and song:
+                    match = re.search(r'[【\[『（\(](.*?)[】\]』）\)]', song)
+                    if match:
+                        anime = match.group(1).strip()
 
                 categorized_data[current_category].append({
                     "anime": anime, "type": type_, "artist": artist, "song": song
@@ -324,7 +320,7 @@ if cool_file and os.path.exists(cool_file):
 
 
 # ==========================================
-# HTML生成
+# HTML生成 (HTML出力・印刷設定)
 # ==========================================
 
 columns_to_hide = ['コメント'] 
