@@ -380,10 +380,11 @@ html_content = f"""
         .btn-pdf {{ background-color: #e74c3c; }}
         .count-display {{ margin-left: auto; font-weight: bold; font-size: 13px; }}
 
-        /* Controls Toggle Classes */
+        /* Controls Toggle */
         .ctrl-setlist {{ display: flex; width: 100%; align-items: center; gap:8px; }}
         .ctrl-analysis {{ display: none; width: 100%; align-items: center; justify-content: flex-end; }}
 
+        /* Content Area */
         .content-area {{
             flex: 1; position: relative; overflow: hidden; 
         }}
@@ -396,19 +397,20 @@ html_content = f"""
         }}
         .tab-content.active {{ display: block; }}
 
+        /* Table Styles */
         table {{
             width: 100%; border-collapse: separate; border-spacing: 0;
             background: #fff; border-radius: 4px; margin-top: 10px; margin-bottom: 20px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            /* ★修正: PDF見切れ対策 (幅固定と折り返し強制) */
-            table-layout: fixed;
-            word-wrap: break-word;
-            overflow-wrap: break-word;
+            /* ★修正: PDF見切れ対策 */
+            table-layout: fixed; 
         }}
         th, td {{
             padding: 5px 8px; text-align: left; border-bottom: 1px solid #eee;
             font-size: 13px; vertical-align: middle; line-height: 1.3;
-            /* ★修正: PDF見切れ対策 (セル内の折り返し) */
+            /* ★修正: 長い単語の強制折り返し */
+            word-wrap: break-word;
+            overflow-wrap: break-word;
             word-break: break-all;
             white-space: normal;
         }}
@@ -420,6 +422,7 @@ html_content = f"""
         tr:hover {{ background-color: #f1f8ff; }}
         tr.hidden {{ display: none !important; }}
 
+        /* Analysis Styles */
         .category-header {{
             margin-top: 20px; padding: 10px 15px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -439,6 +442,7 @@ html_content = f"""
             height: 10px; background: linear-gradient(90deg, #3498db, #2980b9);
             border-radius: 5px;
         }}
+        
         td[rowspan] {{
             background-color: #fff;
             border-right: 1px solid #eee;
@@ -446,12 +450,12 @@ html_content = f"""
             font-weight: normal; color: inherit;      
         }}
         
-        /* PDF出力用のスタイル調整 (PDF化の際のみ適用されるCSSではないが、レイアウト補助) */
-        #pdf-target {{
-            width: 100%;
+        /* PDF出力用の強制スタイル (PDF化中も画面上で少し狭くなる一瞬があるが許容) */
+        #pdf-target.printing table {{
+            font-size: 11px; /* PDF用フォントサイズ縮小 */
         }}
-        #pdf-target table {{
-            font-size: 11px; /* PDFでは少し小さくして収まりよくする */
+        #pdf-target.printing th, #pdf-target.printing td {{
+            padding: 3px; /* 余白縮小 */
         }}
     </style>
 </head>
@@ -504,7 +508,6 @@ html_content = f"""
         const btnIndex = tabName === 'setlist' ? 0 : 1;
         document.querySelectorAll('.tab-btn')[btnIndex].classList.add('active');
         
-        // コントロール表示切り替え
         if(tabName === 'setlist') {{
             document.getElementById('ctrl-setlist').style.display = 'flex';
             document.getElementById('ctrl-analysis').style.display = 'none';
@@ -522,16 +525,23 @@ html_content = f"""
         icon.style.float = 'right';
     }}
 
-    // --- PDF出力機能 ---
+    // --- ★修正: PDF出力 (幅強制固定による見切れ防止) ---
     function exportPDF() {{
         const element = document.getElementById('pdf-target');
         
-        // 一時的に全て開く
+        // 1. 折りたたみを開く
         const hiddenContents = element.querySelectorAll('.category-content.collapsed');
         hiddenContents.forEach(el => el.classList.remove('collapsed'));
         
+        // 2. PDF用のクラスを付与 (文字サイズ縮小など)
+        element.classList.add('printing');
+        
+        // 3. 幅をA4用紙サイズ相当に強制固定して、ブラウザに折り返し計算をさせる
+        const originalWidth = element.style.width;
+        element.style.width = '750px'; 
+
         const opt = {{
-            margin:       10,
+            margin:       [10, 10, 10, 10], 
             filename:     'karaoke_cool_analysis.pdf',
             image:        {{ type: 'jpeg', quality: 0.98 }},
             html2canvas:  {{ scale: 2, logging: true, useCORS: true }},
@@ -539,11 +549,13 @@ html_content = f"""
         }};
 
         html2pdf().set(opt).from(element).save().then(function() {{
-            // 必要なら閉じる処理をここに追加
+            // 4. 元に戻す
+            element.style.width = originalWidth;
+            element.classList.remove('printing');
+            // hiddenContents.forEach(el => el.classList.add('collapsed')); // 閉じた状態に戻すならコメント解除
         }});
     }}
 
-    // --- 検索機能 ---
     const searchInput = document.getElementById("searchInput");
     const table = document.getElementById("setlistTable");
     const countDisplay = document.getElementById('countDisplay');
