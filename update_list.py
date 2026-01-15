@@ -63,8 +63,8 @@ def normalize_text(text):
     text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
     
     # 3. 括弧の処理: 記号だけスペースに (中身は残す)
-    # ※中身を消してしまうと、ファイル名にある作品名がヒットしなくなるため維持
-    text = re.sub(r'[\[\(\{【\]\)\}】]', ' ', text)
+    # 検索ヒット率向上のため、中身は維持します
+    text = re.sub(r'[\[\(\{【\]\)\}】『』]', ' ', text)
     
     # 4. キー変更情報を削除
     text = re.sub(r'(key|KEY)?\s*[\+\-]\s*[0-9]+', ' ', text)
@@ -218,11 +218,12 @@ if cool_file and os.path.exists(cool_file):
                 
                 if not anime and not song: continue
 
-                # ★修正: 救済ロジックの厳格化
-                # 作品名が「-」または空の場合「のみ」、曲名から【】の中身を探して補完する
-                # これにより、元々作品名が入っているデータは上書きされずに守られる
+                # ★修正: 救済ロジックの拡張
+                # 作品名が「-」または空の場合「のみ」、曲名からカッコの中身を探して補完する
+                # 対応カッコ: 【】 [] () 『』 （）
                 if (anime == "-" or not anime) and song:
-                    match = re.search(r'【(.*?)】', song)
+                    # 最初のカッコの中身を取得する正規表現
+                    match = re.search(r'[【\[『（\(](.*?)[】\]』）\)]', song)
                     if match:
                         anime = match.group(1).strip()
 
@@ -349,6 +350,7 @@ html_content = f"""
     <title>Karaoke Dashboard</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
+        /* CSS内の括弧は {{ }} でエスケープしています */
         :root {{
             --primary-color: #2c3e50;
             --accent-color: #3498db;
