@@ -51,7 +51,7 @@ room_map = {
     11106: "冨塚部屋"
 }
 
-# --- 関数: テキスト正規化 ---
+# --- 関数: テキスト正規化 (提供されたコードベース) ---
 def normalize_text(text):
     if not isinstance(text, str):
         return str(text)
@@ -62,13 +62,15 @@ def normalize_text(text):
     # 2. 拡張子の削除
     text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
     
-    # 3. 括弧の処理: 記号だけスペースに (中身は残す)
-    # 検索ヒット率向上のため、中身は維持します
-    text = re.sub(r'[\[\(\{【\]\)\}】『』]', ' ', text)
+    # 3. 括弧と中身を除去 (提供コードの仕様: 中身ごと消すことでヒット率を高める)
+    text = re.sub(r'[\[\(\{【].*?[\]\)\}】]', ' ', text)
     
     # 4. キー変更情報を削除
     text = re.sub(r'(key|KEY)?\s*[\+\-]\s*[0-9]+', ' ', text)
     text = re.sub(r'原キー', ' ', text)
+    
+    # ★追加: 「キー変更」という日本語文字やコロンも削除して、純粋な曲名に近づける
+    text = re.sub(r'(キー)?変更[:：]?', ' ', text)
     
     # 5. 記号をスペースに置換
     text = re.sub(r'[~〜～\-_=,.]', ' ', text)
@@ -218,11 +220,9 @@ if cool_file and os.path.exists(cool_file):
                 
                 if not anime and not song: continue
 
-                # ★修正: 救済ロジックの拡張
-                # 作品名が「-」または空の場合「のみ」、曲名からカッコの中身を探して補完する
-                # 対応カッコ: 【】 [] () 『』 （）
+                # ★修正: 救済ロジック
+                # 「作品名がハイフンまたは空」の場合のみ、曲名の【】等から作品名を取得
                 if (anime == "-" or not anime) and song:
-                    # 最初のカッコの中身を取得する正規表現
                     match = re.search(r'[【\[『（\(](.*?)[】\]』）\)]', song)
                     if match:
                         anime = match.group(1).strip()
@@ -320,7 +320,7 @@ if cool_file and os.path.exists(cool_file):
 
 
 # ==========================================
-# HTML生成
+# HTML生成 (HTML出力・印刷設定)
 # ==========================================
 
 columns_to_hide = ['コメント'] 
