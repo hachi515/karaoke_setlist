@@ -55,26 +55,13 @@ room_map = {
 def normalize_text(text):
     if not isinstance(text, str):
         return str(text)
-    
-    # 1. NFKC正規化
     text = unicodedata.normalize('NFKC', text)
-    
-    # 2. 拡張子の削除
     text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
-    
-    # 3. 括弧と中身を除去
     text = re.sub(r'[\[\(\{【].*?[\]\)\}】]', ' ', text)
-    
-    # 4. キー変更情報を削除
     text = re.sub(r'(key|KEY)?\s*[\+\-]\s*[0-9]+', ' ', text)
     text = re.sub(r'原キー', ' ', text)
-    
-    # 5. 記号をスペースに置換
     text = re.sub(r'[~〜～\-_=,.]', ' ', text)
-    
-    # 6. スペース正規化
     text = re.sub(r'\s+', ' ', text).strip()
-    
     return text.upper()
 
 # --- 1. 過去データ読み込み ---
@@ -115,19 +102,16 @@ if new_data_frames:
     new_df = pd.concat(new_data_frames, ignore_index=True)
     combined_df = pd.concat([history_df, new_df], ignore_index=True)
 
-    # クリーニング
     clean_check_cols = ['部屋主', '曲名（ファイル名）', '作品名', '歌手名']
     for col in clean_check_cols:
         if col in combined_df.columns:
             combined_df = combined_df[combined_df[col] != col]
 
-    # 重複排除
     subset_cols = ['部屋主', '順番', '曲名（ファイル名）', '歌った人']
     existing_cols = [c for c in subset_cols if c in combined_df.columns]
     final_df = combined_df.drop_duplicates(subset=existing_cols, keep='first')
     final_df = final_df.fillna("")
 
-    # ソート
     if '順番' in final_df.columns:
         final_df['順番'] = pd.to_numeric(final_df['順番'], errors='coerce')
         
@@ -135,7 +119,6 @@ if new_data_frames:
     final_df = final_df.sort_values(by=['temp_date', '順番'], ascending=[False, False])
     final_df = final_df.drop(columns=['temp_date'])
     
-    # 列整理
     cols = list(final_df.columns)
     if '部屋主' in cols:
         cols.insert(0, cols.pop(cols.index('部屋主')))
@@ -174,7 +157,6 @@ if cool_file and os.path.exists(cool_file):
         if raw_df is not None:
             raw_df = raw_df.fillna("")
             
-            # 履歴データ準備
             start_date = pd.to_datetime("2026/01/01")
             end_date = pd.to_datetime("2026/03/31")
             
@@ -236,6 +218,7 @@ if cool_file and os.path.exists(cool_file):
                     return source_series.str.contains(safe_target, case=False, na=False)
 
             for category, items in categorized_data.items():
+                # PDF出力用のラップdiv
                 analysis_html_content += f"""
                 <div class="category-block">
                     <div class="category-header" onclick="toggleCategory(this)">
@@ -255,8 +238,6 @@ if cool_file and os.path.exists(cool_file):
                         <tbody>
                 """
                 
-                # ★修正: ソート処理(items.sort)を削除
-                # これにより、CSVの並び順のまま、連続する作品名だけが統合される
                 def get_anime_key(x): return x['anime']
                 
                 for anime_name, group_iter in groupby(items, key=get_anime_key):
@@ -385,7 +366,7 @@ html_content = f"""
         .controls-row {{
             padding: 8px 15px; display: flex; gap: 8px; align-items: center;
             background-color: #fff; border-bottom: 1px solid var(--border-color);
-            height: 40px; 
+            height: 40px; /* 高さ固定でチラつき防止 */
         }}
         .search-box {{
             padding: 6px 12px; border: 1px solid #ccc; border-radius: 4px;
@@ -400,6 +381,7 @@ html_content = f"""
         .btn-pdf {{ background-color: #e74c3c; }}
         .count-display {{ margin-left: auto; font-weight: bold; font-size: 13px; }}
 
+        /* Controls Toggle Classes */
         .ctrl-setlist {{ display: flex; width: 100%; align-items: center; gap:8px; }}
         .ctrl-analysis {{ display: none; width: 100%; align-items: center; justify-content: flex-end; }}
 
@@ -419,7 +401,9 @@ html_content = f"""
             width: 100%; border-collapse: separate; border-spacing: 0;
             background: #fff; border-radius: 4px; margin-top: 10px; margin-bottom: 20px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            page-break-inside: auto;
         }}
+        tr {{ page-break-inside: avoid; page-break-after: auto; }}
         th, td {{
             padding: 5px 8px; text-align: left; border-bottom: 1px solid #eee;
             font-size: 13px; vertical-align: middle; line-height: 1.3;
@@ -428,23 +412,17 @@ html_content = f"""
             background-color: var(--primary-color); color: #fff;
             position: sticky; top: 0; z-index: 10; font-weight: bold;
         }}
-        
-        tr {{
-            page-break-inside: avoid; /* 行の途中での改行禁止 */
-            break-inside: avoid;
-        }}
-        
         tr:nth-child(even) {{ background-color: #fafafa; }}
         tr:hover {{ background-color: #f1f8ff; }}
         tr.hidden {{ display: none !important; }}
 
+        /* Analysis Styles */
         .category-header {{
             margin-top: 20px; padding: 10px 15px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white; border-radius: 6px;
             font-weight: bold; font-size: 1.1rem; cursor: pointer;
             user-select: none;
-            page-break-after: avoid; 
         }}
         .category-content {{ display: block; transition: all 0.3s; }}
         .category-content.collapsed {{ display: none; }}
@@ -464,9 +442,6 @@ html_content = f"""
             vertical-align: middle;
             font-weight: normal; color: inherit;      
         }}
-        
-        /* PDF出力時: 特別なスタイルは適用せず元のまま */
-        #pdf-target.printing {{ }}
     </style>
 </head>
 <body>
@@ -518,6 +493,7 @@ html_content = f"""
         const btnIndex = tabName === 'setlist' ? 0 : 1;
         document.querySelectorAll('.tab-btn')[btnIndex].classList.add('active');
         
+        // コントロール表示切り替え
         if(tabName === 'setlist') {{
             document.getElementById('ctrl-setlist').style.display = 'flex';
             document.getElementById('ctrl-analysis').style.display = 'none';
@@ -535,31 +511,30 @@ html_content = f"""
         icon.style.float = 'right';
     }}
 
-    // --- PDF出力 (右余白削除版) ---
+    // --- PDF出力機能 ---
     function exportPDF() {{
         const element = document.getElementById('pdf-target');
         
-        // 全て開く
+        // PDF化のために一時的にすべての折りたたみを開く
         const hiddenContents = element.querySelectorAll('.category-content.collapsed');
         hiddenContents.forEach(el => el.classList.remove('collapsed'));
         
-        element.classList.add('printing');
-
         const opt = {{
-            margin:       [10, 10, 10, 10], 
+            margin:       10,
             filename:     'karaoke_cool_analysis.pdf',
             image:        {{ type: 'jpeg', quality: 0.98 }},
-            html2canvas:  {{ scale: 2, logging: true, useCORS: true }},
-            jsPDF:        {{ unit: 'mm', format: 'a4', orientation: 'portrait' }},
-            // 行の途中で切れないようにする設定
-            pagebreak:    {{ mode: ['avoid-all', 'css', 'legacy'] }}
+            html2canvas:  {{ scale: 2, logging: true }},
+            jsPDF:        {{ unit: 'mm', format: 'a4', orientation: 'portrait' }}
         }};
 
+        // PDF生成実行
         html2pdf().set(opt).from(element).save().then(function() {{
-            element.classList.remove('printing');
+            // 生成後に元の状態に戻す（必要なら）
+            // hiddenContents.forEach(el => el.classList.add('collapsed'));
         }});
     }}
 
+    // --- 検索機能 ---
     const searchInput = document.getElementById("searchInput");
     const table = document.getElementById("setlistTable");
     const countDisplay = document.getElementById('countDisplay');
