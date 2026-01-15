@@ -9,7 +9,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
         :root {
-            --primary-color: #2c3e50;
+            --primary-color: #2c3e50; /* 濃いネイビー */
             --accent-color: #3498db;
             --bg-color: #f4f7f6;
             --text-color: #333;
@@ -66,11 +66,9 @@
         .btn-pdf { background-color: #e74c3c; }
         .count-display { margin-left: auto; font-weight: bold; font-size: 13px; }
 
-        /* Controls Toggle */
         .ctrl-setlist { display: flex; width: 100%; align-items: center; gap:8px; }
         .ctrl-analysis { display: none; width: 100%; align-items: center; justify-content: flex-end; }
 
-        /* Content Area */
         .content-area {
             flex: 1; position: relative; overflow: hidden; 
         }
@@ -83,22 +81,15 @@
         }
         .tab-content.active { display: block; }
 
-        /* Table Styles */
+        /* Table Styles (自然なレイアウト) */
         table {
             width: 100%; border-collapse: separate; border-spacing: 0;
             background: #fff; border-radius: 4px; margin-top: 10px; margin-bottom: 20px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            /* ★修正: PDF見切れ対策 */
-            table-layout: fixed; 
         }
         th, td {
             padding: 5px 8px; text-align: left; border-bottom: 1px solid #eee;
             font-size: 13px; vertical-align: middle; line-height: 1.3;
-            /* ★修正: 長い単語の強制折り返し */
-            word-wrap: break-word;
-            overflow-wrap: break-word;
-            word-break: break-all;
-            white-space: normal;
         }
         th {
             background-color: var(--primary-color); color: #fff;
@@ -128,20 +119,11 @@
             height: 10px; background: linear-gradient(90deg, #3498db, #2980b9);
             border-radius: 5px;
         }
-        
         td[rowspan] {
             background-color: #fff;
             border-right: 1px solid #eee;
             vertical-align: middle;
             font-weight: normal; color: inherit;      
-        }
-        
-        /* PDF出力用の強制スタイル (PDF化中も画面上で少し狭くなる一瞬があるが許容) */
-        #pdf-target.printing table {
-            font-size: 11px; /* PDF用フォントサイズ縮小 */
-        }
-        #pdf-target.printing th, #pdf-target.printing td {
-            padding: 3px; /* 余白縮小 */
         }
     </style>
 </head>
@@ -149,7 +131,7 @@
     <div class="top-section">
         <div class="header-inner">
             <h1>Karaoke Dashboard</h1>
-            <div class="update-time">2026/01/15 11:35 更新</div>
+            <div class="update-time">2026/01/15 11:47 更新</div>
         </div>
         <div class="tabs">
             <button class="tab-btn active" onclick="openTab('setlist')">セットリスト</button>
@@ -245,23 +227,23 @@
         icon.style.float = 'right';
     }
 
-    // --- ★修正: PDF出力 (幅強制固定による見切れ防止) ---
+    // --- ★修正: PDF出力 (右側余白確保版) ---
     function exportPDF() {
         const element = document.getElementById('pdf-target');
         
-        // 1. 折りたたみを開く
+        // 全て開く
         const hiddenContents = element.querySelectorAll('.category-content.collapsed');
         hiddenContents.forEach(el => el.classList.remove('collapsed'));
         
-        // 2. PDF用のクラスを付与 (文字サイズ縮小など)
-        element.classList.add('printing');
+        // 一時的に右側に余白(padding)を追加して、PDF生成時に見切れないようにする
+        const originalPaddingRight = element.style.paddingRight;
+        const originalBoxSizing = element.style.boxSizing;
         
-        // 3. 幅をA4用紙サイズ相当に強制固定して、ブラウザに折り返し計算をさせる
-        const originalWidth = element.style.width;
-        element.style.width = '750px'; 
+        element.style.paddingRight = "30px"; // ★右余白を追加
+        element.style.boxSizing = "border-box"; 
 
         const opt = {
-            margin:       [10, 10, 10, 10], 
+            margin:       [15, 15, 15, 15], // マージンを全体的に確保
             filename:     'karaoke_cool_analysis.pdf',
             image:        { type: 'jpeg', quality: 0.98 },
             html2canvas:  { scale: 2, logging: true, useCORS: true },
@@ -269,10 +251,9 @@
         };
 
         html2pdf().set(opt).from(element).save().then(function() {
-            // 4. 元に戻す
-            element.style.width = originalWidth;
-            element.classList.remove('printing');
-            // hiddenContents.forEach(el => el.classList.add('collapsed')); // 閉じた状態に戻すならコメント解除
+            // 生成後に元に戻す
+            element.style.paddingRight = originalPaddingRight;
+            element.style.boxSizing = originalBoxSizing;
         });
     }
 
