@@ -132,7 +132,7 @@ else:
 
 
 # ==========================================
-# ★集計処理 (作品統合 & 改ページ制御用タグ付与)
+# ★集計処理
 # ==========================================
 analysis_html_content = "" 
 cool_data_exists = False
@@ -236,14 +236,14 @@ if cool_file and os.path.exists(cool_file):
                         </thead>
                 """
                 
-                # groupbyで作品名ごとにまとめる (CSV順序維持)
+                # 作品名でソートして統合を確実に
+                items.sort(key=lambda x: x['anime'])
                 def get_anime_key(x): return x['anime']
                 
                 for anime_name, group_iter in groupby(items, key=get_anime_key):
                     group_items = list(group_iter)
                     rowspan = len(group_items)
                     
-                    # ★作品ごとに tbody で囲む (改ページ制御の単位)
                     analysis_html_content += '<tbody class="anime-group">'
                     
                     for i, item in enumerate(group_items):
@@ -280,7 +280,7 @@ if cool_file and os.path.exists(cool_file):
                         analysis_html_content += f'<td class="count-cell"><div class="count-wrapper"><span class="count-num">{count}</span>{bar_html}</div></td>'
                         analysis_html_content += '</tr>'
                     
-                    analysis_html_content += '</tbody>' # 作品グループ終了
+                    analysis_html_content += '</tbody>'
                 
                 analysis_html_content += "</table></div></div>"
 
@@ -296,7 +296,7 @@ if cool_file and os.path.exists(cool_file):
 
 
 # ==========================================
-# HTML生成 (HTML出力・改ページCSS実装)
+# HTML生成
 # ==========================================
 
 columns_to_hide = ['コメント'] 
@@ -443,22 +443,30 @@ html_content = f"""
             font-weight: normal; color: inherit;      
         }}
 
-        /* --- 印刷用スタイル (HTML出力後の印刷時) --- */
+        /* --- 印刷用スタイル --- */
         @media print {{
             body {{
                 overflow: visible !important;
                 height: auto !important;
                 display: block !important;
             }}
-            .category-content {{ display: block !important; }} /* 折りたたみ強制解除 */
+            .top-section {{ display: none !important; }}
+            .content-area {{ overflow: visible !important; position: static !important; }}
+            .tab-content {{ 
+                position: static !important; 
+                display: block !important; 
+                overflow: visible !important; 
+                padding: 0 !important;
+            }}
+            .category-content {{ display: block !important; }}
             
-            /* ★重要: 作品グループ単位での改ページ禁止 */
+            /* 作品グループ単位での改ページ禁止 */
             tbody.anime-group {{
                 break-inside: avoid;
                 page-break-inside: avoid;
             }}
-            
-            /* テーブルヘッダーは各ページに表示 */
+            /* ヘッダー直後の改ページ回避 */
+            .category-header {{ page-break-after: avoid; }}
             thead {{ display: table-header-group; }}
         }}
     </style>
@@ -529,17 +537,13 @@ html_content = f"""
         icon.style.float = 'right';
     }}
 
-    // --- HTML保存機能 ---
     function downloadHTML() {{
         const element = document.getElementById('print-target');
-        
-        // 折りたたみ強制解除
         const hiddenContents = element.querySelectorAll('.category-content.collapsed');
         hiddenContents.forEach(el => el.classList.remove('collapsed'));
         
         const htmlContent = element.innerHTML;
         
-        // 印刷用スタイルを含む完全なHTMLを作成
         const fullHtml = `
 <!DOCTYPE html>
 <html lang="ja">
@@ -549,8 +553,9 @@ html_content = f"""
     <style>
         body {{ font-family: "Helvetica Neue", Arial, sans-serif; font-size: 13px; color: #333; }}
         table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; }}
-        th, td {{ border: 1px solid #ccc; padding: 5px 8px; text-align: left; }}
-        th {{ background-color: {0}; color: #fff; }}
+        th, td {{ border: 1px solid #ccc; padding: 5px 8px; text-align: left; vertical-align: middle; }}
+        th {{ background-color: #2c3e50; color: #fff; }}
+        td[rowspan] {{ background-color: #fff; }}
         .category-header {{ 
             background: #667eea; color: white; padding: 10px; margin-top: 20px; 
             font-weight: bold; border-radius: 4px;
@@ -559,10 +564,10 @@ html_content = f"""
         .count-num {{ width: 25px; text-align: right; }}
         .bar-chart {{ height: 10px; background: #3498db; border-radius: 5px; }}
         
-        /* 印刷設定: 作品単位での改ページ禁止 */
         @media print {{
             tbody.anime-group {{ break-inside: avoid; page-break-inside: avoid; }}
             .category-header {{ page-break-after: avoid; }}
+            thead {{ display: table-header-group; }}
         }}
     </style>
 </head>
@@ -578,9 +583,6 @@ html_content = f"""
         link.href = URL.createObjectURL(blob);
         link.download = 'karaoke_analysis.html';
         link.click();
-        
-        // 状態戻し（必要なら）
-        // hiddenContents.forEach(el => el.classList.add('collapsed'));
     }}
 
     const searchInput = document.getElementById("searchInput");
@@ -656,7 +658,7 @@ html_content = f"""
 </script>
 </body>
 </html>
-""".format('#2c3e50') # CSS内format用
+"""
 
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
