@@ -51,36 +51,20 @@ room_map = {
     11106: "冨塚部屋"
 }
 
-# --- ★修正: テキスト正規化関数の強化 (スペース保持・キー除外) ---
+# --- 関数: テキスト正規化 ---
 def normalize_text(text):
     if not isinstance(text, str):
         return str(text)
-    
-    # 1. NFKC正規化 (全角英数を半角に、濁点を統合など)
     text = unicodedata.normalize('NFKC', text)
-    
-    # 2. 拡張子除去 (.mp3, .m4a, .zip など)
     text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
-    
-    # 3. 括弧と中身を除去 [LIVE], (OP), {原キー} など
     text = re.sub(r'[\[\(\{【].*?[\]\)\}】]', ' ', text)
-    
-    # 4. キー変更の記述を削除 (+2, -1, + 2, 原キー, key+1 など)
-    # 数字の前後にスペースがある場合も考慮
     text = re.sub(r'(key|KEY)?\s*[\+\-]\s*[0-9]+', ' ', text)
     text = re.sub(r'原キー', ' ', text)
-    
-    # 5. 記号を「スペース」に置換 (削除ではない)
-    # これにより "Song-A" -> "Song A" となり、"Song"と"A"が癒着しない
     text = re.sub(r'[~〜～\-_=,.]', ' ', text)
-    
-    # 6. スペースの正規化 (連続するスペースを1つに、前後の空白削除)
-    # ★重要: スペースを削除せず残すことで "I" と "Impact" を区別できるようにする
     text = re.sub(r'\s+', ' ', text).strip()
-    
     return text.upper()
 
-# --- 1. 過去のデータ(history.csv)を読み込む ---
+# --- 1. 過去データ読み込み ---
 history_file = "history.csv"
 if os.path.exists(history_file):
     try:
@@ -92,7 +76,7 @@ if os.path.exists(history_file):
 else:
     history_df = pd.DataFrame()
 
-# --- 2. 新しいデータを取得する ---
+# --- 2. 新しいデータ取得 ---
 target_ports = list(room_map.keys())
 new_data_frames = []
 
@@ -118,19 +102,16 @@ if new_data_frames:
     new_df = pd.concat(new_data_frames, ignore_index=True)
     combined_df = pd.concat([history_df, new_df], ignore_index=True)
 
-    # クリーニング
     clean_check_cols = ['部屋主', '曲名（ファイル名）', '作品名', '歌手名']
     for col in clean_check_cols:
         if col in combined_df.columns:
             combined_df = combined_df[combined_df[col] != col]
 
-    # 重複排除
     subset_cols = ['部屋主', '順番', '曲名（ファイル名）', '歌った人']
     existing_cols = [c for c in subset_cols if c in combined_df.columns]
     final_df = combined_df.drop_duplicates(subset=existing_cols, keep='first')
     final_df = final_df.fillna("")
 
-    # ソート
     if '順番' in final_df.columns:
         final_df['順番'] = pd.to_numeric(final_df['順番'], errors='coerce')
         
@@ -151,7 +132,7 @@ else:
 
 
 # ==========================================
-# ★集計処理 (単語境界チェック・AND検索)
+# ★集計処理
 # ==========================================
 analysis_html_content = "" 
 cool_data_exists = False
@@ -182,7 +163,6 @@ if cool_file and os.path.exists(cool_file):
             analysis_source_df = final_df.copy()
             analysis_source_df['dt_obj'] = pd.to_datetime(analysis_source_df['取得日'], errors='coerce')
             
-            # 正規化 (スペースあり)
             analysis_source_df['norm_filename'] = analysis_source_df['曲名（ファイル名）'].apply(normalize_text)
             if '作品名' in analysis_source_df.columns:
                 analysis_source_df['norm_workname'] = analysis_source_df['作品名'].apply(normalize_text)
@@ -227,40 +207,35 @@ if cool_file and os.path.exists(cool_file):
                     "anime": anime, "type": type_, "artist": artist, "song": song
                 })
 
-            # --- マッチングロジック ---
             def check_match(target_text, source_series):
                 if not target_text:
                     return pd.Series([False] * len(source_series))
-                
                 safe_target = re.escape(target_text)
-                
-                # ★重要: 英語(ASCII)のみのタイトルの場合、単語境界(\b)を使って厳密に判定
-                # これにより "I" が "IMPACT" にヒットするのを防ぐ
                 if re.match(r'^[A-Z0-9\s]+$', target_text):
-                    # 前後に 英数字以外 があるか、行頭・行末であること
                     pattern = r'(?:^|[^A-Z0-9])' + safe_target + r'(?:[^A-Z0-9]|$)'
                     return source_series.str.contains(pattern, regex=True, case=False, na=False)
                 else:
-                    # 日本語が含まれる場合は通常の部分一致
                     return source_series.str.contains(safe_target, case=False, na=False)
 
             for category, items in categorized_data.items():
+                # PDF出力用のラップdiv
                 analysis_html_content += f"""
-                <div class="category-header" onclick="toggleCategory(this)">
-                    {category} <i class="fas fa-chevron-down" style="float:right;"></i>
-                </div>
-                <div class="category-content">
-                <table class="analysisTable">
-                    <thead>
-                        <tr>
-                            <th width="25%">作品名</th>
-                            <th width="10%">OP/ED</th>
-                            <th width="20%">歌手</th>
-                            <th width="25%">曲名</th>
-                            <th width="20%">歌唱数</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+                <div class="category-block">
+                    <div class="category-header" onclick="toggleCategory(this)">
+                        {category} <i class="fas fa-chevron-down" style="float:right;"></i>
+                    </div>
+                    <div class="category-content">
+                    <table class="analysisTable">
+                        <thead>
+                            <tr>
+                                <th width="25%">作品名</th>
+                                <th width="10%">OP/ED</th>
+                                <th width="20%">歌手</th>
+                                <th width="25%">曲名</th>
+                                <th width="20%">歌唱数</th>
+                            </tr>
+                        </thead>
+                        <tbody>
                 """
                 
                 def get_anime_key(x): return x['anime']
@@ -273,10 +248,7 @@ if cool_file and os.path.exists(cool_file):
                         target_song_norm = normalize_text(item["song"])
                         target_anime_norm = normalize_text(item["anime"])
                         
-                        # --- 判定 ---
                         song_match_mask = check_match(target_song_norm, target_history['norm_filename'])
-                        
-                        # 作品名はファイル名または作品名列に含まれればOK
                         anime_match_mask = (
                             target_history['norm_filename'].str.contains(re.escape(target_anime_norm), case=False, na=False) |
                             target_history['norm_workname'].str.contains(re.escape(target_anime_norm), case=False, na=False)
@@ -298,17 +270,15 @@ if cool_file and os.path.exists(cool_file):
                         bar_html = f'<div class="bar-chart" style="width:{bar_width}px;"></div>' if count > 0 else ""
                         
                         analysis_html_content += f'<tr class="{row_class}">'
-                        
                         if i == 0:
                             analysis_html_content += f'<td rowspan="{rowspan}">{item["anime"]}</td>'
-                            
                         analysis_html_content += f'<td align="center">{item["type"]}</td>'
                         analysis_html_content += f'<td>{item["artist"]}</td>'
                         analysis_html_content += f'<td>{item["song"]}</td>'
                         analysis_html_content += f'<td class="count-cell"><div class="count-wrapper"><span class="count-num">{count}</span>{bar_html}</div></td>'
                         analysis_html_content += '</tr>'
                 
-                analysis_html_content += "</tbody></table></div>"
+                analysis_html_content += "</tbody></table></div></div>"
 
             cool_data_exists = True
             print("クール集計処理完了。")
@@ -351,6 +321,7 @@ html_content = f"""
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Karaoke Dashboard</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
         :root {{
             --primary-color: #2c3e50;
@@ -395,6 +366,7 @@ html_content = f"""
         .controls-row {{
             padding: 8px 15px; display: flex; gap: 8px; align-items: center;
             background-color: #fff; border-bottom: 1px solid var(--border-color);
+            height: 40px; /* 高さ固定でチラつき防止 */
         }}
         .search-box {{
             padding: 6px 12px; border: 1px solid #ccc; border-radius: 4px;
@@ -406,7 +378,12 @@ html_content = f"""
             font-weight: bold; white-space: nowrap;
         }}
         .btn:hover {{ opacity: 0.9; }}
+        .btn-pdf {{ background-color: #e74c3c; }}
         .count-display {{ margin-left: auto; font-weight: bold; font-size: 13px; }}
+
+        /* Controls Toggle Classes */
+        .ctrl-setlist {{ display: flex; width: 100%; align-items: center; gap:8px; }}
+        .ctrl-analysis {{ display: none; width: 100%; align-items: center; justify-content: flex-end; }}
 
         .content-area {{
             flex: 1; position: relative; overflow: hidden; 
@@ -424,7 +401,9 @@ html_content = f"""
             width: 100%; border-collapse: separate; border-spacing: 0;
             background: #fff; border-radius: 4px; margin-top: 10px; margin-bottom: 20px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            page-break-inside: auto;
         }}
+        tr {{ page-break-inside: avoid; page-break-after: auto; }}
         th, td {{
             padding: 5px 8px; text-align: left; border-bottom: 1px solid #eee;
             font-size: 13px; vertical-align: middle; line-height: 1.3;
@@ -437,6 +416,7 @@ html_content = f"""
         tr:hover {{ background-color: #f1f8ff; }}
         tr.hidden {{ display: none !important; }}
 
+        /* Analysis Styles */
         .category-header {{
             margin-top: 20px; padding: 10px 15px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -444,7 +424,6 @@ html_content = f"""
             font-weight: bold; font-size: 1.1rem; cursor: pointer;
             user-select: none;
         }}
-        .category-header:hover {{ opacity: 0.9; }}
         .category-content {{ display: block; transition: all 0.3s; }}
         .category-content.collapsed {{ display: none; }}
         
@@ -457,13 +436,11 @@ html_content = f"""
             height: 10px; background: linear-gradient(90deg, #3498db, #2980b9);
             border-radius: 5px;
         }}
-        
         td[rowspan] {{
             background-color: #fff;
             border-right: 1px solid #eee;
             vertical-align: middle;
-            font-weight: normal; 
-            color: inherit;      
+            font-weight: normal; color: inherit;      
         }}
     </style>
 </head>
@@ -477,11 +454,16 @@ html_content = f"""
             <button class="tab-btn active" onclick="openTab('setlist')">セットリスト</button>
             <button class="tab-btn" onclick="openTab('analysis')">クール集計</button>
         </div>
-        <div id="setlist-controls" class="controls-row">
-            <input type="text" id="searchInput" class="search-box" placeholder="キーワード (例: 曲名 歌手)...">
-            <button onclick="performSearch()" class="btn"><i class="fas fa-search"></i> 検索</button>
-            <button onclick="resetFilter()" class="btn" style="background:#95a5a6"><i class="fas fa-undo"></i></button>
-            <div class="count-display" id="countDisplay">読み込み中...</div>
+        <div class="controls-row">
+            <div id="ctrl-setlist" class="ctrl-setlist">
+                <input type="text" id="searchInput" class="search-box" placeholder="キーワード (例: 曲名 歌手)...">
+                <button onclick="performSearch()" class="btn"><i class="fas fa-search"></i> 検索</button>
+                <button onclick="resetFilter()" class="btn" style="background:#95a5a6"><i class="fas fa-undo"></i></button>
+                <div class="count-display" id="countDisplay">読み込み中...</div>
+            </div>
+            <div id="ctrl-analysis" class="ctrl-analysis">
+                <button onclick="exportPDF()" class="btn btn-pdf"><i class="fas fa-file-pdf"></i> PDF出力</button>
+            </div>
         </div>
     </div>
 
@@ -496,7 +478,9 @@ html_content = f"""
 
         <div id="analysis" class="tab-content">
             <div style="margin-top:15px; font-size:0.9rem; color:#7f8c8d; text-align:right;">集計対象: 2026/01/01 - 2026/03/31</div>
-            {analysis_html_content if cool_data_exists else '<div style="padding:20px;text-align:center;color:#e74c3c;">集計データがありません</div>'}
+            <div id="pdf-target">
+                {analysis_html_content if cool_data_exists else '<div style="padding:20px;text-align:center;color:#e74c3c;">集計データがありません</div>'}
+            </div>
         </div>
     </div>
 
@@ -509,11 +493,13 @@ html_content = f"""
         const btnIndex = tabName === 'setlist' ? 0 : 1;
         document.querySelectorAll('.tab-btn')[btnIndex].classList.add('active');
         
-        const controls = document.getElementById('setlist-controls');
+        // コントロール表示切り替え
         if(tabName === 'setlist') {{
-            controls.style.display = 'flex';
+            document.getElementById('ctrl-setlist').style.display = 'flex';
+            document.getElementById('ctrl-analysis').style.display = 'none';
         }} else {{
-            controls.style.display = 'none';
+            document.getElementById('ctrl-setlist').style.display = 'none';
+            document.getElementById('ctrl-analysis').style.display = 'flex';
         }}
     }}
 
@@ -525,6 +511,30 @@ html_content = f"""
         icon.style.float = 'right';
     }}
 
+    // --- PDF出力機能 ---
+    function exportPDF() {{
+        const element = document.getElementById('pdf-target');
+        
+        // PDF化のために一時的にすべての折りたたみを開く
+        const hiddenContents = element.querySelectorAll('.category-content.collapsed');
+        hiddenContents.forEach(el => el.classList.remove('collapsed'));
+        
+        const opt = {{
+            margin:       10,
+            filename:     'karaoke_cool_analysis.pdf',
+            image:        {{ type: 'jpeg', quality: 0.98 }},
+            html2canvas:  {{ scale: 2, logging: true }},
+            jsPDF:        {{ unit: 'mm', format: 'a4', orientation: 'portrait' }}
+        }};
+
+        // PDF生成実行
+        html2pdf().set(opt).from(element).save().then(function() {{
+            // 生成後に元の状態に戻す（必要なら）
+            // hiddenContents.forEach(el => el.classList.add('collapsed'));
+        }});
+    }}
+
+    // --- 検索機能 ---
     const searchInput = document.getElementById("searchInput");
     const table = document.getElementById("setlistTable");
     const countDisplay = document.getElementById('countDisplay');
