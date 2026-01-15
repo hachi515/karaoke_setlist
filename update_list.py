@@ -51,33 +51,34 @@ room_map = {
     11106: "冨塚部屋"
 }
 
-# --- ★修正: テキスト正規化関数の大幅強化 ---
+# --- ★修正: テキスト正規化関数の強化 (スペース保持・キー除外) ---
 def normalize_text(text):
     if not isinstance(text, str):
         return str(text)
     
-    # 1. NFKC正規化 (全角英数を半角に統一など)
+    # 1. NFKC正規化 (全角英数を半角に、濁点を統合など)
     text = unicodedata.normalize('NFKC', text)
     
-    # 2. 拡張子の削除 (末尾の .mp3, .m4a など)
+    # 2. 拡張子除去 (.mp3, .m4a, .zip など)
     text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
     
     # 3. 括弧と中身を除去 [LIVE], (OP), {原キー} など
-    text = re.sub(r'[\[\(\{【].*?[\]\)\}】]', '', text)
+    text = re.sub(r'[\[\(\{【].*?[\]\)\}】]', ' ', text)
     
-    # 4. キー変更の記述を削除 (+2, -1, +12, 原キー など)
-    # 括弧に入っていない場合も想定して削除
-    text = re.sub(r'[\+\-][0-9]+', '', text)
-    text = re.sub(r'原キー', '', text)
+    # 4. キー変更の記述を削除 (+2, -1, + 2, 原キー, key+1 など)
+    # 数字の前後にスペースがある場合も考慮
+    text = re.sub(r'(key|KEY)?\s*[\+\-]\s*[0-9]+', ' ', text)
+    text = re.sub(r'原キー', ' ', text)
     
-    # 5. 記号の削除・統一 (波線、ハイフンなどを削除して文字だけで比較)
-    text = re.sub(r'[~〜～\-_]', '', text)
+    # 5. 記号を「スペース」に置換 (削除ではない)
+    # これにより "Song-A" -> "Song A" となり、"Song"と"A"が癒着しない
+    text = re.sub(r'[~〜～\-_=,.]', ' ', text)
     
-    # 6. スペース(空白)を全て削除
-    # "One Time" と "OneTime" を同一視させるため
-    text = text.replace(' ', '').replace('　', '')
+    # 6. スペースの正規化 (連続するスペースを1つに、前後の空白削除)
+    # ★重要: スペースを削除せず残すことで "I" と "Impact" を区別できるようにする
+    text = re.sub(r'\s+', ' ', text).strip()
     
-    return text.strip().upper() # 大文字に統一
+    return text.upper()
 
 # --- 1. 過去のデータ(history.csv)を読み込む ---
 history_file = "history.csv"
@@ -123,10 +124,9 @@ if new_data_frames:
         if col in combined_df.columns:
             combined_df = combined_df[combined_df[col] != col]
 
-    # 重複排除 (過去の日付優先)
+    # 重複排除
     subset_cols = ['部屋主', '順番', '曲名（ファイル名）', '歌った人']
     existing_cols = [c for c in subset_cols if c in combined_df.columns]
-    
     final_df = combined_df.drop_duplicates(subset=existing_cols, keep='first')
     final_df = final_df.fillna("")
 
@@ -138,7 +138,6 @@ if new_data_frames:
     final_df = final_df.sort_values(by=['temp_date', '順番'], ascending=[False, False])
     final_df = final_df.drop(columns=['temp_date'])
     
-    # 列整理
     cols = list(final_df.columns)
     if '部屋主' in cols:
         cols.insert(0, cols.pop(cols.index('部屋主')))
@@ -152,7 +151,7 @@ else:
 
 
 # ==========================================
-# ★集計処理 (強力な正規化・AND検索)
+# ★集計処理 (単語境界チェック・AND検索)
 # ==========================================
 analysis_html_content = "" 
 cool_data_exists = False
@@ -177,31 +176,27 @@ if cool_file and os.path.exists(cool_file):
         if raw_df is not None:
             raw_df = raw_df.fillna("")
             
-            # 履歴データ準備
             start_date = pd.to_datetime("2026/01/01")
             end_date = pd.to_datetime("2026/03/31")
             
             analysis_source_df = final_df.copy()
             analysis_source_df['dt_obj'] = pd.to_datetime(analysis_source_df['取得日'], errors='coerce')
             
-            # ★正規化カラムの作成 (ここで強力な正規化を適用)
+            # 正規化 (スペースあり)
             analysis_source_df['norm_filename'] = analysis_source_df['曲名（ファイル名）'].apply(normalize_text)
             if '作品名' in analysis_source_df.columns:
                 analysis_source_df['norm_workname'] = analysis_source_df['作品名'].apply(normalize_text)
             else:
                 analysis_source_df['norm_workname'] = ""
 
-            # 除外ワード
             exclude_keywords = ['test', 'テスト', 'システム', 'admin', 'System']
             
-            # フィルタリング
             target_history = analysis_source_df[
                 (analysis_source_df['dt_obj'] >= start_date) & 
                 (analysis_source_df['dt_obj'] <= end_date) &
                 (~analysis_source_df['歌った人'].astype(str).apply(lambda x: any(k in x for k in exclude_keywords)))
             ]
 
-            # CSV解析 (カテゴリ厳格化)
             categorized_data = {}
             ALLOWED_CATEGORIES = ["2026年冬アニメ", "2025年秋アニメ"]
             current_category = None
@@ -232,7 +227,23 @@ if cool_file and os.path.exists(cool_file):
                     "anime": anime, "type": type_, "artist": artist, "song": song
                 })
 
-            # HTML生成 (行結合・集計)
+            # --- マッチングロジック ---
+            def check_match(target_text, source_series):
+                if not target_text:
+                    return pd.Series([False] * len(source_series))
+                
+                safe_target = re.escape(target_text)
+                
+                # ★重要: 英語(ASCII)のみのタイトルの場合、単語境界(\b)を使って厳密に判定
+                # これにより "I" が "IMPACT" にヒットするのを防ぐ
+                if re.match(r'^[A-Z0-9\s]+$', target_text):
+                    # 前後に 英数字以外 があるか、行頭・行末であること
+                    pattern = r'(?:^|[^A-Z0-9])' + safe_target + r'(?:[^A-Z0-9]|$)'
+                    return source_series.str.contains(pattern, regex=True, case=False, na=False)
+                else:
+                    # 日本語が含まれる場合は通常の部分一致
+                    return source_series.str.contains(safe_target, case=False, na=False)
+
             for category, items in categorized_data.items():
                 analysis_html_content += f"""
                 <div class="category-header" onclick="toggleCategory(this)">
@@ -259,23 +270,18 @@ if cool_file and os.path.exists(cool_file):
                     rowspan = len(group_items)
                     
                     for i, item in enumerate(group_items):
-                        # ターゲットの正規化
                         target_song_norm = normalize_text(item["song"])
                         target_anime_norm = normalize_text(item["anime"])
                         
-                        mask = pd.Series([False] * len(target_history))
+                        # --- 判定 ---
+                        song_match_mask = check_match(target_song_norm, target_history['norm_filename'])
                         
-                        # エスケープして正規表現検索 (部分一致)
-                        safe_song = re.escape(target_song_norm)
-                        song_match_mask = target_history['norm_filename'].str.contains(safe_song, case=False, na=False)
-                        
-                        safe_anime = re.escape(target_anime_norm)
+                        # 作品名はファイル名または作品名列に含まれればOK
                         anime_match_mask = (
-                            target_history['norm_filename'].str.contains(safe_anime, case=False, na=False) |
-                            target_history['norm_workname'].str.contains(safe_anime, case=False, na=False)
+                            target_history['norm_filename'].str.contains(re.escape(target_anime_norm), case=False, na=False) |
+                            target_history['norm_workname'].str.contains(re.escape(target_anime_norm), case=False, na=False)
                         )
                         
-                        # AND検索ロジック
                         if target_song_norm and target_anime_norm:
                             final_mask = song_match_mask & anime_match_mask
                         elif target_song_norm:
@@ -316,7 +322,7 @@ if cool_file and os.path.exists(cool_file):
 
 
 # ==========================================
-# HTML生成 (UI維持)
+# HTML生成
 # ==========================================
 
 columns_to_hide = ['コメント'] 
@@ -346,7 +352,6 @@ html_content = f"""
     <title>Karaoke Dashboard</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        /* ベース設定 */
         :root {{
             --primary-color: #2c3e50;
             --accent-color: #3498db;
@@ -365,7 +370,6 @@ html_content = f"""
             display: flex; flex-direction: column;
         }}
 
-        /* --- Top Section --- */
         .top-section {{
             flex: 0 0 auto;
             background-color: var(--header-bg);
@@ -404,15 +408,11 @@ html_content = f"""
         .btn:hover {{ opacity: 0.9; }}
         .count-display {{ margin-left: auto; font-weight: bold; font-size: 13px; }}
 
-        /* --- Scrollable Content Area --- */
         .content-area {{
-            flex: 1; 
-            position: relative; 
-            overflow: hidden; 
+            flex: 1; position: relative; overflow: hidden; 
         }}
         .tab-content {{
-            display: none; 
-            position: absolute; 
+            display: none; position: absolute; 
             top: 0; left: 0; right: 0; bottom: 0;
             overflow-y: auto; 
             -webkit-overflow-scrolling: touch;
@@ -420,28 +420,23 @@ html_content = f"""
         }}
         .tab-content.active {{ display: block; }}
 
-        /* Table Styles */
         table {{
             width: 100%; border-collapse: separate; border-spacing: 0;
             background: #fff; border-radius: 4px; margin-top: 10px; margin-bottom: 20px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }}
         th, td {{
-            padding: 5px 8px; 
-            text-align: left; border-bottom: 1px solid #eee;
-            font-size: 13px; 
-            vertical-align: middle; line-height: 1.3;
+            padding: 5px 8px; text-align: left; border-bottom: 1px solid #eee;
+            font-size: 13px; vertical-align: middle; line-height: 1.3;
         }}
         th {{
-            background-color: var(--primary-color); 
-            color: #fff;
+            background-color: var(--primary-color); color: #fff;
             position: sticky; top: 0; z-index: 10; font-weight: bold;
         }}
         tr:nth-child(even) {{ background-color: #fafafa; }}
         tr:hover {{ background-color: #f1f8ff; }}
         tr.hidden {{ display: none !important; }}
 
-        /* Analysis Styles */
         .category-header {{
             margin-top: 20px; padding: 10px 15px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
