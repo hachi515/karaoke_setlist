@@ -9,7 +9,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
         :root {
-            --primary-color: #2c3e50; /* 濃いネイビー */
+            --primary-color: #2c3e50;
             --accent-color: #3498db;
             --bg-color: #f4f7f6;
             --text-color: #333;
@@ -81,7 +81,6 @@
         }
         .tab-content.active { display: block; }
 
-        /* Table Styles (自然なレイアウト) */
         table {
             width: 100%; border-collapse: separate; border-spacing: 0;
             background: #fff; border-radius: 4px; margin-top: 10px; margin-bottom: 20px;
@@ -95,17 +94,23 @@
             background-color: var(--primary-color); color: #fff;
             position: sticky; top: 0; z-index: 10; font-weight: bold;
         }
+        
+        tr {
+            page-break-inside: avoid; /* 行の途中での改行禁止 */
+            break-inside: avoid;
+        }
+        
         tr:nth-child(even) { background-color: #fafafa; }
         tr:hover { background-color: #f1f8ff; }
         tr.hidden { display: none !important; }
 
-        /* Analysis Styles */
         .category-header {
             margin-top: 20px; padding: 10px 15px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white; border-radius: 6px;
             font-weight: bold; font-size: 1.1rem; cursor: pointer;
             user-select: none;
+            page-break-after: avoid; 
         }
         .category-content { display: block; transition: all 0.3s; }
         .category-content.collapsed { display: none; }
@@ -125,13 +130,16 @@
             vertical-align: middle;
             font-weight: normal; color: inherit;      
         }
+        
+        /* PDF出力時: 特別なスタイルは適用せず元のまま */
+        #pdf-target.printing { }
     </style>
 </head>
 <body>
     <div class="top-section">
         <div class="header-inner">
             <h1>Karaoke Dashboard</h1>
-            <div class="update-time">2026/01/15 11:47 更新</div>
+            <div class="update-time">2026/01/15 12:02 更新</div>
         </div>
         <div class="tabs">
             <button class="tab-btn active" onclick="openTab('setlist')">セットリスト</button>
@@ -227,7 +235,7 @@
         icon.style.float = 'right';
     }
 
-    // --- ★修正: PDF出力 (右側余白確保版) ---
+    // --- PDF出力 (右余白削除版) ---
     function exportPDF() {
         const element = document.getElementById('pdf-target');
         
@@ -235,25 +243,20 @@
         const hiddenContents = element.querySelectorAll('.category-content.collapsed');
         hiddenContents.forEach(el => el.classList.remove('collapsed'));
         
-        // 一時的に右側に余白(padding)を追加して、PDF生成時に見切れないようにする
-        const originalPaddingRight = element.style.paddingRight;
-        const originalBoxSizing = element.style.boxSizing;
-        
-        element.style.paddingRight = "30px"; // ★右余白を追加
-        element.style.boxSizing = "border-box"; 
+        element.classList.add('printing');
 
         const opt = {
-            margin:       [15, 15, 15, 15], // マージンを全体的に確保
+            margin:       [10, 10, 10, 10], 
             filename:     'karaoke_cool_analysis.pdf',
             image:        { type: 'jpeg', quality: 0.98 },
             html2canvas:  { scale: 2, logging: true, useCORS: true },
-            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            // 行の途中で切れないようにする設定
+            pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
         };
 
         html2pdf().set(opt).from(element).save().then(function() {
-            // 生成後に元に戻す
-            element.style.paddingRight = originalPaddingRight;
-            element.style.boxSizing = originalBoxSizing;
+            element.classList.remove('printing');
         });
     }
 
