@@ -3,6 +3,7 @@ import requests
 import datetime
 import os
 import re
+import unicodedata  # ★追加: 文字の正規化用ライブラリ
 from itertools import groupby
 
 # --- 時刻設定 ---
@@ -50,14 +51,20 @@ room_map = {
     11106: "冨塚部屋"
 }
 
-# --- 関数: テキスト正規化 (括弧除去) ---
+# --- ★修正: テキスト正規化関数の強化 (NFKC正規化) ---
 def normalize_text(text):
     if not isinstance(text, str):
         return str(text)
-    # [], (), {}, 【】 とその中身を除去
+    
+    # 1. NFKC正規化: 全角英数・記号を半角に、濁点付き文字を1文字に統一など
+    # これにより "ＴＨＥ　ＲＥＶＯ" -> "THE REVO" に変換されます
+    text = unicodedata.normalize('NFKC', text)
+    
+    # 2. [], (), {}, 【】 とその中身を除去
     text = re.sub(r'[\[\(\{【].*?[\]\)\}】]', '', text)
-    # 前後の空白を除去し、全角スペースを半角に
-    return text.replace('　', ' ').strip()
+    
+    # 3. 前後の空白除去
+    return text.strip()
 
 # --- 1. 過去のデータ(history.csv)を読み込む ---
 history_file = "history.csv"
@@ -103,7 +110,7 @@ if new_data_frames:
         if col in combined_df.columns:
             combined_df = combined_df[combined_df[col] != col]
 
-    # 重複排除 (過去の日付優先)
+    # 重複排除 (keep='first')
     subset_cols = ['部屋主', '順番', '曲名（ファイル名）', '歌った人']
     existing_cols = [c for c in subset_cols if c in combined_df.columns]
     
@@ -132,7 +139,7 @@ else:
 
 
 # ==========================================
-# ★集計処理
+# ★集計処理 (正規化強化・AND検索)
 # ==========================================
 analysis_html_content = "" 
 cool_data_exists = False
@@ -157,14 +164,13 @@ if cool_file and os.path.exists(cool_file):
         if raw_df is not None:
             raw_df = raw_df.fillna("")
             
-            # 履歴データ準備
             start_date = pd.to_datetime("2026/01/01")
             end_date = pd.to_datetime("2026/03/31")
             
             analysis_source_df = final_df.copy()
             analysis_source_df['dt_obj'] = pd.to_datetime(analysis_source_df['取得日'], errors='coerce')
             
-            # 正規化
+            # 正規化 (NFKC適用済み)
             analysis_source_df['norm_filename'] = analysis_source_df['曲名（ファイル名）'].apply(normalize_text)
             if '作品名' in analysis_source_df.columns:
                 analysis_source_df['norm_workname'] = analysis_source_df['作品名'].apply(normalize_text)
@@ -174,14 +180,12 @@ if cool_file and os.path.exists(cool_file):
             # 除外ワード
             exclude_keywords = ['test', 'テスト', 'システム', 'admin', 'System']
             
-            # フィルタリング
             target_history = analysis_source_df[
                 (analysis_source_df['dt_obj'] >= start_date) & 
                 (analysis_source_df['dt_obj'] <= end_date) &
                 (~analysis_source_df['歌った人'].astype(str).apply(lambda x: any(k in x for k in exclude_keywords)))
             ]
 
-            # CSV解析 (カテゴリ厳格化)
             categorized_data = {}
             ALLOWED_CATEGORIES = ["2026年冬アニメ", "2025年秋アニメ"]
             current_category = None
@@ -212,7 +216,7 @@ if cool_file and os.path.exists(cool_file):
                     "anime": anime, "type": type_, "artist": artist, "song": song
                 })
 
-            # HTML生成 (行結合ロジック)
+            # HTML生成
             for category, items in categorized_data.items():
                 analysis_html_content += f"""
                 <div class="category-header" onclick="toggleCategory(this)">
@@ -252,6 +256,7 @@ if cool_file and os.path.exists(cool_file):
                             target_history['norm_workname'].str.contains(safe_anime, case=False, na=False)
                         )
                         
+                        # AND検索ロジック
                         if target_song_norm and target_anime_norm:
                             final_mask = song_match_mask & anime_match_mask
                         elif target_song_norm:
@@ -292,7 +297,7 @@ if cool_file and os.path.exists(cool_file):
 
 
 # ==========================================
-# HTML生成 (CSS修正: 文字太さ、色)
+# HTML生成 (UIは変更なし)
 # ==========================================
 
 columns_to_hide = ['コメント'] 
@@ -439,13 +444,12 @@ html_content = f"""
             border-radius: 5px;
         }}
         
-        /* ★修正: 結合セル(作品名)を通常文字・通常色に */
         td[rowspan] {{
             background-color: #fff;
             border-right: 1px solid #eee;
             vertical-align: middle;
-            font-weight: normal; /* 太字解除 */
-            color: inherit;      /* 通常色 */
+            font-weight: normal; 
+            color: inherit;      
         }}
     </style>
 </head>
