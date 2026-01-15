@@ -218,7 +218,6 @@ if cool_file and os.path.exists(cool_file):
                     return source_series.str.contains(safe_target, case=False, na=False)
 
             for category, items in categorized_data.items():
-                # PDF出力用のラップdiv
                 analysis_html_content += f"""
                 <div class="category-block">
                     <div class="category-header" onclick="toggleCategory(this)">
@@ -235,14 +234,20 @@ if cool_file and os.path.exists(cool_file):
                                 <th width="20%">歌唱数</th>
                             </tr>
                         </thead>
-                        <tbody>
                 """
                 
+                # groupbyは「連続するキー」をまとめる仕様なので、CSVの順序が整理されていれば
+                # 勝手にソートせずとも、上下でつながっている作品はグループ化されます。
                 def get_anime_key(x): return x['anime']
                 
                 for anime_name, group_iter in groupby(items, key=get_anime_key):
                     group_items = list(group_iter)
                     rowspan = len(group_items)
+                    
+                    # ★重要: 作品ごとに tbody で囲む
+                    # これにより、CSSの page-break-inside: avoid が効き、
+                    # 作品の途中でページが切れるのを防ぎます。
+                    analysis_html_content += '<tbody class="anime-group">'
                     
                     for i, item in enumerate(group_items):
                         target_song_norm = normalize_text(item["song"])
@@ -277,8 +282,10 @@ if cool_file and os.path.exists(cool_file):
                         analysis_html_content += f'<td>{item["song"]}</td>'
                         analysis_html_content += f'<td class="count-cell"><div class="count-wrapper"><span class="count-num">{count}</span>{bar_html}</div></td>'
                         analysis_html_content += '</tr>'
+                    
+                    analysis_html_content += '</tbody>' # tbody close
                 
-                analysis_html_content += "</tbody></table></div></div>"
+                analysis_html_content += "</table></div></div>"
 
             cool_data_exists = True
             print("クール集計処理完了。")
@@ -366,7 +373,7 @@ html_content = f"""
         .controls-row {{
             padding: 8px 15px; display: flex; gap: 8px; align-items: center;
             background-color: #fff; border-bottom: 1px solid var(--border-color);
-            height: 40px; /* 高さ固定でチラつき防止 */
+            height: 40px; 
         }}
         .search-box {{
             padding: 6px 12px; border: 1px solid #ccc; border-radius: 4px;
@@ -381,7 +388,6 @@ html_content = f"""
         .btn-pdf {{ background-color: #e74c3c; }}
         .count-display {{ margin-left: auto; font-weight: bold; font-size: 13px; }}
 
-        /* Controls Toggle Classes */
         .ctrl-setlist {{ display: flex; width: 100%; align-items: center; gap:8px; }}
         .ctrl-analysis {{ display: none; width: 100%; align-items: center; justify-content: flex-end; }}
 
@@ -401,9 +407,7 @@ html_content = f"""
             width: 100%; border-collapse: separate; border-spacing: 0;
             background: #fff; border-radius: 4px; margin-top: 10px; margin-bottom: 20px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            page-break-inside: auto;
         }}
-        tr {{ page-break-inside: avoid; page-break-after: auto; }}
         th, td {{
             padding: 5px 8px; text-align: left; border-bottom: 1px solid #eee;
             font-size: 13px; vertical-align: middle; line-height: 1.3;
@@ -412,17 +416,30 @@ html_content = f"""
             background-color: var(--primary-color); color: #fff;
             position: sticky; top: 0; z-index: 10; font-weight: bold;
         }}
+        
+        /* ★PDF出力時の改ページ制御 */
+        /* 作品グループ(tbody)単位での改ページ禁止 */
+        tbody.anime-group {{
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }}
+        /* 行単位での改ページ禁止 */
+        tr {{
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }}
+        
         tr:nth-child(even) {{ background-color: #fafafa; }}
         tr:hover {{ background-color: #f1f8ff; }}
         tr.hidden {{ display: none !important; }}
 
-        /* Analysis Styles */
         .category-header {{
             margin-top: 20px; padding: 10px 15px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white; border-radius: 6px;
             font-weight: bold; font-size: 1.1rem; cursor: pointer;
             user-select: none;
+            page-break-after: avoid; 
         }}
         .category-content {{ display: block; transition: all 0.3s; }}
         .category-content.collapsed {{ display: none; }}
@@ -493,7 +510,6 @@ html_content = f"""
         const btnIndex = tabName === 'setlist' ? 0 : 1;
         document.querySelectorAll('.tab-btn')[btnIndex].classList.add('active');
         
-        // コントロール表示切り替え
         if(tabName === 'setlist') {{
             document.getElementById('ctrl-setlist').style.display = 'flex';
             document.getElementById('ctrl-analysis').style.display = 'none';
@@ -511,30 +527,27 @@ html_content = f"""
         icon.style.float = 'right';
     }}
 
-    // --- PDF出力機能 ---
+    // --- PDF出力 ---
     function exportPDF() {{
         const element = document.getElementById('pdf-target');
         
-        // PDF化のために一時的にすべての折りたたみを開く
         const hiddenContents = element.querySelectorAll('.category-content.collapsed');
         hiddenContents.forEach(el => el.classList.remove('collapsed'));
         
         const opt = {{
-            margin:       10,
+            margin:       10, 
             filename:     'karaoke_cool_analysis.pdf',
             image:        {{ type: 'jpeg', quality: 0.98 }},
-            html2canvas:  {{ scale: 2, logging: true }},
-            jsPDF:        {{ unit: 'mm', format: 'a4', orientation: 'portrait' }}
+            html2canvas:  {{ scale: 2, logging: true, useCORS: true }},
+            jsPDF:        {{ unit: 'mm', format: 'a4', orientation: 'portrait' }},
+            pagebreak:    {{ mode: ['avoid-all', 'css', 'legacy'] }}
         }};
 
-        // PDF生成実行
         html2pdf().set(opt).from(element).save().then(function() {{
-            // 生成後に元の状態に戻す（必要なら）
-            // hiddenContents.forEach(el => el.classList.add('collapsed'));
+            // 処理完了
         }});
     }}
 
-    // --- 検索機能 ---
     const searchInput = document.getElementById("searchInput");
     const table = document.getElementById("setlistTable");
     const countDisplay = document.getElementById('countDisplay');
