@@ -51,7 +51,7 @@
         .controls-row {
             padding: 8px 15px; display: flex; gap: 8px; align-items: center;
             background-color: #fff; border-bottom: 1px solid var(--border-color);
-            height: 40px; 
+            height: 40px; /* 高さ固定でチラつき防止 */
         }
         .search-box {
             padding: 6px 12px; border: 1px solid #ccc; border-radius: 4px;
@@ -66,6 +66,7 @@
         .btn-pdf { background-color: #e74c3c; }
         .count-display { margin-left: auto; font-weight: bold; font-size: 13px; }
 
+        /* Controls Toggle Classes */
         .ctrl-setlist { display: flex; width: 100%; align-items: center; gap:8px; }
         .ctrl-analysis { display: none; width: 100%; align-items: center; justify-content: flex-end; }
 
@@ -85,7 +86,9 @@
             width: 100%; border-collapse: separate; border-spacing: 0;
             background: #fff; border-radius: 4px; margin-top: 10px; margin-bottom: 20px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            page-break-inside: auto;
         }
+        tr { page-break-inside: avoid; page-break-after: auto; }
         th, td {
             padding: 5px 8px; text-align: left; border-bottom: 1px solid #eee;
             font-size: 13px; vertical-align: middle; line-height: 1.3;
@@ -94,23 +97,17 @@
             background-color: var(--primary-color); color: #fff;
             position: sticky; top: 0; z-index: 10; font-weight: bold;
         }
-        
-        tr {
-            page-break-inside: avoid; /* 行の途中での改行禁止 */
-            break-inside: avoid;
-        }
-        
         tr:nth-child(even) { background-color: #fafafa; }
         tr:hover { background-color: #f1f8ff; }
         tr.hidden { display: none !important; }
 
+        /* Analysis Styles */
         .category-header {
             margin-top: 20px; padding: 10px 15px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white; border-radius: 6px;
             font-weight: bold; font-size: 1.1rem; cursor: pointer;
             user-select: none;
-            page-break-after: avoid; 
         }
         .category-content { display: block; transition: all 0.3s; }
         .category-content.collapsed { display: none; }
@@ -130,16 +127,13 @@
             vertical-align: middle;
             font-weight: normal; color: inherit;      
         }
-        
-        /* PDF出力時: 特別なスタイルは適用せず元のまま */
-        #pdf-target.printing { }
     </style>
 </head>
 <body>
     <div class="top-section">
         <div class="header-inner">
             <h1>Karaoke Dashboard</h1>
-            <div class="update-time">2026/01/15 12:02 更新</div>
+            <div class="update-time">2026/01/15 12:06 更新</div>
         </div>
         <div class="tabs">
             <button class="tab-btn active" onclick="openTab('setlist')">セットリスト</button>
@@ -218,6 +212,7 @@
         const btnIndex = tabName === 'setlist' ? 0 : 1;
         document.querySelectorAll('.tab-btn')[btnIndex].classList.add('active');
         
+        // コントロール表示切り替え
         if(tabName === 'setlist') {
             document.getElementById('ctrl-setlist').style.display = 'flex';
             document.getElementById('ctrl-analysis').style.display = 'none';
@@ -235,31 +230,30 @@
         icon.style.float = 'right';
     }
 
-    // --- PDF出力 (右余白削除版) ---
+    // --- PDF出力機能 ---
     function exportPDF() {
         const element = document.getElementById('pdf-target');
         
-        // 全て開く
+        // PDF化のために一時的にすべての折りたたみを開く
         const hiddenContents = element.querySelectorAll('.category-content.collapsed');
         hiddenContents.forEach(el => el.classList.remove('collapsed'));
         
-        element.classList.add('printing');
-
         const opt = {
-            margin:       [10, 10, 10, 10], 
+            margin:       10,
             filename:     'karaoke_cool_analysis.pdf',
             image:        { type: 'jpeg', quality: 0.98 },
-            html2canvas:  { scale: 2, logging: true, useCORS: true },
-            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-            // 行の途中で切れないようにする設定
-            pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
+            html2canvas:  { scale: 2, logging: true },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
         };
 
+        // PDF生成実行
         html2pdf().set(opt).from(element).save().then(function() {
-            element.classList.remove('printing');
+            // 生成後に元の状態に戻す（必要なら）
+            // hiddenContents.forEach(el => el.classList.add('collapsed'));
         });
     }
 
+    // --- 検索機能 ---
     const searchInput = document.getElementById("searchInput");
     const table = document.getElementById("setlistTable");
     const countDisplay = document.getElementById('countDisplay');
