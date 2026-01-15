@@ -3,7 +3,7 @@ import requests
 import datetime
 import os
 import re
-import unicodedata  # ★追加: 文字の正規化用ライブラリ
+import unicodedata
 from itertools import groupby
 
 # --- 時刻設定 ---
@@ -51,20 +51,33 @@ room_map = {
     11106: "冨塚部屋"
 }
 
-# --- ★修正: テキスト正規化関数の強化 (NFKC正規化) ---
+# --- ★修正: テキスト正規化関数の大幅強化 ---
 def normalize_text(text):
     if not isinstance(text, str):
         return str(text)
     
-    # 1. NFKC正規化: 全角英数・記号を半角に、濁点付き文字を1文字に統一など
-    # これにより "ＴＨＥ　ＲＥＶＯ" -> "THE REVO" に変換されます
+    # 1. NFKC正規化 (全角英数を半角に統一など)
     text = unicodedata.normalize('NFKC', text)
     
-    # 2. [], (), {}, 【】 とその中身を除去
+    # 2. 拡張子の削除 (末尾の .mp3, .m4a など)
+    text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
+    
+    # 3. 括弧と中身を除去 [LIVE], (OP), {原キー} など
     text = re.sub(r'[\[\(\{【].*?[\]\)\}】]', '', text)
     
-    # 3. 前後の空白除去
-    return text.strip()
+    # 4. キー変更の記述を削除 (+2, -1, +12, 原キー など)
+    # 括弧に入っていない場合も想定して削除
+    text = re.sub(r'[\+\-][0-9]+', '', text)
+    text = re.sub(r'原キー', '', text)
+    
+    # 5. 記号の削除・統一 (波線、ハイフンなどを削除して文字だけで比較)
+    text = re.sub(r'[~〜～\-_]', '', text)
+    
+    # 6. スペース(空白)を全て削除
+    # "One Time" と "OneTime" を同一視させるため
+    text = text.replace(' ', '').replace('　', '')
+    
+    return text.strip().upper() # 大文字に統一
 
 # --- 1. 過去のデータ(history.csv)を読み込む ---
 history_file = "history.csv"
@@ -110,7 +123,7 @@ if new_data_frames:
         if col in combined_df.columns:
             combined_df = combined_df[combined_df[col] != col]
 
-    # 重複排除 (keep='first')
+    # 重複排除 (過去の日付優先)
     subset_cols = ['部屋主', '順番', '曲名（ファイル名）', '歌った人']
     existing_cols = [c for c in subset_cols if c in combined_df.columns]
     
@@ -139,7 +152,7 @@ else:
 
 
 # ==========================================
-# ★集計処理 (正規化強化・AND検索)
+# ★集計処理 (強力な正規化・AND検索)
 # ==========================================
 analysis_html_content = "" 
 cool_data_exists = False
@@ -164,13 +177,14 @@ if cool_file and os.path.exists(cool_file):
         if raw_df is not None:
             raw_df = raw_df.fillna("")
             
+            # 履歴データ準備
             start_date = pd.to_datetime("2026/01/01")
             end_date = pd.to_datetime("2026/03/31")
             
             analysis_source_df = final_df.copy()
             analysis_source_df['dt_obj'] = pd.to_datetime(analysis_source_df['取得日'], errors='coerce')
             
-            # 正規化 (NFKC適用済み)
+            # ★正規化カラムの作成 (ここで強力な正規化を適用)
             analysis_source_df['norm_filename'] = analysis_source_df['曲名（ファイル名）'].apply(normalize_text)
             if '作品名' in analysis_source_df.columns:
                 analysis_source_df['norm_workname'] = analysis_source_df['作品名'].apply(normalize_text)
@@ -180,12 +194,14 @@ if cool_file and os.path.exists(cool_file):
             # 除外ワード
             exclude_keywords = ['test', 'テスト', 'システム', 'admin', 'System']
             
+            # フィルタリング
             target_history = analysis_source_df[
                 (analysis_source_df['dt_obj'] >= start_date) & 
                 (analysis_source_df['dt_obj'] <= end_date) &
                 (~analysis_source_df['歌った人'].astype(str).apply(lambda x: any(k in x for k in exclude_keywords)))
             ]
 
+            # CSV解析 (カテゴリ厳格化)
             categorized_data = {}
             ALLOWED_CATEGORIES = ["2026年冬アニメ", "2025年秋アニメ"]
             current_category = None
@@ -216,7 +232,7 @@ if cool_file and os.path.exists(cool_file):
                     "anime": anime, "type": type_, "artist": artist, "song": song
                 })
 
-            # HTML生成
+            # HTML生成 (行結合・集計)
             for category, items in categorized_data.items():
                 analysis_html_content += f"""
                 <div class="category-header" onclick="toggleCategory(this)">
@@ -243,10 +259,13 @@ if cool_file and os.path.exists(cool_file):
                     rowspan = len(group_items)
                     
                     for i, item in enumerate(group_items):
+                        # ターゲットの正規化
                         target_song_norm = normalize_text(item["song"])
                         target_anime_norm = normalize_text(item["anime"])
                         
                         mask = pd.Series([False] * len(target_history))
+                        
+                        # エスケープして正規表現検索 (部分一致)
                         safe_song = re.escape(target_song_norm)
                         song_match_mask = target_history['norm_filename'].str.contains(safe_song, case=False, na=False)
                         
@@ -297,7 +316,7 @@ if cool_file and os.path.exists(cool_file):
 
 
 # ==========================================
-# HTML生成 (UIは変更なし)
+# HTML生成 (UI維持)
 # ==========================================
 
 columns_to_hide = ['コメント'] 
