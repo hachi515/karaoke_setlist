@@ -51,28 +51,28 @@ room_map = {
     11106: "冨塚部屋"
 }
 
-# --- 関数: テキスト正規化 (キー変更除去・スペース保持) ---
+# --- 関数: テキスト正規化 ---
 def normalize_text(text):
     if not isinstance(text, str):
         return str(text)
     
-    # 1. NFKC正規化 (全角英数→半角、全角チルダ→半角チルダ等)
+    # 1. NFKC正規化
     text = unicodedata.normalize('NFKC', text)
     
     # 2. 拡張子の削除
     text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
     
-    # 3. 括弧と中身を除去 [LIVE], (OP), {原キー} など
+    # 3. 括弧と中身を除去
     text = re.sub(r'[\[\(\{【].*?[\]\)\}】]', ' ', text)
     
-    # 4. キー変更情報を削除 (+2, -1, key+1, 原キー など)
+    # 4. キー変更情報を削除
     text = re.sub(r'(key|KEY)?\s*[\+\-]\s*[0-9]+', ' ', text)
     text = re.sub(r'原キー', ' ', text)
     
-    # 5. 記号をスペースに置換 (削除すると単語が癒着するため)
+    # 5. 記号をスペースに置換
     text = re.sub(r'[~〜～\-_=,.]', ' ', text)
     
-    # 6. 連続するスペースを1つに統合し、前後の空白を削除
+    # 6. スペース正規化
     text = re.sub(r'\s+', ' ', text).strip()
     
     return text.upper()
@@ -121,7 +121,7 @@ if new_data_frames:
         if col in combined_df.columns:
             combined_df = combined_df[combined_df[col] != col]
 
-    # 重複排除 (古い日付を維持)
+    # 重複排除
     subset_cols = ['部屋主', '順番', '曲名（ファイル名）', '歌った人']
     existing_cols = [c for c in subset_cols if c in combined_df.columns]
     final_df = combined_df.drop_duplicates(subset=existing_cols, keep='first')
@@ -135,7 +135,7 @@ if new_data_frames:
     final_df = final_df.sort_values(by=['temp_date', '順番'], ascending=[False, False])
     final_df = final_df.drop(columns=['temp_date'])
     
-    # 列順序整理
+    # 列整理
     cols = list(final_df.columns)
     if '部屋主' in cols:
         cols.insert(0, cols.pop(cols.index('部屋主')))
@@ -174,31 +174,27 @@ if cool_file and os.path.exists(cool_file):
         if raw_df is not None:
             raw_df = raw_df.fillna("")
             
-            # 履歴データ準備 (期間指定)
+            # 履歴データ準備
             start_date = pd.to_datetime("2026/01/01")
             end_date = pd.to_datetime("2026/03/31")
             
             analysis_source_df = final_df.copy()
             analysis_source_df['dt_obj'] = pd.to_datetime(analysis_source_df['取得日'], errors='coerce')
             
-            # ★正規化カラムの作成
             analysis_source_df['norm_filename'] = analysis_source_df['曲名（ファイル名）'].apply(normalize_text)
             if '作品名' in analysis_source_df.columns:
                 analysis_source_df['norm_workname'] = analysis_source_df['作品名'].apply(normalize_text)
             else:
                 analysis_source_df['norm_workname'] = ""
 
-            # 除外キーワード
             exclude_keywords = ['test', 'テスト', 'システム', 'admin', 'System']
             
-            # 履歴フィルタリング
             target_history = analysis_source_df[
                 (analysis_source_df['dt_obj'] >= start_date) & 
                 (analysis_source_df['dt_obj'] <= end_date) &
                 (~analysis_source_df['歌った人'].astype(str).apply(lambda x: any(k in x for k in exclude_keywords)))
             ]
 
-            # CSV解析 (カテゴリ化)
             categorized_data = {}
             ALLOWED_CATEGORIES = ["2026年冬アニメ", "2025年秋アニメ"]
             current_category = None
@@ -229,23 +225,16 @@ if cool_file and os.path.exists(cool_file):
                     "anime": anime, "type": type_, "artist": artist, "song": song
                 })
 
-            # --- マッチングロジック (単語境界チェック) ---
             def check_match(target_text, source_series):
                 if not target_text:
                     return pd.Series([False] * len(source_series))
-                
                 safe_target = re.escape(target_text)
-                
-                # 英数字のみのタイトルの場合 ("I"など)、単語境界(\b的なもの)を確認
-                # 日本語が含まれる場合は通常の部分一致
                 if re.match(r'^[A-Z0-9\s]+$', target_text):
-                    # 前後に「英数字以外」があるか、または行頭/行末であること
                     pattern = r'(?:^|[^A-Z0-9])' + safe_target + r'(?:[^A-Z0-9]|$)'
                     return source_series.str.contains(pattern, regex=True, case=False, na=False)
                 else:
                     return source_series.str.contains(safe_target, case=False, na=False)
 
-            # --- HTML生成ループ ---
             for category, items in categorized_data.items():
                 analysis_html_content += f"""
                 <div class="category-block">
@@ -266,7 +255,8 @@ if cool_file and os.path.exists(cool_file):
                         <tbody>
                 """
                 
-                # 行結合のためのグルーピング
+                # ★修正: ソート処理(items.sort)を削除
+                # これにより、CSVの並び順のまま、連続する作品名だけが統合される
                 def get_anime_key(x): return x['anime']
                 
                 for anime_name, group_iter in groupby(items, key=get_anime_key):
@@ -277,17 +267,12 @@ if cool_file and os.path.exists(cool_file):
                         target_song_norm = normalize_text(item["song"])
                         target_anime_norm = normalize_text(item["anime"])
                         
-                        # --- 判定 ---
-                        # 曲名一致 (必須)
                         song_match_mask = check_match(target_song_norm, target_history['norm_filename'])
-                        
-                        # 作品名一致 (条件: ファイル名 OR 作品名列)
                         anime_match_mask = (
                             target_history['norm_filename'].str.contains(re.escape(target_anime_norm), case=False, na=False) |
                             target_history['norm_workname'].str.contains(re.escape(target_anime_norm), case=False, na=False)
                         )
                         
-                        # ANDロジック
                         if target_song_norm and target_anime_norm:
                             final_mask = song_match_mask & anime_match_mask
                         elif target_song_norm:
@@ -304,11 +289,8 @@ if cool_file and os.path.exists(cool_file):
                         bar_html = f'<div class="bar-chart" style="width:{bar_width}px;"></div>' if count > 0 else ""
                         
                         analysis_html_content += f'<tr class="{row_class}">'
-                        
-                        # 行結合 (作品名)
                         if i == 0:
                             analysis_html_content += f'<td rowspan="{rowspan}">{item["anime"]}</td>'
-                            
                         analysis_html_content += f'<td align="center">{item["type"]}</td>'
                         analysis_html_content += f'<td>{item["artist"]}</td>'
                         analysis_html_content += f'<td>{item["song"]}</td>'
@@ -361,7 +343,7 @@ html_content = f"""
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
         :root {{
-            --primary-color: #2c3e50; /* 濃いネイビー */
+            --primary-color: #2c3e50;
             --accent-color: #3498db;
             --bg-color: #f4f7f6;
             --text-color: #333;
@@ -433,7 +415,6 @@ html_content = f"""
         }}
         .tab-content.active {{ display: block; }}
 
-        /* Table Styles (自然なレイアウト) */
         table {{
             width: 100%; border-collapse: separate; border-spacing: 0;
             background: #fff; border-radius: 4px; margin-top: 10px; margin-bottom: 20px;
@@ -447,17 +428,23 @@ html_content = f"""
             background-color: var(--primary-color); color: #fff;
             position: sticky; top: 0; z-index: 10; font-weight: bold;
         }}
+        
+        tr {{
+            page-break-inside: avoid; /* 行の途中での改行禁止 */
+            break-inside: avoid;
+        }}
+        
         tr:nth-child(even) {{ background-color: #fafafa; }}
         tr:hover {{ background-color: #f1f8ff; }}
         tr.hidden {{ display: none !important; }}
 
-        /* Analysis Styles */
         .category-header {{
             margin-top: 20px; padding: 10px 15px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white; border-radius: 6px;
             font-weight: bold; font-size: 1.1rem; cursor: pointer;
             user-select: none;
+            page-break-after: avoid; 
         }}
         .category-content {{ display: block; transition: all 0.3s; }}
         .category-content.collapsed {{ display: none; }}
@@ -477,6 +464,9 @@ html_content = f"""
             vertical-align: middle;
             font-weight: normal; color: inherit;      
         }}
+        
+        /* PDF出力時: 特別なスタイルは適用せず元のまま */
+        #pdf-target.printing {{ }}
     </style>
 </head>
 <body>
@@ -545,7 +535,7 @@ html_content = f"""
         icon.style.float = 'right';
     }}
 
-    // --- ★修正: PDF出力 (右側余白確保版) ---
+    // --- PDF出力 (右余白削除版) ---
     function exportPDF() {{
         const element = document.getElementById('pdf-target');
         
@@ -553,25 +543,20 @@ html_content = f"""
         const hiddenContents = element.querySelectorAll('.category-content.collapsed');
         hiddenContents.forEach(el => el.classList.remove('collapsed'));
         
-        // 一時的に右側に余白(padding)を追加して、PDF生成時に見切れないようにする
-        const originalPaddingRight = element.style.paddingRight;
-        const originalBoxSizing = element.style.boxSizing;
-        
-        element.style.paddingRight = "30px"; // ★右余白を追加
-        element.style.boxSizing = "border-box"; 
+        element.classList.add('printing');
 
         const opt = {{
-            margin:       [15, 15, 15, 15], // マージンを全体的に確保
+            margin:       [10, 10, 10, 10], 
             filename:     'karaoke_cool_analysis.pdf',
             image:        {{ type: 'jpeg', quality: 0.98 }},
             html2canvas:  {{ scale: 2, logging: true, useCORS: true }},
-            jsPDF:        {{ unit: 'mm', format: 'a4', orientation: 'portrait' }}
+            jsPDF:        {{ unit: 'mm', format: 'a4', orientation: 'portrait' }},
+            // 行の途中で切れないようにする設定
+            pagebreak:    {{ mode: ['avoid-all', 'css', 'legacy'] }}
         }};
 
         html2pdf().set(opt).from(element).save().then(function() {{
-            // 生成後に元に戻す
-            element.style.paddingRight = originalPaddingRight;
-            element.style.boxSizing = originalBoxSizing;
+            element.classList.remove('printing');
         }});
     }}
 
