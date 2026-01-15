@@ -132,7 +132,7 @@ else:
 
 
 # ==========================================
-# ★集計処理
+# ★集計処理 (作品統合 & 改ページ制御用タグ付与)
 # ==========================================
 analysis_html_content = "" 
 cool_data_exists = False
@@ -236,17 +236,14 @@ if cool_file and os.path.exists(cool_file):
                         </thead>
                 """
                 
-                # groupbyは「連続するキー」をまとめる仕様なので、CSVの順序が整理されていれば
-                # 勝手にソートせずとも、上下でつながっている作品はグループ化されます。
+                # groupbyで作品名ごとにまとめる (CSV順序維持)
                 def get_anime_key(x): return x['anime']
                 
                 for anime_name, group_iter in groupby(items, key=get_anime_key):
                     group_items = list(group_iter)
                     rowspan = len(group_items)
                     
-                    # ★重要: 作品ごとに tbody で囲む
-                    # これにより、CSSの page-break-inside: avoid が効き、
-                    # 作品の途中でページが切れるのを防ぎます。
+                    # ★作品ごとに tbody で囲む (改ページ制御の単位)
                     analysis_html_content += '<tbody class="anime-group">'
                     
                     for i, item in enumerate(group_items):
@@ -283,7 +280,7 @@ if cool_file and os.path.exists(cool_file):
                         analysis_html_content += f'<td class="count-cell"><div class="count-wrapper"><span class="count-num">{count}</span>{bar_html}</div></td>'
                         analysis_html_content += '</tr>'
                     
-                    analysis_html_content += '</tbody>' # tbody close
+                    analysis_html_content += '</tbody>' # 作品グループ終了
                 
                 analysis_html_content += "</table></div></div>"
 
@@ -299,7 +296,7 @@ if cool_file and os.path.exists(cool_file):
 
 
 # ==========================================
-# HTML生成
+# HTML生成 (HTML出力・改ページCSS実装)
 # ==========================================
 
 columns_to_hide = ['コメント'] 
@@ -328,7 +325,6 @@ html_content = f"""
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Karaoke Dashboard</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
         :root {{
             --primary-color: #2c3e50;
@@ -385,7 +381,7 @@ html_content = f"""
             font-weight: bold; white-space: nowrap;
         }}
         .btn:hover {{ opacity: 0.9; }}
-        .btn-pdf {{ background-color: #e74c3c; }}
+        .btn-dl {{ background-color: #2ecc71; }}
         .count-display {{ margin-left: auto; font-weight: bold; font-size: 13px; }}
 
         .ctrl-setlist {{ display: flex; width: 100%; align-items: center; gap:8px; }}
@@ -417,18 +413,6 @@ html_content = f"""
             position: sticky; top: 0; z-index: 10; font-weight: bold;
         }}
         
-        /* ★PDF出力時の改ページ制御 */
-        /* 作品グループ(tbody)単位での改ページ禁止 */
-        tbody.anime-group {{
-            page-break-inside: avoid;
-            break-inside: avoid;
-        }}
-        /* 行単位での改ページ禁止 */
-        tr {{
-            page-break-inside: avoid;
-            break-inside: avoid;
-        }}
-        
         tr:nth-child(even) {{ background-color: #fafafa; }}
         tr:hover {{ background-color: #f1f8ff; }}
         tr.hidden {{ display: none !important; }}
@@ -439,7 +423,6 @@ html_content = f"""
             color: white; border-radius: 6px;
             font-weight: bold; font-size: 1.1rem; cursor: pointer;
             user-select: none;
-            page-break-after: avoid; 
         }}
         .category-content {{ display: block; transition: all 0.3s; }}
         .category-content.collapsed {{ display: none; }}
@@ -458,6 +441,25 @@ html_content = f"""
             border-right: 1px solid #eee;
             vertical-align: middle;
             font-weight: normal; color: inherit;      
+        }}
+
+        /* --- 印刷用スタイル (HTML出力後の印刷時) --- */
+        @media print {{
+            body {{
+                overflow: visible !important;
+                height: auto !important;
+                display: block !important;
+            }}
+            .category-content {{ display: block !important; }} /* 折りたたみ強制解除 */
+            
+            /* ★重要: 作品グループ単位での改ページ禁止 */
+            tbody.anime-group {{
+                break-inside: avoid;
+                page-break-inside: avoid;
+            }}
+            
+            /* テーブルヘッダーは各ページに表示 */
+            thead {{ display: table-header-group; }}
         }}
     </style>
 </head>
@@ -479,7 +481,7 @@ html_content = f"""
                 <div class="count-display" id="countDisplay">読み込み中...</div>
             </div>
             <div id="ctrl-analysis" class="ctrl-analysis">
-                <button onclick="exportPDF()" class="btn btn-pdf"><i class="fas fa-file-pdf"></i> PDF出力</button>
+                <button onclick="downloadHTML()" class="btn btn-dl"><i class="fas fa-file-code"></i> HTML保存</button>
             </div>
         </div>
     </div>
@@ -495,7 +497,7 @@ html_content = f"""
 
         <div id="analysis" class="tab-content">
             <div style="margin-top:15px; font-size:0.9rem; color:#7f8c8d; text-align:right;">集計対象: 2026/01/01 - 2026/03/31</div>
-            <div id="pdf-target">
+            <div id="print-target">
                 {analysis_html_content if cool_data_exists else '<div style="padding:20px;text-align:center;color:#e74c3c;">集計データがありません</div>'}
             </div>
         </div>
@@ -527,25 +529,58 @@ html_content = f"""
         icon.style.float = 'right';
     }}
 
-    // --- PDF出力 ---
-    function exportPDF() {{
-        const element = document.getElementById('pdf-target');
+    // --- HTML保存機能 ---
+    function downloadHTML() {{
+        const element = document.getElementById('print-target');
         
+        // 折りたたみ強制解除
         const hiddenContents = element.querySelectorAll('.category-content.collapsed');
         hiddenContents.forEach(el => el.classList.remove('collapsed'));
         
-        const opt = {{
-            margin:       10, 
-            filename:     'karaoke_cool_analysis.pdf',
-            image:        {{ type: 'jpeg', quality: 0.98 }},
-            html2canvas:  {{ scale: 2, logging: true, useCORS: true }},
-            jsPDF:        {{ unit: 'mm', format: 'a4', orientation: 'portrait' }},
-            pagebreak:    {{ mode: ['avoid-all', 'css', 'legacy'] }}
-        }};
+        const htmlContent = element.innerHTML;
+        
+        // 印刷用スタイルを含む完全なHTMLを作成
+        const fullHtml = `
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>Cool Analysis Output</title>
+    <style>
+        body {{ font-family: "Helvetica Neue", Arial, sans-serif; font-size: 13px; color: #333; }}
+        table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; }}
+        th, td {{ border: 1px solid #ccc; padding: 5px 8px; text-align: left; }}
+        th {{ background-color: {0}; color: #fff; }}
+        .category-header {{ 
+            background: #667eea; color: white; padding: 10px; margin-top: 20px; 
+            font-weight: bold; border-radius: 4px;
+        }}
+        .count-wrapper {{ display: flex; align-items: center; gap: 8px; }}
+        .count-num {{ width: 25px; text-align: right; }}
+        .bar-chart {{ height: 10px; background: #3498db; border-radius: 5px; }}
+        
+        /* 印刷設定: 作品単位での改ページ禁止 */
+        @media print {{
+            tbody.anime-group {{ break-inside: avoid; page-break-inside: avoid; }}
+            .category-header {{ page-break-after: avoid; }}
+        }}
+    </style>
+</head>
+<body>
+    <h1>クール集計結果</h1>
+    <div style="text-align:right; font-size:0.9rem; color:#777;">出力日: {current_date_str}</div>
+    ${{htmlContent}}
+</body>
+</html>`;
 
-        html2pdf().set(opt).from(element).save().then(function() {{
-            // 処理完了
-        }});
+        const blob = new Blob([fullHtml], {{type: 'text/html'}});
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'karaoke_analysis.html';
+        link.click();
+        
+        // 状態戻し（必要なら）
+        // hiddenContents.forEach(el => el.classList.add('collapsed'));
     }}
 
     const searchInput = document.getElementById("searchInput");
@@ -621,7 +656,7 @@ html_content = f"""
 </script>
 </body>
 </html>
-"""
+""".format('#2c3e50') # CSS内format用
 
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
