@@ -51,7 +51,7 @@ room_map = {
     11106: "冨塚部屋"
 }
 
-# --- 関数: テキスト正規化 (提供されたコードベース) ---
+# --- 関数: テキスト正規化 (ご提示のロジックを踏襲) ---
 def normalize_text(text):
     if not isinstance(text, str):
         return str(text)
@@ -62,14 +62,12 @@ def normalize_text(text):
     # 2. 拡張子の削除
     text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
     
-    # 3. 括弧と中身を除去 (提供コードの仕様: 中身ごと消すことでヒット率を高める)
+    # 3. 括弧と中身を除去 (THE REVO対策: これで【FINAL SEASON】などが消える)
     text = re.sub(r'[\[\(\{【].*?[\]\)\}】]', ' ', text)
     
     # 4. キー変更情報を削除
     text = re.sub(r'(key|KEY)?\s*[\+\-]\s*[0-9]+', ' ', text)
     text = re.sub(r'原キー', ' ', text)
-    
-    # ★追加: 「キー変更」という日本語文字やコロンも削除して、純粋な曲名に近づける
     text = re.sub(r'(キー)?変更[:：]?', ' ', text)
     
     # 5. 記号をスペースに置換
@@ -148,7 +146,7 @@ else:
 
 
 # ==========================================
-# ★集計処理
+# ★集計処理 (救済ロジック + HTML出力)
 # ==========================================
 analysis_html_content = "" 
 cool_data_exists = False
@@ -179,10 +177,27 @@ if cool_file and os.path.exists(cool_file):
             analysis_source_df = final_df.copy()
             analysis_source_df['dt_obj'] = pd.to_datetime(analysis_source_df['取得日'], errors='coerce')
             
-            # 正規化
+            # --- ★ここが重要: 救済ロジックと正規化の共存 ---
+            # 1. まず「曲名（ファイル名）」を正規化する（これで【FINAL SEASON】などは消える）
             analysis_source_df['norm_filename'] = analysis_source_df['曲名（ファイル名）'].apply(normalize_text)
+            
+            # 2. 次に「作品名」を正規化するが、ここで「-」の場合の救済を行う
+            def get_rescued_workname(row):
+                raw_work = str(row['作品名']) if pd.notna(row['作品名']) else ""
+                raw_song = str(row['曲名（ファイル名）']) if pd.notna(row['曲名（ファイル名）']) else ""
+                
+                # 作品名が「-」「空」「nan」の場合のみ、元のファイル名から【】の中身を抽出して作品名とする
+                if raw_work.strip() in ["-", "−", "", "nan"]:
+                    match = re.search(r'【(.*?)】', raw_song)
+                    if match:
+                        # 抽出した中身を正規化して返す
+                        return normalize_text(match.group(1))
+                
+                # それ以外は通常の作品名を正規化して返す
+                return normalize_text(raw_work)
+
             if '作品名' in analysis_source_df.columns:
-                analysis_source_df['norm_workname'] = analysis_source_df['作品名'].apply(normalize_text)
+                analysis_source_df['norm_workname'] = analysis_source_df.apply(get_rescued_workname, axis=1)
             else:
                 analysis_source_df['norm_workname'] = ""
 
@@ -220,13 +235,6 @@ if cool_file and os.path.exists(cool_file):
                 
                 if not anime and not song: continue
 
-                # ★修正: 救済ロジック
-                # 「作品名がハイフンまたは空」の場合のみ、曲名の【】等から作品名を取得
-                if (anime == "-" or not anime) and song:
-                    match = re.search(r'[【\[『（\(](.*?)[】\]』）\)]', song)
-                    if match:
-                        anime = match.group(1).strip()
-
                 categorized_data[current_category].append({
                     "anime": anime, "type": type_, "artist": artist, "song": song
                 })
@@ -260,7 +268,6 @@ if cool_file and os.path.exists(cool_file):
                         </thead>
                 """
                 
-                # 作品名でソートして統合を確実に
                 items.sort(key=lambda x: x['anime'])
                 def get_anime_key(x): return x['anime']
                 
@@ -350,7 +357,7 @@ html_content = f"""
     <title>Karaoke Dashboard</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        /* CSS内の括弧は {{ }} でエスケープしています */
+        /* CSS内の括弧は {{ }} でエスケープ */
         :root {{
             --primary-color: #2c3e50;
             --accent-color: #3498db;
