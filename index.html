@@ -7,6 +7,7 @@
     <title>Karaoke Dashboard</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
+        /* CSS内の括弧は { } でエスケープしています */
         :root {
             --primary-color: #2c3e50;
             --accent-color: #3498db;
@@ -126,6 +127,13 @@
 
         /* --- 印刷用スタイル --- */
         @media print {
+            /* ★重要: 背景色・グラフ色を強制的に印刷する設定 */
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                color-adjust: exact !important;
+            }
+            
             body {
                 overflow: visible !important;
                 height: auto !important;
@@ -156,7 +164,7 @@
     <div class="top-section">
         <div class="header-inner">
             <h1>Karaoke Dashboard</h1>
-            <div class="update-time">2026/01/15 13:46 更新</div>
+            <div class="update-time">2026/01/15 13:51 更新</div>
         </div>
         <div class="tabs">
             <button class="tab-btn active" onclick="openTab('setlist')">セットリスト</button>
@@ -257,6 +265,7 @@
         
         const htmlContent = element.innerHTML;
         
+        // 保存するHTMLにも印刷設定を埋め込む
         const fullHtml = `
 <!DOCTYPE html>
 <html lang="ja">
@@ -278,6 +287,11 @@
         .bar-chart { height: 10px; background: #3498db; border-radius: 5px; }
         
         @media print {
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                color-adjust: exact !important;
+            }
             tbody.anime-group { break-inside: avoid; page-break-inside: avoid; }
             .category-header { page-break-after: avoid; }
             thead { display: table-header-group; }
