@@ -55,13 +55,27 @@ room_map = {
 def normalize_text(text):
     if not isinstance(text, str):
         return str(text)
+    
+    # 1. NFKC正規化
     text = unicodedata.normalize('NFKC', text)
+    
+    # 2. 拡張子の削除
     text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
-    text = re.sub(r'[\[\(\{【].*?[\]\)\}】]', ' ', text)
+    
+    # 3. 括弧の処理:
+    # 作品名などが括弧に入っている場合があるため、中身は消さずに「記号だけ」をスペースに置換
+    text = re.sub(r'[\[\(\{【\]\)\}】]', ' ', text)
+    
+    # 4. キー変更情報を削除 (+2, -1, key+1, 原キー など)
     text = re.sub(r'(key|KEY)?\s*[\+\-]\s*[0-9]+', ' ', text)
     text = re.sub(r'原キー', ' ', text)
+    
+    # 5. 記号をスペースに置換
     text = re.sub(r'[~〜～\-_=,.]', ' ', text)
+    
+    # 6. スペース正規化
     text = re.sub(r'\s+', ' ', text).strip()
+    
     return text.upper()
 
 # --- 1. 過去データ読み込み ---
@@ -132,7 +146,7 @@ else:
 
 
 # ==========================================
-# ★集計処理 (作品統合 & 改ページ制御)
+# ★集計処理
 # ==========================================
 analysis_html_content = "" 
 cool_data_exists = False
@@ -203,6 +217,12 @@ if cool_file and os.path.exists(cool_file):
                 
                 if not anime and not song: continue
 
+                # ★追加: 作品名が「-」または空の場合、曲名から【】の中身を探して補完する
+                if anime == "-" or not anime:
+                    match = re.search(r'【(.*?)】', song)
+                    if match:
+                        anime = match.group(1).strip()
+
                 categorized_data[current_category].append({
                     "anime": anime, "type": type_, "artist": artist, "song": song
                 })
@@ -244,7 +264,6 @@ if cool_file and os.path.exists(cool_file):
                     group_items = list(group_iter)
                     rowspan = len(group_items)
                     
-                    # 改ページ制御用のtbody
                     analysis_html_content += '<tbody class="anime-group">'
                     
                     for i, item in enumerate(group_items):
@@ -297,7 +316,7 @@ if cool_file and os.path.exists(cool_file):
 
 
 # ==========================================
-# HTML生成 (CSS調整済み)
+# HTML生成
 # ==========================================
 
 columns_to_hide = ['コメント'] 
@@ -327,7 +346,6 @@ html_content = f"""
     <title>Karaoke Dashboard</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        /* CSS内の括弧は {{ }} でエスケープしています */
         :root {{
             --primary-color: #2c3e50;
             --accent-color: #3498db;
@@ -447,13 +465,11 @@ html_content = f"""
 
         /* --- 印刷用スタイル --- */
         @media print {{
-            /* ★重要: 背景色・グラフ色を強制的に印刷する設定 */
             * {{
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
                 color-adjust: exact !important;
             }}
-            
             body {{
                 overflow: visible !important;
                 height: auto !important;
@@ -469,12 +485,10 @@ html_content = f"""
             }}
             .category-content {{ display: block !important; }}
             
-            /* 作品グループ単位での改ページ禁止 */
             tbody.anime-group {{
                 break-inside: avoid;
                 page-break-inside: avoid;
             }}
-            /* ヘッダー直後の改ページ回避 */
             .category-header {{ page-break-after: avoid; }}
             thead {{ display: table-header-group; }}
         }}
@@ -553,7 +567,6 @@ html_content = f"""
         
         const htmlContent = element.innerHTML;
         
-        // 保存するHTMLにも印刷設定を埋め込む
         const fullHtml = `
 <!DOCTYPE html>
 <html lang="ja">
