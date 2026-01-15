@@ -132,7 +132,7 @@ else:
 
 
 # ==========================================
-# ★集計処理
+# ★集計処理 (作品統合 & 改ページ制御)
 # ==========================================
 analysis_html_content = "" 
 cool_data_exists = False
@@ -244,6 +244,7 @@ if cool_file and os.path.exists(cool_file):
                     group_items = list(group_iter)
                     rowspan = len(group_items)
                     
+                    # 改ページ制御用のtbody
                     analysis_html_content += '<tbody class="anime-group">'
                     
                     for i, item in enumerate(group_items):
@@ -296,7 +297,7 @@ if cool_file and os.path.exists(cool_file):
 
 
 # ==========================================
-# HTML生成
+# HTML生成 (CSS調整済み)
 # ==========================================
 
 columns_to_hide = ['コメント'] 
@@ -326,6 +327,7 @@ html_content = f"""
     <title>Karaoke Dashboard</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
+        /* CSS内の括弧は {{ }} でエスケープしています */
         :root {{
             --primary-color: #2c3e50;
             --accent-color: #3498db;
@@ -445,6 +447,13 @@ html_content = f"""
 
         /* --- 印刷用スタイル --- */
         @media print {{
+            /* ★重要: 背景色・グラフ色を強制的に印刷する設定 */
+            * {{
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                color-adjust: exact !important;
+            }}
+            
             body {{
                 overflow: visible !important;
                 height: auto !important;
@@ -544,6 +553,7 @@ html_content = f"""
         
         const htmlContent = element.innerHTML;
         
+        // 保存するHTMLにも印刷設定を埋め込む
         const fullHtml = `
 <!DOCTYPE html>
 <html lang="ja">
@@ -565,6 +575,11 @@ html_content = f"""
         .bar-chart {{ height: 10px; background: #3498db; border-radius: 5px; }}
         
         @media print {{
+            * {{
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                color-adjust: exact !important;
+            }}
             tbody.anime-group {{ break-inside: avoid; page-break-inside: avoid; }}
             .category-header {{ page-break-after: avoid; }}
             thead {{ display: table-header-group; }}
