@@ -62,11 +62,10 @@ def normalize_text(text):
     # 2. 拡張子の削除
     text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
     
-    # 3. 括弧の処理:
-    # 作品名などが括弧に入っている場合があるため、中身は消さずに「記号だけ」をスペースに置換
+    # 3. 括弧の処理: 記号だけスペースに (中身は残す)
     text = re.sub(r'[\[\(\{【\]\)\}】]', ' ', text)
     
-    # 4. キー変更情報を削除 (+2, -1, key+1, 原キー など)
+    # 4. キー変更情報を削除
     text = re.sub(r'(key|KEY)?\s*[\+\-]\s*[0-9]+', ' ', text)
     text = re.sub(r'原キー', ' ', text)
     
@@ -177,6 +176,7 @@ if cool_file and os.path.exists(cool_file):
             analysis_source_df = final_df.copy()
             analysis_source_df['dt_obj'] = pd.to_datetime(analysis_source_df['取得日'], errors='coerce')
             
+            # 正規化
             analysis_source_df['norm_filename'] = analysis_source_df['曲名（ファイル名）'].apply(normalize_text)
             if '作品名' in analysis_source_df.columns:
                 analysis_source_df['norm_workname'] = analysis_source_df['作品名'].apply(normalize_text)
@@ -217,8 +217,10 @@ if cool_file and os.path.exists(cool_file):
                 
                 if not anime and not song: continue
 
-                # ★追加: 作品名が「-」または空の場合、曲名から【】の中身を探して補完する
-                if anime == "-" or not anime:
+                # ★修正: 救済ロジックの発動条件を厳格化
+                # 作品名が「-」または空の場合「のみ」、曲名から【】を探す
+                # 作品名が既にある場合は何もしない（THE REVOなどが誤作動しないように）
+                if (anime == "-" or not anime) and song:
                     match = re.search(r'【(.*?)】', song)
                     if match:
                         anime = match.group(1).strip()
