@@ -51,7 +51,8 @@ room_map = {
     11106: "冨塚部屋"
 }
 
-# --- 関数: テキスト正規化 ---
+# --- 関数: テキスト正規化 (検索キー用・履歴データ用) ---
+# ※こちらは従来どおり括弧の中身を削除して「純粋な曲名/作品名」にする
 def normalize_text(text):
     if not isinstance(text, str):
         return str(text)
@@ -62,7 +63,7 @@ def normalize_text(text):
     # 2. 拡張子の削除
     text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
     
-    # 3. 括弧と中身を除去
+    # 3. 括弧と中身を除去 (検索ノイズ除去のため)
     text = re.sub(r'[\[\(\{【].*?[\]\)\}】]', ' ', text)
     
     # 4. キー変更情報を削除
@@ -77,6 +78,32 @@ def normalize_text(text):
     text = re.sub(r'\s+', ' ', text).strip()
     
     return text.upper()
+
+# --- 関数: オフラインリスト用正規化 (括弧の中身を保持する) ---
+# ※ファイル名には作品名などが括弧内に含まれているため、削除せずに保持する
+def normalize_offline_text(text):
+    if not isinstance(text, str):
+        return str(text)
+    
+    # 1. NFKC正規化
+    text = unicodedata.normalize('NFKC', text)
+    
+    # 2. 拡張子の削除
+    text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
+    
+    # 3. キー変更情報を削除
+    text = re.sub(r'(key|KEY)?\s*[\+\-]\s*[0-9]+', ' ', text)
+    text = re.sub(r'原キー', ' ', text)
+    text = re.sub(r'(キー)?変更[:：]?', ' ', text)
+    
+    # 4. 記号をスペースに置換 (ただし括弧類は削除しない！)
+    text = re.sub(r'[~〜～\-_=,.]', ' ', text)
+    
+    # 5. スペース正規化
+    text = re.sub(r'\s+', ' ', text).strip()
+    
+    return text.upper()
+
 
 # --- 1. 過去データ読み込み ---
 history_file = "history.csv"
@@ -165,8 +192,8 @@ if os.path.exists(offline_file):
         offline_df = offline_df.fillna("")
         # 曲名列をリスト化 (ファイル名等がここに入っている前提)
         if '曲名' in offline_df.columns:
-            # 読み込み時点で正規化してリスト化
-            offline_targets = [normalize_text(str(x)) for x in offline_df['曲名'].tolist()]
+            # ★修正: 括弧の中身を保持する正規化関数を使用
+            offline_targets = [normalize_offline_text(str(x)) for x in offline_df['曲名'].tolist()]
         print(f"オフラインリスト({offline_file})を読み込みました。件数: {len(offline_targets)}")
     except Exception as e:
         print(f"オフラインリスト読み込みエラー: {e}")
@@ -298,7 +325,7 @@ if cool_file and os.path.exists(cool_file):
                         target_song_norm = normalize_text(item["song"])
                         target_anime_norm = normalize_text(item["anime"])
                         
-                        # --- 歌唱数集計 ---
+                        # --- 歌唱数集計 (履歴データとの照合) ---
                         song_match_mask = check_match(target_song_norm, target_history['norm_filename'])
                         anime_match_mask = (
                             target_history['norm_filename'].str.contains(re.escape(target_anime_norm), case=False, na=False) |
@@ -318,13 +345,14 @@ if cool_file and os.path.exists(cool_file):
                         
                         # --- ★作成数(オフラインリスト)集計 修正 ---
                         # ロジック: 曲名の一致 + 作品名(アニメ名)の部分一致を確認
+                        # ※オフラインリスト側は normalize_offline_text (括弧保持) を適用済み
                         creation_count = 0
                         
                         if target_song_norm:
                             for offline_str in offline_targets:
                                 # 1. 曲名が含まれているか
                                 if target_song_norm in offline_str:
-                                    # 2. 作品名(アニメ名)が含まれているか (部分一致)
+                                    # 2. 作品名(アニメ名)が含まれているか
                                     if target_anime_norm:
                                         if target_anime_norm in offline_str:
                                             creation_count += 1
