@@ -51,31 +51,19 @@ room_map = {
     11106: "冨塚部屋"
 }
 
-# --- 関数: テキスト正規化 (ご提示のロジックを踏襲) ---
+# --- 関数: テキスト正規化 ---
 def normalize_text(text):
     if not isinstance(text, str):
         return str(text)
     
-    # 1. NFKC正規化
     text = unicodedata.normalize('NFKC', text)
-    
-    # 2. 拡張子の削除
     text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
-    
-    # 3. 括弧と中身を除去 (THE REVO対策: これで【FINAL SEASON】などが消える)
-    text = re.sub(r'[\[\(\{【].*?[\]\)\}】]', ' ', text)
-    
-    # 4. キー変更情報を削除
+    # 括弧の記号だけスペースに (中身は残す)
+    text = re.sub(r'[\[\(\{【\]\)\}】『』「」]', ' ', text)
     text = re.sub(r'(key|KEY)?\s*[\+\-]\s*[0-9]+', ' ', text)
     text = re.sub(r'原キー', ' ', text)
-    text = re.sub(r'(キー)?変更[:：]?', ' ', text)
-    
-    # 5. 記号をスペースに置換
     text = re.sub(r'[~〜～\-_=,.]', ' ', text)
-    
-    # 6. スペース正規化
     text = re.sub(r'\s+', ' ', text).strip()
-    
     return text.upper()
 
 # --- 1. 過去データ読み込み ---
@@ -146,7 +134,7 @@ else:
 
 
 # ==========================================
-# ★集計処理 (救済ロジック + HTML出力)
+# ★集計処理 (二重カウント防止ロジック)
 # ==========================================
 analysis_html_content = "" 
 cool_data_exists = False
@@ -177,27 +165,10 @@ if cool_file and os.path.exists(cool_file):
             analysis_source_df = final_df.copy()
             analysis_source_df['dt_obj'] = pd.to_datetime(analysis_source_df['取得日'], errors='coerce')
             
-            # --- ★ここが重要: 救済ロジックと正規化の共存 ---
-            # 1. まず「曲名（ファイル名）」を正規化する（これで【FINAL SEASON】などは消える）
+            # 正規化
             analysis_source_df['norm_filename'] = analysis_source_df['曲名（ファイル名）'].apply(normalize_text)
-            
-            # 2. 次に「作品名」を正規化するが、ここで「-」の場合の救済を行う
-            def get_rescued_workname(row):
-                raw_work = str(row['作品名']) if pd.notna(row['作品名']) else ""
-                raw_song = str(row['曲名（ファイル名）']) if pd.notna(row['曲名（ファイル名）']) else ""
-                
-                # 作品名が「-」「空」「nan」の場合のみ、元のファイル名から【】の中身を抽出して作品名とする
-                if raw_work.strip() in ["-", "−", "", "nan"]:
-                    match = re.search(r'【(.*?)】', raw_song)
-                    if match:
-                        # 抽出した中身を正規化して返す
-                        return normalize_text(match.group(1))
-                
-                # それ以外は通常の作品名を正規化して返す
-                return normalize_text(raw_work)
-
             if '作品名' in analysis_source_df.columns:
-                analysis_source_df['norm_workname'] = analysis_source_df.apply(get_rescued_workname, axis=1)
+                analysis_source_df['norm_workname'] = analysis_source_df['作品名'].apply(normalize_text)
             else:
                 analysis_source_df['norm_workname'] = ""
 
@@ -210,6 +181,9 @@ if cool_file and os.path.exists(cool_file):
             ]
 
             categorized_data = {}
+            # 二重カウント防止のため、すべてのターゲット(集計対象)をフラットなリストにも保持する
+            all_targets = [] 
+            
             ALLOWED_CATEGORIES = ["2026年冬アニメ", "2025年秋アニメ"]
             current_category = None
             
@@ -235,20 +209,81 @@ if cool_file and os.path.exists(cool_file):
                 
                 if not anime and not song: continue
 
-                categorized_data[current_category].append({
-                    "anime": anime, "type": type_, "artist": artist, "song": song
-                })
+                # 救済ロジック
+                if anime in ["-", "−", "", "nan"] and song:
+                    match = re.search(r'[【\[『（\(](.*?)[】\]』）\)]', song)
+                    if match:
+                        anime = match.group(1).strip()
 
-            def check_match(target_text, source_series):
-                if not target_text:
-                    return pd.Series([False] * len(source_series))
-                safe_target = re.escape(target_text)
-                if re.match(r'^[A-Z0-9\s]+$', target_text):
-                    pattern = r'(?:^|[^A-Z0-9])' + safe_target + r'(?:[^A-Z0-9]|$)'
-                    return source_series.str.contains(pattern, regex=True, case=False, na=False)
-                else:
-                    return source_series.str.contains(safe_target, case=False, na=False)
+                item = {
+                    "anime": anime, 
+                    "type": type_, 
+                    "artist": artist, 
+                    "song": song,
+                    "count": 0, # カウント用変数を初期化
+                    "norm_song": normalize_text(song),
+                    "norm_anime": normalize_text(anime)
+                }
+                
+                categorized_data[current_category].append(item)
+                all_targets.append(item)
 
+            # --- ★二重カウント防止のための集計ロジック ---
+            # 履歴1行ごとに、「最も適したターゲット1つ」を選んでカウントする
+            
+            for h_idx, h_row in target_history.iterrows():
+                h_song = h_row['norm_filename']
+                h_work = h_row['norm_workname']
+                
+                best_target = None
+                best_score = -1
+                
+                for target in all_targets:
+                    t_song = target['norm_song']
+                    t_anime = target['norm_anime']
+                    
+                    # 1. 作品名チェック (ターゲットに作品名がある場合、履歴側にも含まれているか)
+                    anime_ok = False
+                    if not t_anime or t_anime in ["-", "−"]: 
+                        anime_ok = True # ターゲットの作品名が「-」なら曲名だけでOK
+                    elif t_anime in h_song or (h_work and t_anime in h_work):
+                        anime_ok = True
+                        
+                    if not anime_ok: continue
+                    
+                    # 2. 曲名マッチングとスコアリング
+                    score = -1
+                    if not t_song:
+                        continue
+                        
+                    # 英数字のみの場合の単語境界チェック (「I」問題対策)
+                    if re.match(r'^[A-Z0-9\s]+$', t_song):
+                        pattern = r'(?:^|[^A-Z0-9])' + re.escape(t_song) + r'(?:[^A-Z0-9]|$)'
+                        if re.search(pattern, h_song):
+                            # 完全一致なら高スコア、そうでなければ長さ依存
+                            score = 1000 if t_song == h_song else len(t_song)
+                    else:
+                        # 日本語含む通常マッチ
+                        if t_song == h_song:
+                            score = 1000 # 完全一致は最強
+                        elif t_song in h_song:
+                            score = len(t_song) # 部分一致は文字数が長いほうが偉い
+                            
+                    # 3. 作品名が明示されているターゲットを少し優遇 (+500点)
+                    # これにより、作品名「-」のものより、作品名ありのものが選ばれやすくなる
+                    if score > 0 and t_anime and t_anime not in ["-", "−"]:
+                        score += 500
+                    
+                    # 4. ベストスコア更新
+                    if score > best_score:
+                        best_score = score
+                        best_target = target
+                
+                # 最もスコアが高かったターゲットに1票入れる (1回のみ)
+                if best_target:
+                    best_target['count'] += 1
+
+            # --- HTML生成 ---
             for category, items in categorized_data.items():
                 analysis_html_content += f"""
                 <div class="category-block">
@@ -278,25 +313,7 @@ if cool_file and os.path.exists(cool_file):
                     analysis_html_content += '<tbody class="anime-group">'
                     
                     for i, item in enumerate(group_items):
-                        target_song_norm = normalize_text(item["song"])
-                        target_anime_norm = normalize_text(item["anime"])
-                        
-                        song_match_mask = check_match(target_song_norm, target_history['norm_filename'])
-                        anime_match_mask = (
-                            target_history['norm_filename'].str.contains(re.escape(target_anime_norm), case=False, na=False) |
-                            target_history['norm_workname'].str.contains(re.escape(target_anime_norm), case=False, na=False)
-                        )
-                        
-                        if target_song_norm and target_anime_norm:
-                            final_mask = song_match_mask & anime_match_mask
-                        elif target_song_norm:
-                            final_mask = song_match_mask
-                        elif target_anime_norm:
-                            final_mask = anime_match_mask
-                        else:
-                            final_mask = pd.Series([False] * len(target_history))
-
-                        count = len(target_history[final_mask])
+                        count = item['count'] # 計算済みのカウントを使用
                         row_class = "zero-count" if count == 0 else "has-count"
                         
                         bar_width = min(count * 20, 150)
@@ -357,7 +374,6 @@ html_content = f"""
     <title>Karaoke Dashboard</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        /* CSS内の括弧は {{ }} でエスケープ */
         :root {{
             --primary-color: #2c3e50;
             --accent-color: #3498db;
