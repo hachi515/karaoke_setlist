@@ -181,22 +181,37 @@ cool_data_exists = False
 ranking_data_list = [] 
 
 cool_file = "cool_analysis.csv" 
-offline_file = "offline_list.csv" # オフラインリスト
 
-# --- オフラインリストの読み込み ---
+# --- ★修正: 複数ファイルからのオフラインリスト読み込み ---
+offline_files = [
+    "offline_list_2026_1st.csv",
+    "offline_list_2025_1st.csv",
+    "offline_list_2025_2nd.csv"
+]
 offline_targets = []
-if os.path.exists(offline_file):
-    try:
-        # csv読み込み
-        offline_df = pd.read_csv(offline_file)
-        offline_df = offline_df.fillna("")
-        # 曲名列をリスト化 (ファイル名等がここに入っている前提)
-        if '曲名' in offline_df.columns:
-            # ★修正: 括弧の中身を保持する正規化関数を使用
-            offline_targets = [normalize_offline_text(str(x)) for x in offline_df['曲名'].tolist()]
-        print(f"オフラインリスト({offline_file})を読み込みました。件数: {len(offline_targets)}")
-    except Exception as e:
-        print(f"オフラインリスト読み込みエラー: {e}")
+
+for file_path in offline_files:
+    if os.path.exists(file_path):
+        try:
+            # csv読み込み
+            offline_df = pd.read_csv(file_path)
+            offline_df = offline_df.fillna("")
+            
+            # 曲名列をリスト化して追加
+            if '曲名' in offline_df.columns:
+                targets = [normalize_offline_text(str(x)) for x in offline_df['曲名'].tolist()]
+                offline_targets.extend(targets)
+                print(f"オフラインリスト({file_path})を読み込みました。追加件数: {len(targets)}")
+            else:
+                print(f"オフラインリスト({file_path})に'曲名'カラムが見つかりません。")
+                
+        except Exception as e:
+            print(f"オフラインリスト({file_path})読み込みエラー: {e}")
+    else:
+        print(f"オフラインリスト({file_path})が見つかりません。")
+
+print(f"オフラインリスト合計件数: {len(offline_targets)}")
+
 
 if not os.path.exists(cool_file):
     possible_files = [f for f in os.listdir('.') if f.endswith('.csv') and 'history' not in f and 'offline' not in f]
