@@ -326,7 +326,7 @@ if cool_file and os.path.exists(cool_file):
             print("クール集計処理完了。")
             
             # ==========================================
-            # ★ランキングHTML生成処理 (同率順位対応版)
+            # ★ランキングHTML生成処理 (同率順位全表示対応版)
             # ==========================================
             print("ランキング生成処理開始...")
             
@@ -337,14 +337,12 @@ if cool_file and os.path.exists(cool_file):
                 cat_items = [d for d in ranking_data_list if d["category"] == target_cat and d["count"] > 0]
                 cat_items.sort(key=lambda x: x["count"], reverse=True)
                 
-                top_items = cat_items[:20]
-                
                 ranking_html_content += f"""
                 <div class="category-block">
-                    <div class="category-header">
-                        {target_cat} ランキング (TOP 20)
+                    <div class="category-header" onclick="toggleCategory(this)">
+                        {target_cat} ランキング (TOP 20) <i class="fas fa-chevron-down" style="float:right;"></i>
                     </div>
-                    <div class="category-content" style="display:block;">
+                    <div class="category-content">
                     <table class="rankingTable">
                         <thead>
                             <tr>
@@ -358,23 +356,24 @@ if cool_file and os.path.exists(cool_file):
                         <tbody>
                 """
                 
-                if not top_items:
+                if not cat_items:
                     ranking_html_content += '<tr><td colspan="5" style="text-align:center; padding:20px;">歌唱データがありません</td></tr>'
                 else:
-                    # --- 同率順位ロジック (競技方式 1224) ---
                     previous_count = None
                     current_rank = 0
                     
-                    for i, item in enumerate(top_items):
-                        # iは0から始まるインデックス。
-                        # 前の件数と異なれば、順位は現在の位置(i+1)になる
-                        # 前の件数と同じなら、順位は更新せず前と同じまま
+                    # データをスキャンして表示対象（rank <= 20）のみリストアップ
+                    for i, item in enumerate(cat_items):
                         if item["count"] != previous_count:
                             current_rank = i + 1
                         
                         previous_count = item["count"]
                         
-                        # 表示用装飾の判定
+                        # ★20位以下なら表示、21位以降になったらループ終了
+                        if current_rank > 20:
+                            break
+                        
+                        # --- HTML出力 ---
                         rank_class = f"rank-{current_rank}" if current_rank <= 3 else "rank-normal"
                         
                         rank_display = f'<span class="rank-badge {rank_class}">{current_rank}</span>'
@@ -705,6 +704,9 @@ html_content = f"""
     // ランキングのダウンロード
     function downloadRanking() {{
         const element = document.getElementById('ranking-print-target');
+        const hiddenContents = element.querySelectorAll('.category-content.collapsed');
+        hiddenContents.forEach(el => el.classList.remove('collapsed'));
+
         const htmlContent = element.innerHTML;
         generateDownload(htmlContent, 'karaoke_ranking.html', 'カラオケ歌唱ランキング');
     }}
