@@ -315,14 +315,19 @@ if cool_file and os.path.exists(cool_file):
                         
                         # ★リンク生成 (作品名 + 半角スペース + 曲名)
                         search_word = f"{item['anime']} {item['song']}"
+                        link_tag_start = f'<a href="#host/search.php?searchword={search_word}" class="search-link" target="_blank">'
                         
                         analysis_html_content += f'<tr class="{row_class}">'
                         if i == 0:
                             analysis_html_content += f'<td rowspan="{rowspan}">{item["anime"]}</td>'
-                        analysis_html_content += f'<td align="center">{item["type"]}</td>'
-                        analysis_html_content += f'<td>{item["artist"]}</td>'
-                        # ★リンクタグ追加 (#hostプレースホルダー)
-                        analysis_html_content += f'<td><a href="#host/search.php?searchword={search_word}" class="search-link" target="_blank">{item["song"]}</a></td>'
+                        
+                        # ★OP/ED列 (song-cell適用)
+                        analysis_html_content += f'<td align="center" class="song-cell">{link_tag_start}{item["type"]}</a></td>'
+                        # ★歌手列 (song-cell適用)
+                        analysis_html_content += f'<td class="song-cell">{link_tag_start}{item["artist"]}</a></td>'
+                        # ★曲名列 (song-cell適用)
+                        analysis_html_content += f'<td class="song-cell">{link_tag_start}{item["song"]}</a></td>'
+                        
                         analysis_html_content += f'<td class="count-cell"><div class="count-wrapper"><span class="count-num">{count}</span>{bar_html}</div></td>'
                         analysis_html_content += '</tr>'
                     
@@ -393,14 +398,14 @@ if cool_file and os.path.exists(cool_file):
                         bar_width = min(item["count"] * 20, 150)
                         bar_html = f'<div class="bar-chart" style="width:{bar_width}px;"></div>'
 
-                        # ★リンク生成
                         search_word = f"{item['anime']} {item['song']}"
-
+                        
+                        # ランキングは行全体をクリック
                         ranking_html_content += f"""
-                        <tr class="has-count">
+                        <tr class="has-count ranking-row" data-href="#host/search.php?searchword={search_word}">
                             <td align="center" style="font-weight:bold; font-size:1.1rem;">{rank_display}</td>
                             <td>{item["anime"]} <span style="font-size:0.8em; color:#777;">({item["type"]})</span></td>
-                            <td style="font-weight:bold;"><a href="#host/search.php?searchword={search_word}" class="search-link" target="_blank">{item["song"]}</a></td>
+                            <td style="font-weight:bold;">{item["song"]}</td>
                             <td>{item["artist"]}</td>
                             <td class="count-cell"><div class="count-wrapper"><span class="count-num">{item["count"]}</span>{bar_html}</div></td>
                         </tr>
@@ -467,14 +472,40 @@ html_content = f"""
             font-size: 13px; 
             display: flex; flex-direction: column;
         }}
-        a.search-link {{
+
+        /* --- リンクスタイル改修 --- */
+        
+        /* Analysis: セル全体をリンク化するスタイル */
+        td.song-cell {{
+            padding: 0 !important; /* セルの余白をゼロに */
+            height: 1px; /* 子要素の高さを100%にするためのハック */
+        }}
+        td.song-cell a.search-link {{
+            display: flex;
+            align-items: center; /* 垂直中央揃え */
+            width: 100%;
+            height: 100%;
+            padding: 5px 8px; /* 元のtdのpaddingをここに移動 */
+            box-sizing: border-box;
             color: var(--text-color);
             text-decoration: none;
             cursor: pointer;
         }}
-        a.search-link:hover {{
+        td.song-cell a.search-link:hover {{
+            background-color: #eef2f7;
             color: var(--accent-color);
-            text-decoration: underline;
+        }}
+
+        /* Ranking: 行全体をクリック可能に */
+        tr.ranking-row {{
+            cursor: pointer;
+            transition: background-color 0.1s;
+        }}
+        tr.ranking-row:hover {{
+            background-color: #dbeafe !important; /* ホバー時の色 */
+        }}
+        tr.ranking-row:active {{
+            background-color: #cbd5e1 !important; /* タップ時の色 */
         }}
 
         .top-section {{
@@ -673,11 +704,27 @@ html_content = f"""
 <script>
     document.addEventListener('DOMContentLoaded', () => {{
         const host = 'http://ykr.moe:11059'; 
+
+        // 1. 通常のAタグリンクの置換 (クール集計のセル用)
         document.querySelectorAll('a.search-link').forEach(link => {{
              const rawHref = link.getAttribute('href');
              if (rawHref && rawHref.startsWith('#host')) {{
                  link.href = rawHref.replace('#host', host);
              }}
+        }});
+
+        // 2. ランキング行クリック時の動作
+        document.querySelectorAll('tr.ranking-row').forEach(row => {{
+            row.addEventListener('click', function(e) {{
+                // 文字選択中は発火させない
+                if (window.getSelection().toString().length > 0) return;
+
+                const rawHref = this.getAttribute('data-href');
+                if (rawHref && rawHref.startsWith('#host')) {{
+                    const url = rawHref.replace('#host', host);
+                    window.open(url, '_blank');
+                }}
+            }});
         }});
     }});
 
@@ -717,7 +764,6 @@ html_content = f"""
     // クール集計のダウンロード
     function downloadHTML() {{
         const element = document.getElementById('print-target');
-        // ★修正: 折りたたみを解除せずにそのまま取得
         const htmlContent = element.innerHTML;
         generateDownload(htmlContent, 'karaoke_analysis.html', 'クール集計結果');
     }}
@@ -725,7 +771,6 @@ html_content = f"""
     // ランキングのダウンロード
     function downloadRanking() {{
         const element = document.getElementById('ranking-print-target');
-        // ★修正: 折りたたみを解除せずにそのまま取得
         const htmlContent = element.innerHTML;
         generateDownload(htmlContent, 'karaoke_ranking.html', 'カラオケ歌唱ランキング');
     }}
@@ -746,7 +791,6 @@ html_content = f"""
         th {{ background-color: #2c3e50; color: #fff; }}
         td[rowspan] {{ background-color: #fff; }}
         
-        /* カテゴリヘッダのスタイル */
         .category-header {{ 
             background: #667eea; color: white; padding: 10px; margin-top: 20px; 
             font-weight: bold; border-radius: 4px; cursor: pointer; user-select: none;
@@ -755,8 +799,15 @@ html_content = f"""
         .category-content.collapsed {{ display: none; }}
         
         /* リンクスタイル */
-        a.search-link {{ color: #333; text-decoration: none; }}
-        a.search-link:hover {{ color: #3498db; text-decoration: underline; }}
+        td.song-cell {{ padding: 0; height: 1px; }}
+        td.song-cell a {{ 
+            display: flex; align-items: center; width: 100%; height: 100%; padding: 5px 8px;
+            color: #333; text-decoration: none; box-sizing: border-box;
+        }}
+        td.song-cell a:hover {{ background-color: #eef2f7; color: #3498db; }}
+        
+        tr.ranking-row {{ cursor: pointer; }}
+        tr.ranking-row:hover {{ background-color: #dbeafe; }}
         
         .count-wrapper {{ display: flex; align-items: center; gap: 8px; }}
         .count-num {{ width: 25px; text-align: right; }}
@@ -795,22 +846,30 @@ html_content = f"""
         const host = 'http://ykr.moe:11059';
 
         document.addEventListener('DOMContentLoaded', () => {{
-            // リンク書き換え
-            const links = document.querySelectorAll('a.search-link');
-            links.forEach(link => {{
+            // リンク書き換え (通常リンク)
+            document.querySelectorAll('a').forEach(link => {{
                 const rawHref = link.getAttribute('href');
                 if (rawHref && rawHref.startsWith('#host')) {{
                     link.href = rawHref.replace('#host', host);
                 }}
             }});
+
+            // リンク書き換え (行クリック)
+            document.querySelectorAll('tr.ranking-row').forEach(row => {{
+                row.addEventListener('click', function(e) {{
+                    if (window.getSelection().toString().length > 0) return;
+                    const rawHref = this.getAttribute('data-href');
+                    if (rawHref && rawHref.startsWith('#host')) {{
+                        window.open(rawHref.replace('#host', host), '_blank');
+                    }}
+                }});
+            }});
         }});
 
-        // ★追加: 保存ファイル用の折りたたみ制御関数
         function toggleCategory(header) {{
             const content = header.nextElementSibling;
             content.classList.toggle('collapsed');
             const icon = header.querySelector('i');
-            // ダウンロードされたHTML内のiタグはクラスリセットされている可能性があるため、ここで再制御
             if(icon) {{
                 icon.className = content.classList.contains('collapsed') ? 'fas fa-chevron-right' : 'fas fa-chevron-down';
                 icon.style.float = 'right';
