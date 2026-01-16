@@ -163,9 +163,9 @@ if os.path.exists(offline_file):
         # csv読み込み
         offline_df = pd.read_csv(offline_file)
         offline_df = offline_df.fillna("")
-        # 曲名列をリスト化 (曲名列に歌手名等も含まれる前提)
+        # 曲名列をリスト化 (ファイル名等がここに入っている前提)
         if '曲名' in offline_df.columns:
-            # ★修正: 読み込み時点で正規化しておくことでマッチング精度を上げる
+            # 読み込み時点で正規化してリスト化
             offline_targets = [normalize_text(str(x)) for x in offline_df['曲名'].tolist()]
         print(f"オフラインリスト({offline_file})を読み込みました。件数: {len(offline_targets)}")
     except Exception as e:
@@ -190,7 +190,7 @@ if cool_file and os.path.exists(cool_file):
         if raw_df is not None:
             raw_df = raw_df.fillna("")
             
-            # --- ★重複削除ロジック (後勝ち) ---
+            # --- 重複削除ロジック (後勝ち) ---
             print("CSV内の重複行を削除中...")
             raw_df = raw_df.drop_duplicates(keep='last')
             
@@ -297,7 +297,6 @@ if cool_file and os.path.exists(cool_file):
                     for i, item in enumerate(group_items):
                         target_song_norm = normalize_text(item["song"])
                         target_anime_norm = normalize_text(item["anime"])
-                        target_artist_norm = normalize_text(item["artist"]) # 歌手名も正規化
                         
                         # --- 歌唱数集計 ---
                         song_match_mask = check_match(target_song_norm, target_history['norm_filename'])
@@ -318,20 +317,19 @@ if cool_file and os.path.exists(cool_file):
                         count = len(target_history[final_mask])
                         
                         # --- ★作成数(オフラインリスト)集計 修正 ---
-                        # ロジック: 正規化した曲名がオフラインリスト(正規化済)に含まれているか
-                        # 歌手名がある場合は、それも含まれているかを確認して精度を高める
+                        # ロジック: 曲名の一致 + 作品名(アニメ名)の部分一致を確認
                         creation_count = 0
                         
                         if target_song_norm:
                             for offline_str in offline_targets:
-                                # 曲名が含まれているか
+                                # 1. 曲名が含まれているか
                                 if target_song_norm in offline_str:
-                                    # 歌手名も指定されている場合、それも含まれているかチェック
-                                    if target_artist_norm:
-                                        if target_artist_norm in offline_str:
+                                    # 2. 作品名(アニメ名)が含まれているか (部分一致)
+                                    if target_anime_norm:
+                                        if target_anime_norm in offline_str:
                                             creation_count += 1
                                     else:
-                                        # 歌手名指定がない場合は曲名一致だけでカウント
+                                        # 作品名指定がない場合は曲名一致だけでカウント
                                         creation_count += 1
 
                         ranking_data_list.append({
@@ -419,11 +417,10 @@ if cool_file and os.path.exists(cool_file):
                     current_rank = 0
                     
                     for i, item in enumerate(cat_items):
-                        # カウントが前回と異なる場合のみ順位を更新
                         if item["count"] != previous_count:
                             current_rank = i + 1
                         
-                        # ★修正: 20位以内、または20位と同率の場合は表示し続ける
+                        # 20位以内、または20位と同率の場合は表示し続ける
                         if current_rank > 20:
                             break
                         
@@ -498,7 +495,6 @@ html_content = f"""
     <title>Karaoke Dashboard</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        /* CSS内の括弧は {{ }} でエスケープ */
         :root {{
             --primary-color: #2c3e50;
             --accent-color: #3498db;
@@ -517,22 +513,17 @@ html_content = f"""
             display: flex; flex-direction: column;
         }}
 
-        /* --- ダッシュボード(Live)用スタイル: リンク無効化・レイアウト保持 --- */
-        
-        /* Analysis: リンクタグをただのテキストのように見せる */
         a.export-link {{
             color: inherit;
             text-decoration: none;
-            pointer-events: none; /* クリック無効 */
+            pointer-events: none;
             cursor: default;
         }}
 
-        /* Ranking: ダッシュボードでは行クリック無効 */
         tr.ranking-row {{
             cursor: default; 
         }}
         
-        /* レイアウト: デフォルトのテーブル挙動に戻しつつ、min-widthはインラインスタイルで適用済み */
         th, td {{
             padding: 5px 8px; text-align: left; border-bottom: 1px solid #eee;
             font-size: 13px; vertical-align: middle; line-height: 1.3;
@@ -619,7 +610,7 @@ html_content = f"""
         .category-content.collapsed {{ display: none; }}
         
         tr.zero-count {{ color: #ccc; }}
-        .gray-text {{ color: gray !important; }} /* 強制的にグレー */
+        .gray-text {{ color: gray !important; }}
         tr.has-count {{ background-color: #fff; color: #333; }}
         
         .count-wrapper {{ display: flex; align-items: center; gap: 8px; }}
@@ -729,9 +720,7 @@ html_content = f"""
     </div>
 
 <script>
-    // ダッシュボード上では空関数 (クリック無効)
     function onRankingClick(row) {{
-        // 何もしない
     }}
 
     function openTab(tabName) {{
@@ -767,21 +756,18 @@ html_content = f"""
         icon.style.float = 'right';
     }}
 
-    // クール集計のダウンロード
     function downloadHTML() {{
         const element = document.getElementById('print-target');
         const htmlContent = element.innerHTML;
         generateDownload(htmlContent, 'karaoke_analysis.html', 'クール集計結果');
     }}
 
-    // ランキングのダウンロード
     function downloadRanking() {{
         const element = document.getElementById('ranking-print-target');
         const htmlContent = element.innerHTML;
         generateDownload(htmlContent, 'karaoke_ranking.html', 'カラオケ歌唱ランキング');
     }}
 
-    // ダウンロード共通処理
     function generateDownload(content, filename, title) {{
         const fullHtml = `
 <!DOCTYPE html>
@@ -804,12 +790,9 @@ html_content = f"""
         .category-content {{ display: block; }}
         .category-content.collapsed {{ display: none; }}
         
-        /* 作成数0のグレーアウト */
         .gray-text {{ color: gray !important; }}
         tr.zero-count {{ color: #ccc; }}
         
-        /* ★保存版用スタイル: リンク有効化 */
-        /* ネガティブマージンでセル全体をクリック可能にする */
         a.export-link {{
             display: block; 
             margin: -5px -8px; 
@@ -821,7 +804,6 @@ html_content = f"""
         }}
         a.export-link:hover {{ background-color: #eef2f7; color: #3498db; }}
         
-        /* ランキング: 行ホバー */
         tr.ranking-row {{ cursor: pointer; }}
         tr.ranking-row:hover {{ background-color: #dbeafe; }}
         
@@ -859,13 +841,10 @@ html_content = f"""
     ${{content}}
 
     <script>
-        // ★ リンク先ホスト (ここを1箇所変更するだけで全リンクに適用)
         const host = 'http://ykr.moe:11059';
 
-        // ランキング行クリック機能 (保存版でのみ有効)
         function onRankingClick(row) {{
             if (window.getSelection().toString().length > 0) return;
-            
             const rawHref = row.getAttribute('data-href');
             if (rawHref && rawHref.startsWith('#host')) {{
                 const url = rawHref.replace('#host', host);
@@ -874,8 +853,6 @@ html_content = f"""
         }}
 
         document.addEventListener('DOMContentLoaded', () => {{
-            
-            // クール集計のリンク(Aタグ) href置換
             document.querySelectorAll('a.export-link').forEach(link => {{
                 const rawHref = link.getAttribute('href');
                 if (rawHref && rawHref.startsWith('#host')) {{
