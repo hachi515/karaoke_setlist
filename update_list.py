@@ -251,7 +251,6 @@ if cool_file and os.path.exists(cool_file):
 
             # --- クール集計HTML生成 & ランキングデータ収集 ---
             for category, items in categorized_data.items():
-                # ★修正ポイント: min-widthを指定して列幅の崩れを防ぐ
                 analysis_html_content += f"""
                 <div class="category-block">
                     <div class="category-header" onclick="toggleCategory(this)">
@@ -315,7 +314,9 @@ if cool_file and os.path.exists(cool_file):
                         bar_html = f'<div class="bar-chart" style="width:{bar_width}px;"></div>' if count > 0 else ""
                         
                         # ★リンク生成 (プレースホルダー #host を使用)
-                        search_word = f"{item['anime']} {item['song']}"
+                        # ★ここを変更: 作品名から括弧書きを削除して検索ワードにする
+                        clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
+                        search_word = f"{clean_anime} {item['song']}"
                         
                         # クラス 'export-link' を付与。
                         # ダッシュボード上ではCSSでクリック無効・装飾なし。保存HTMLでのみ有効化。
@@ -352,7 +353,6 @@ if cool_file and os.path.exists(cool_file):
                 cat_items = [d for d in ranking_data_list if d["category"] == target_cat and d["count"] > 0]
                 cat_items.sort(key=lambda x: x["count"], reverse=True)
                 
-                # ★修正ポイント: min-widthを指定
                 ranking_html_content += f"""
                 <div class="category-block">
                     <div class="category-header" onclick="toggleCategory(this)">
@@ -401,7 +401,9 @@ if cool_file and os.path.exists(cool_file):
                         bar_width = min(item["count"] * 20, 150)
                         bar_html = f'<div class="bar-chart" style="width:{bar_width}px;"></div>'
 
-                        search_word = f"{item['anime']} {item['song']}"
+                        # ★ここを変更: 作品名から括弧書きを削除
+                        clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
+                        search_word = f"{clean_anime} {item['song']}"
                         
                         # ★ランキング行クリック用: onclickを埋め込む
                         ranking_html_content += f"""
