@@ -51,7 +51,7 @@ room_map = {
     11106: "冨塚部屋"
 }
 
-# --- 関数: テキスト正規化 ---
+# --- 関数: テキスト正規化 (括弧の中身を削除するバージョン) ---
 def normalize_text(text):
     if not isinstance(text, str):
         return str(text)
@@ -62,8 +62,8 @@ def normalize_text(text):
     # 2. 拡張子の削除
     text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
     
-    # 3. 括弧の処理: 記号だけスペースに (中身は残す)
-    text = re.sub(r'[\[\(\{【\]\)\}】『』「」]', ' ', text)
+    # 3. 括弧と中身を除去 (THE REVO対策: これで【FINAL SEASON】などが消える)
+    text = re.sub(r'[\[\(\{【].*?[\]\)\}】]', ' ', text)
     
     # 4. キー変更情報を削除
     text = re.sub(r'(key|KEY)?\s*[\+\-]\s*[0-9]+', ' ', text)
@@ -146,7 +146,7 @@ else:
 
 
 # ==========================================
-# ★集計処理 (二重カウント防止 & 救済ロジック)
+# ★集計処理 (ベストマッチ & 救済ロジック)
 # ==========================================
 analysis_html_content = "" 
 cool_data_exists = False
@@ -177,7 +177,7 @@ if cool_file and os.path.exists(cool_file):
             analysis_source_df = final_df.copy()
             analysis_source_df['dt_obj'] = pd.to_datetime(analysis_source_df['取得日'], errors='coerce')
             
-            # 正規化
+            # 履歴の正規化
             analysis_source_df['norm_filename'] = analysis_source_df['曲名（ファイル名）'].apply(normalize_text)
             if '作品名' in analysis_source_df.columns:
                 analysis_source_df['norm_workname'] = analysis_source_df['作品名'].apply(normalize_text)
@@ -193,8 +193,8 @@ if cool_file and os.path.exists(cool_file):
             ]
 
             categorized_data = {}
-            # 二重カウント防止のため、すべての集計ターゲットをフラットなリストでも管理
-            all_targets = []
+            # 二重カウント防止のため、すべてのターゲット(集計対象)をフラットなリストにも保持する
+            all_targets = [] 
             
             ALLOWED_CATEGORIES = ["2026年冬アニメ", "2025年秋アニメ"]
             current_category = None
@@ -221,17 +221,15 @@ if cool_file and os.path.exists(cool_file):
                 
                 if not anime and not song: continue
 
-                # ★救済ロジック: 作品名が「-」または空の場合のみ、曲名からカッコの中身を抽出
-                if (anime in ["-", "−", ""] or pd.isna(anime) or anime == "nan") and song:
+                # ★救済ロジック
+                # 作品名が「-」または空の場合のみ、曲名の【】等から作品名を抽出する
+                if anime in ["-", "−", "", "nan"] and song:
                     match = re.search(r'[【\[『（\(](.*?)[】\]』）\)]', song)
                     if match:
-                        potential_anime = match.group(1).strip()
-                        # (OP) (ED) などの短い文字は除外
-                        if len(potential_anime) > 0 and potential_anime.upper() not in ["OP", "ED", "MV", "PV"]:
-                            anime = potential_anime
+                        anime = match.group(1).strip()
 
-                # ターゲット辞書作成
-                target_item = {
+                # ターゲットごとのオブジェクトを作成
+                item = {
                     "anime": anime, 
                     "type": type_, 
                     "artist": artist, 
@@ -241,39 +239,29 @@ if cool_file and os.path.exists(cool_file):
                     "norm_anime": normalize_text(anime)
                 }
                 
-                categorized_data[current_category].append(target_item)
-                all_targets.append(target_item)
+                categorized_data[current_category].append(item)
+                all_targets.append(item)
 
-            # --- ★集計ロジックの刷新 (二重カウント防止) ---
-            # 履歴 1行 vs 全ターゲット で比較し、ベストマッチな1つだけにカウントを入れる
+            # --- ★二重カウント防止のための集計ロジック (Best Match) ---
+            # 履歴1行ごとに、最もスコアが高いターゲット1つだけを選んでカウントする
             
             for h_idx, h_row in target_history.iterrows():
                 h_song = h_row['norm_filename']
                 h_work = h_row['norm_workname']
                 
-                matched_targets = []
+                best_target = None
+                best_score = -1
                 
                 for target in all_targets:
                     t_song = target['norm_song']
                     t_anime = target['norm_anime']
                     
-                    # 1. 作品名チェック (ターゲットに作品名がある場合、履歴側にも含まれているか)
-                    anime_ok = False
-                    # ターゲットの作品名が「-」や空なら、曲名一致だけでOKとする
-                    if not t_anime or t_anime in ["-", "−"]: 
-                        anime_ok = True 
-                    # 履歴のファイル名か作品名列に、ターゲットの作品名が含まれているか
-                    elif (t_anime in h_song) or (h_work and t_anime in h_work):
-                        anime_ok = True
-                        
-                    if not anime_ok: continue
-                    
-                    # 2. 曲名マッチング
                     if not t_song: continue
-                    
+
+                    # --- 1. 曲名マッチング ---
                     is_match = False
-                    # 英数字のみの短い曲名対策 ("I"など)
                     if re.match(r'^[A-Z0-9\s]+$', t_song):
+                        # 英数字のみの場合、単語境界チェック
                         pattern = r'(?:^|[^A-Z0-9])' + re.escape(t_song) + r'(?:[^A-Z0-9]|$)'
                         if re.search(pattern, h_song):
                             is_match = True
@@ -281,20 +269,32 @@ if cool_file and os.path.exists(cool_file):
                         # 通常の部分一致
                         if t_song in h_song:
                             is_match = True
-                            
-                    if is_match:
-                        # マッチしたら候補に追加。スコア計算用に情報を保持
-                        score = len(t_song) # 基本スコアは曲名の長さ (長いほうが具体的)
-                        if t_song == h_song: score += 1000 # 完全一致は最強
-                        if t_anime and t_anime not in ["-", "−"]: score += 500 # 作品名指定ありは強い
-                        
-                        matched_targets.append((score, target))
+                    
+                    if not is_match: continue
+
+                    # --- 2. 作品名チェック (ターゲットに作品名がある場合) ---
+                    # ターゲットの作品名が「-」なら曲名一致だけでOK
+                    if t_anime and t_anime not in ["-", "−"]: 
+                        # 履歴のファイル名か作品名列に、ターゲットの作品名が含まれているか
+                        if (t_anime not in h_song) and (not h_work or t_anime not in h_work):
+                            continue # 作品名が一致しないのでスキップ
+
+                    # --- 3. スコア計算 ---
+                    score = len(t_song) # 基本スコアは一致した曲名の長さ (長いほど具体的)
+                    
+                    if t_song == h_song: 
+                        score += 1000 # 完全一致は非常に強い
+                    
+                    if t_anime and t_anime not in ["-", "−"]: 
+                        score += 500 # 作品名指定があるものは優先度アップ
+                    
+                    # ベストスコア更新
+                    if score > best_score:
+                        best_score = score
+                        best_target = target
                 
-                # 候補の中で最もスコアが高いターゲットを1つ選ぶ
-                if matched_targets:
-                    # スコア降順でソート
-                    matched_targets.sort(key=lambda x: x[0], reverse=True)
-                    best_target = matched_targets[0][1]
+                # 最もスコアが高かったターゲットに1票入れる
+                if best_target:
                     best_target['count'] += 1
 
             # --- HTML生成 ---
@@ -317,6 +317,7 @@ if cool_file and os.path.exists(cool_file):
                         </thead>
                 """
                 
+                # 作品名でソートして、同じ作品をまとめる
                 items.sort(key=lambda x: x['anime'])
                 def get_anime_key(x): return x['anime']
                 
@@ -358,7 +359,7 @@ if cool_file and os.path.exists(cool_file):
 
 
 # ==========================================
-# HTML生成 (HTML出力・印刷設定)
+# HTML生成
 # ==========================================
 
 columns_to_hide = ['コメント'] 
