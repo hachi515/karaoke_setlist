@@ -319,24 +319,24 @@ if cool_file and os.path.exists(cool_file):
                         count = len(target_history[final_mask])
                         
                         # --- 作成数(オフラインリスト)集計 ---
-                        # ロジック改良: 
+                        # ロジック:
                         # 1. 曲名が含まれていること (必須)
                         # 2. かつ、(作品名が含まれている OR 歌手名が含まれている)
-                        # ※ すべて正規化後の文字列で比較
+                        # ※正規化済みの offline_targets リストを使用
                         creation_count = 0
                         if target_song_norm:
                             for offline_str in offline_targets:
-                                # 曲名が含まれているか確認
+                                # 曲名の一致を確認
                                 if target_song_norm in offline_str:
-                                    # 追加条件: 作品名 または 歌手名 が含まれているか
+                                    # 作品名の一致(部分一致) または 歌手名の一致を確認
                                     hit_anime = (target_anime_norm in offline_str) if target_anime_norm else False
                                     hit_artist = (target_artist_norm in offline_str) if target_artist_norm else False
                                     
-                                    # 作品名または歌手名のどちらか片方でも一致すればカウント
+                                    # 「曲名」かつ「作品名または歌手名」が含まれていればカウント
                                     if hit_anime or hit_artist:
                                         creation_count += 1
                                     elif not target_anime_norm and not target_artist_norm:
-                                        # 両方空情報なら曲名一致だけでカウント（稀なケース）
+                                        # 作品名も歌手名もない場合(稀)は曲名のみでカウント
                                         creation_count += 1
 
                         ranking_data_list.append({
@@ -397,8 +397,8 @@ if cool_file and os.path.exists(cool_file):
                     continue
                     
                 cat_items = [d for d in ranking_data_list if d["category"] == target_cat and d["count"] > 0]
-                # カウント順、同じなら曲名順でソート
-                cat_items.sort(key=lambda x: (x["count"], x["song"]), reverse=True)
+                # カウント順(降順)、同じなら曲名順(昇順)
+                cat_items.sort(key=lambda x: (-x["count"], x["song"]))
                 
                 ranking_html_content += f"""
                 <div class="category-block">
@@ -429,12 +429,12 @@ if cool_file and os.path.exists(cool_file):
                     for i, item in enumerate(cat_items):
                         real_rank_counter += 1
                         
-                        # ランキング変動ロジック
+                        # ランキング計算
                         if item["count"] != previous_count:
                             current_rank = real_rank_counter
                         
-                        # ★ランキング同率処理の変更
-                        # 「20位以内」または「20位と同率」なら表示し続ける
+                        # ★ランキング足切り判定
+                        # 20位を超えていて、かつ直前のカウント(20位のカウント)より小さい場合にbreak
                         if current_rank > 20 and item["count"] < previous_count:
                             break
                         
@@ -709,7 +709,7 @@ html_content = f"""
             }});
         }});
 
-        function toggleCategory(header) {{
+function toggleCategory(header) {{
             const content = header.nextElementSibling;
             content.classList.toggle('collapsed');
             const icon = header.querySelector('i');
@@ -718,9 +718,10 @@ html_content = f"""
                 icon.style.float = 'right';
             }}
         }}
-    <\/script>
+    </script>
 </body>
-</html>`;
+</html>
+"""
 
         const blob = new Blob([fullHtml], {{type: 'text/html'}});
         const link = document.createElement('a');
