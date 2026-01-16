@@ -721,7 +721,6 @@ function toggleCategory(header) {{
     </script>
 </body>
 </html>
-"""
 
         const blob = new Blob([fullHtml], {{type: 'text/html'}});
         const link = document.createElement('a');
@@ -808,3 +807,4 @@ function toggleCategory(header) {{
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
     print("HTML生成完了: index.html")
+
