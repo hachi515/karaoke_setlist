@@ -154,9 +154,24 @@ cool_data_exists = False
 ranking_data_list = [] 
 
 cool_file = "cool_analysis.csv" 
+offline_file = "offline_list.csv" # オフラインリスト
+
+# --- オフラインリストの読み込み ---
+offline_targets = []
+if os.path.exists(offline_file):
+    try:
+        # csv読み込み (エンコーディングは環境に合わせて自動または指定)
+        offline_df = pd.read_csv(offline_file)
+        offline_df = offline_df.fillna("")
+        # 曲名列をリスト化 (曲名列に歌手名等も含まれる前提)
+        if '曲名' in offline_df.columns:
+            offline_targets = offline_df['曲名'].astype(str).tolist()
+        print(f"オフラインリスト({offline_file})を読み込みました。件数: {len(offline_targets)}")
+    except Exception as e:
+        print(f"オフラインリスト読み込みエラー: {e}")
 
 if not os.path.exists(cool_file):
-    possible_files = [f for f in os.listdir('.') if f.endswith('.csv') and 'history' not in f]
+    possible_files = [f for f in os.listdir('.') if f.endswith('.csv') and 'history' not in f and 'offline' not in f]
     if possible_files:
         cool_file = possible_files[0]
 
@@ -261,10 +276,10 @@ if cool_file and os.path.exists(cool_file):
                         <thead>
                             <tr>
                                 <th style="width:25%; min-width:180px;">作品名</th>
-                                <th style="width:10%; min-width:60px;">OP/ED</th>
+                                <th style="width:5%; min-width:40px;">作成</th> <th style="width:10%; min-width:60px;">OP/ED</th>
                                 <th style="width:20%; min-width:150px;">歌手</th>
                                 <th style="width:25%; min-width:180px;">曲名</th>
-                                <th style="width:20%; min-width:60px;">歌唱数</th>
+                                <th style="width:15%; min-width:60px;">歌唱数</th>
                             </tr>
                         </thead>
                 """
@@ -282,6 +297,7 @@ if cool_file and os.path.exists(cool_file):
                         target_song_norm = normalize_text(item["song"])
                         target_anime_norm = normalize_text(item["anime"])
                         
+                        # --- 歌唱数集計 ---
                         song_match_mask = check_match(target_song_norm, target_history['norm_filename'])
                         anime_match_mask = (
                             target_history['norm_filename'].str.contains(re.escape(target_anime_norm), case=False, na=False) |
@@ -299,6 +315,16 @@ if cool_file and os.path.exists(cool_file):
 
                         count = len(target_history[final_mask])
                         
+                        # --- 作成数(オフラインリスト)集計 ---
+                        # ロジック: offline_targets(曲名カラム)の中に、itemの「曲名」と「歌手」の両方が含まれているか
+                        creation_count = 0
+                        t_song = item["song"]
+                        t_artist = item["artist"]
+                        if t_song and t_artist:
+                            for offline_str in offline_targets:
+                                if t_song in offline_str and t_artist in offline_str:
+                                    creation_count += 1
+
                         ranking_data_list.append({
                             "category": category,
                             "anime": item["anime"],
@@ -308,25 +334,31 @@ if cool_file and os.path.exists(cool_file):
                             "count": count
                         })
 
-                        row_class = "zero-count" if count == 0 else "has-count"
+                        # 行スタイル判定: 作成有無が0の場合はグレー文字
+                        row_class = ""
+                        if creation_count == 0:
+                            row_class = "gray-text"
+                        elif count == 0:
+                            row_class = "zero-count" # 歌唱数0のみの場合(作成ありなら)
+                        else:
+                            row_class = "has-count"
                         
                         bar_width = min(count * 20, 150)
                         bar_html = f'<div class="bar-chart" style="width:{bar_width}px;"></div>' if count > 0 else ""
                         
-                        # ★リンク生成 (プレースホルダー #host を使用)
-                        # ★ここを変更: 作品名から括弧書きを削除して検索ワードにする
+                        # ★リンク生成
                         clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
                         search_word = f"{clean_anime} {item['song']}"
                         
-                        # クラス 'export-link' を付与。
-                        # ダッシュボード上ではCSSでクリック無効・装飾なし。保存HTMLでのみ有効化。
                         link_tag_start = f'<a href="#host/search.php?searchword={search_word}" class="export-link" target="_blank">'
                         
                         analysis_html_content += f'<tr class="{row_class}">'
                         if i == 0:
                             analysis_html_content += f'<td rowspan="{rowspan}">{item["anime"]}</td>'
                         
-                        # 通常のtd内にリンクを配置
+                        # 作成数カラム
+                        analysis_html_content += f'<td align="center">{creation_count}</td>'
+
                         analysis_html_content += f'<td align="center">{link_tag_start}{item["type"]}</a></td>'
                         analysis_html_content += f'<td>{link_tag_start}{item["artist"]}</a></td>'
                         analysis_html_content += f'<td>{link_tag_start}{item["song"]}</a></td>'
@@ -401,17 +433,14 @@ if cool_file and os.path.exists(cool_file):
                         bar_width = min(item["count"] * 20, 150)
                         bar_html = f'<div class="bar-chart" style="width:{bar_width}px;"></div>'
 
-                        # ★ここを変更: 作品名から括弧書きを削除
                         clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
                         search_word = f"{clean_anime} {item['song']}"
                         
-                        # ★ランキング行クリック用: onclickを埋め込む
                         ranking_html_content += f"""
                         <tr class="has-count ranking-row" data-href="#host/search.php?searchword={search_word}" onclick="onRankingClick(this)">
                             <td align="center" style="font-weight:bold; font-size:1.1rem;">{rank_display}</td>
                             <td>{item["anime"]} <span style="font-size:0.8em; color:#777;">({item["type"]})</span></td>
-                            <td style="font-weight:bold;">{item["song"]}</td>
-                            <td>{item["artist"]}</td>
+                            <td>{item["song"]}</td> <td>{item["artist"]}</td>
                             <td class="count-cell"><div class="count-wrapper"><span class="count-num">{item["count"]}</span>{bar_html}</div></td>
                         </tr>
                         """
@@ -580,6 +609,7 @@ html_content = f"""
         .category-content.collapsed {{ display: none; }}
         
         tr.zero-count {{ color: #ccc; }}
+        .gray-text {{ color: gray !important; }} /* 強制的にグレー */
         tr.has-count {{ background-color: #fff; color: #333; }}
         
         .count-wrapper {{ display: flex; align-items: center; gap: 8px; }}
@@ -763,6 +793,10 @@ html_content = f"""
         }}
         .category-content {{ display: block; }}
         .category-content.collapsed {{ display: none; }}
+        
+        /* 作成数0のグレーアウト */
+        .gray-text {{ color: gray !important; }}
+        tr.zero-count {{ color: #ccc; }}
         
         /* ★保存版用スタイル: リンク有効化 */
         /* ネガティブマージンでセル全体をクリック可能にする */
