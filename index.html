@@ -207,7 +207,7 @@
     <div class="top-section">
         <div class="header-inner">
             <h1>Karaoke Dashboard</h1>
-            <div class="update-time">2026/01/16 19:01 更新</div>
+            <div class="update-time">2026/01/16 19:18 更新</div>
         </div>
         <div class="tabs">
             <button class="tab-btn active" onclick="openTab('setlist')">セットリスト</button>
@@ -871,6 +871,7 @@
     // クール集計のダウンロード
     function downloadHTML() {
         const element = document.getElementById('print-target');
+        // 保存時はそのままのHTML(#host付き)を取得
         const htmlContent = element.innerHTML;
         generateDownload(htmlContent, 'karaoke_analysis.html', 'クール集計結果');
     }
@@ -878,6 +879,7 @@
     // ランキングのダウンロード
     function downloadRanking() {
         const element = document.getElementById('ranking-print-target');
+        // 保存時はそのままのHTML(#host付き)を取得
         const htmlContent = element.innerHTML;
         generateDownload(htmlContent, 'karaoke_ranking.html', 'カラオケ歌唱ランキング');
     }
@@ -950,10 +952,11 @@
     ${content}
 
     <script>
+        // ★ ここを1箇所書き換えるだけで済むようにする
         const host = 'http://ykr.moe:11059';
 
         document.addEventListener('DOMContentLoaded', () => {
-            // リンク書き換え (通常リンク)
+            // 通常リンクの置換
             document.querySelectorAll('a').forEach(link => {
                 const rawHref = link.getAttribute('href');
                 if (rawHref && rawHref.startsWith('#host')) {
@@ -961,7 +964,7 @@
                 }
             });
 
-            // リンク書き換え (行クリック)
+            // ランキング行クリック
             document.querySelectorAll('tr.ranking-row').forEach(row => {
                 row.addEventListener('click', function(e) {
                     if (window.getSelection().toString().length > 0) return;
