@@ -175,8 +175,6 @@ if cool_file and os.path.exists(cool_file):
             raw_df = raw_df.fillna("")
             
             # --- ★重複削除ロジック (後勝ち) ---
-            # 「2025年秋アニメ」と「2026年冬アニメ」の両方に同じ曲が含まれている場合、
-            # ファイルの下の方（2025年秋アニメ側）を残すことで、冬アニメへの誤集計を防ぎます。
             print("CSV内の重複行を削除中...")
             raw_df = raw_df.drop_duplicates(keep='last')
             
@@ -315,12 +313,16 @@ if cool_file and os.path.exists(cool_file):
                         bar_width = min(count * 20, 150)
                         bar_html = f'<div class="bar-chart" style="width:{bar_width}px;"></div>' if count > 0 else ""
                         
+                        # ★リンク生成 (作品名 + 半角スペース + 曲名)
+                        search_word = f"{item['anime']} {item['song']}"
+                        
                         analysis_html_content += f'<tr class="{row_class}">'
                         if i == 0:
                             analysis_html_content += f'<td rowspan="{rowspan}">{item["anime"]}</td>'
                         analysis_html_content += f'<td align="center">{item["type"]}</td>'
                         analysis_html_content += f'<td>{item["artist"]}</td>'
-                        analysis_html_content += f'<td>{item["song"]}</td>'
+                        # ★リンクタグ追加 (#hostプレースホルダー)
+                        analysis_html_content += f'<td><a href="#host/search.php?searchword={search_word}" class="search-link" target="_blank">{item["song"]}</a></td>'
                         analysis_html_content += f'<td class="count-cell"><div class="count-wrapper"><span class="count-num">{count}</span>{bar_html}</div></td>'
                         analysis_html_content += '</tr>'
                     
@@ -332,7 +334,7 @@ if cool_file and os.path.exists(cool_file):
             print("クール集計処理完了。")
             
             # ==========================================
-            # ★ランキングHTML生成処理 (同率順位全表示対応版)
+            # ★ランキングHTML生成処理
             # ==========================================
             print("ランキング生成処理開始...")
             
@@ -368,18 +370,15 @@ if cool_file and os.path.exists(cool_file):
                     previous_count = None
                     current_rank = 0
                     
-                    # データをスキャンして表示対象（rank <= 20）のみリストアップ
                     for i, item in enumerate(cat_items):
                         if item["count"] != previous_count:
                             current_rank = i + 1
                         
                         previous_count = item["count"]
                         
-                        # ★20位以下なら表示、21位以降になったらループ終了
                         if current_rank > 20:
                             break
                         
-                        # --- HTML出力 ---
                         rank_class = f"rank-{current_rank}" if current_rank <= 3 else "rank-normal"
                         
                         rank_display = f'<span class="rank-badge {rank_class}">{current_rank}</span>'
@@ -394,11 +393,14 @@ if cool_file and os.path.exists(cool_file):
                         bar_width = min(item["count"] * 20, 150)
                         bar_html = f'<div class="bar-chart" style="width:{bar_width}px;"></div>'
 
+                        # ★リンク生成
+                        search_word = f"{item['anime']} {item['song']}"
+
                         ranking_html_content += f"""
                         <tr class="has-count">
                             <td align="center" style="font-weight:bold; font-size:1.1rem;">{rank_display}</td>
                             <td>{item["anime"]} <span style="font-size:0.8em; color:#777;">({item["type"]})</span></td>
-                            <td style="font-weight:bold;">{item["song"]}</td>
+                            <td style="font-weight:bold;"><a href="#host/search.php?searchword={search_word}" class="search-link" target="_blank">{item["song"]}</a></td>
                             <td>{item["artist"]}</td>
                             <td class="count-cell"><div class="count-wrapper"><span class="count-num">{item["count"]}</span>{bar_html}</div></td>
                         </tr>
@@ -464,6 +466,15 @@ html_content = f"""
             color: var(--text-color);
             font-size: 13px; 
             display: flex; flex-direction: column;
+        }}
+        a.search-link {{
+            color: var(--text-color);
+            text-decoration: none;
+            cursor: pointer;
+        }}
+        a.search-link:hover {{
+            color: var(--accent-color);
+            text-decoration: underline;
         }}
 
         .top-section {{
@@ -566,21 +577,18 @@ html_content = f"""
             font-weight: normal; color: inherit;      
         }}
 
-        /* --- ランキング用スタイル --- */
         .rank-badge {{
             display: inline-block; width: 24px; height: 24px; line-height: 24px;
             border-radius: 50%; text-align: center; color: #fff; font-weight: bold; font-size: 12px;
-            background-color: #95a5a6; /* Default gray */
+            background-color: #95a5a6; 
         }}
-        .rank-1 {{ background-color: #f1c40f; box-shadow: 0 0 5px #f39c12; font-size: 14px; width: 28px; height: 28px; line-height: 28px; }} /* Gold */
-        .rank-2 {{ background-color: #bdc3c7; box-shadow: 0 0 5px #7f8c8d; }} /* Silver */
-        .rank-3 {{ background-color: #d35400; opacity: 0.8; }} /* Bronze */
+        .rank-1 {{ background-color: #f1c40f; box-shadow: 0 0 5px #f39c12; font-size: 14px; width: 28px; height: 28px; line-height: 28px; }} 
+        .rank-2 {{ background-color: #bdc3c7; box-shadow: 0 0 5px #7f8c8d; }} 
+        .rank-3 {{ background-color: #d35400; opacity: 0.8; }} 
         
-        /* 1位の行だけ少し強調 */
         .rankingTable tr:nth-child(1) td {{ background-color: #fffae6; }}
         .rankingTable tr:nth-child(2) td {{ background-color: #f8f9fa; }}
 
-        /* --- 印刷用スタイル --- */
         @media print {{
             * {{
                 -webkit-print-color-adjust: exact !important;
@@ -663,6 +671,16 @@ html_content = f"""
     </div>
 
 <script>
+    document.addEventListener('DOMContentLoaded', () => {{
+        const host = 'http://ykr.moe:11059'; 
+        document.querySelectorAll('a.search-link').forEach(link => {{
+             const rawHref = link.getAttribute('href');
+             if (rawHref && rawHref.startsWith('#host')) {{
+                 link.href = rawHref.replace('#host', host);
+             }}
+        }});
+    }});
+
     function openTab(tabName) {{
         document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
         document.getElementById(tabName).classList.add('active');
@@ -675,7 +693,6 @@ html_content = f"""
         
         document.querySelectorAll('.tab-btn')[btnIndex].classList.add('active');
         
-        // コントロール表示切り替え
         document.getElementById('ctrl-setlist').style.display = 'none';
         document.getElementById('ctrl-analysis').style.display = 'none';
         document.getElementById('ctrl-ranking').style.display = 'none';
@@ -700,9 +717,7 @@ html_content = f"""
     // クール集計のダウンロード
     function downloadHTML() {{
         const element = document.getElementById('print-target');
-        const hiddenContents = element.querySelectorAll('.category-content.collapsed');
-        hiddenContents.forEach(el => el.classList.remove('collapsed'));
-        
+        // ★修正: 折りたたみを解除せずにそのまま取得
         const htmlContent = element.innerHTML;
         generateDownload(htmlContent, 'karaoke_analysis.html', 'クール集計結果');
     }}
@@ -710,9 +725,7 @@ html_content = f"""
     // ランキングのダウンロード
     function downloadRanking() {{
         const element = document.getElementById('ranking-print-target');
-        const hiddenContents = element.querySelectorAll('.category-content.collapsed');
-        hiddenContents.forEach(el => el.classList.remove('collapsed'));
-
+        // ★修正: 折りたたみを解除せずにそのまま取得
         const htmlContent = element.innerHTML;
         generateDownload(htmlContent, 'karaoke_ranking.html', 'カラオケ歌唱ランキング');
     }}
@@ -732,15 +745,23 @@ html_content = f"""
         th, td {{ border: 1px solid #ccc; padding: 5px 8px; text-align: left; vertical-align: middle; }}
         th {{ background-color: #2c3e50; color: #fff; }}
         td[rowspan] {{ background-color: #fff; }}
+        
+        /* カテゴリヘッダのスタイル */
         .category-header {{ 
             background: #667eea; color: white; padding: 10px; margin-top: 20px; 
-            font-weight: bold; border-radius: 4px;
+            font-weight: bold; border-radius: 4px; cursor: pointer; user-select: none;
         }}
+        .category-content {{ display: block; }}
+        .category-content.collapsed {{ display: none; }}
+        
+        /* リンクスタイル */
+        a.search-link {{ color: #333; text-decoration: none; }}
+        a.search-link:hover {{ color: #3498db; text-decoration: underline; }}
+        
         .count-wrapper {{ display: flex; align-items: center; gap: 8px; }}
         .count-num {{ width: 25px; text-align: right; }}
         .bar-chart {{ height: 10px; background: #3498db; border-radius: 5px; }}
         
-        /* ランキング用スタイル */
         .rank-badge {{
             display: inline-block; width: 24px; height: 24px; line-height: 24px;
             border-radius: 50%; text-align: center; color: #fff; font-weight: bold; font-size: 12px;
@@ -758,6 +779,7 @@ html_content = f"""
                 print-color-adjust: exact !important;
                 color-adjust: exact !important;
             }}
+            .category-content {{ display: block !important; }}
             tbody.anime-group {{ break-inside: avoid; page-break-inside: avoid; }}
             .category-header {{ page-break-after: avoid; }}
             thead {{ display: table-header-group; }}
@@ -768,6 +790,33 @@ html_content = f"""
     <h1>${{title}}</h1>
     <div style="text-align:right; font-size:0.9rem; color:#777;">出力日: {current_date_str}</div>
     ${{content}}
+
+    <script>
+        const host = 'http://ykr.moe:11059';
+
+        document.addEventListener('DOMContentLoaded', () => {{
+            // リンク書き換え
+            const links = document.querySelectorAll('a.search-link');
+            links.forEach(link => {{
+                const rawHref = link.getAttribute('href');
+                if (rawHref && rawHref.startsWith('#host')) {{
+                    link.href = rawHref.replace('#host', host);
+                }}
+            }});
+        }});
+
+        // ★追加: 保存ファイル用の折りたたみ制御関数
+        function toggleCategory(header) {{
+            const content = header.nextElementSibling;
+            content.classList.toggle('collapsed');
+            const icon = header.querySelector('i');
+            // ダウンロードされたHTML内のiタグはクラスリセットされている可能性があるため、ここで再制御
+            if(icon) {{
+                icon.className = content.classList.contains('collapsed') ? 'fas fa-chevron-right' : 'fas fa-chevron-down';
+                icon.style.float = 'right';
+            }}
+        }}
+    <\/script>
 </body>
 </html>`;
 
