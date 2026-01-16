@@ -207,7 +207,7 @@
             });
         });
 
-        function toggleCategory(header) {
+function toggleCategory(header) {
             const content = header.nextElementSibling;
             content.classList.toggle('collapsed');
             const icon = header.querySelector('i');
@@ -216,9 +216,9 @@
                 icon.style.float = 'right';
             }
         }
-    <\/script>
+    </script>
 </body>
-</html>`;
+</html>
 
         const blob = new Blob([fullHtml], {type: 'text/html'});
         const link = document.createElement('a');
