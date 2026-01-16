@@ -315,17 +315,20 @@ if cool_file and os.path.exists(cool_file):
                         
                         # ★リンク生成 (プレースホルダー #host を使用)
                         search_word = f"{item['anime']} {item['song']}"
-                        # class "export-link" を付与し、Dashboard上では無効化する
+                        
+                        # クラス 'export-link' を付与。
+                        # ダッシュボード上ではCSSでクリック無効・装飾なしにする。
+                        # 保存されたHTMLでのみCSSでクリック可能にする。
                         link_tag_start = f'<a href="#host/search.php?searchword={search_word}" class="export-link" target="_blank">'
                         
                         analysis_html_content += f'<tr class="{row_class}">'
                         if i == 0:
                             analysis_html_content += f'<td rowspan="{rowspan}">{item["anime"]}</td>'
                         
-                        # song-cellクラスは付与しつつ、中身はリンクタグ
-                        analysis_html_content += f'<td align="center" class="song-cell">{link_tag_start}{item["type"]}</a></td>'
-                        analysis_html_content += f'<td class="song-cell">{link_tag_start}{item["artist"]}</a></td>'
-                        analysis_html_content += f'<td class="song-cell">{link_tag_start}{item["song"]}</a></td>'
+                        # セル内にリンクを配置（特別なクラス song-cell は削除し、標準のTDとして扱う）
+                        analysis_html_content += f'<td align="center">{link_tag_start}{item["type"]}</a></td>'
+                        analysis_html_content += f'<td>{link_tag_start}{item["artist"]}</a></td>'
+                        analysis_html_content += f'<td>{link_tag_start}{item["song"]}</a></td>'
                         
                         analysis_html_content += f'<td class="count-cell"><div class="count-wrapper"><span class="count-num">{count}</span>{bar_html}</div></td>'
                         analysis_html_content += '</tr>'
@@ -399,9 +402,10 @@ if cool_file and os.path.exists(cool_file):
 
                         search_word = f"{item['anime']} {item['song']}"
                         
-                        # ★ランキング行クリック: data-hrefにプレースホルダーを使用
+                        # ★ランキング行クリック用: data-hrefにプレースホルダーをセット
+                        # onclick="onRankingClick(this)" を埋め込むことで、保存されたHTMLでも確実に動作させる
                         ranking_html_content += f"""
-                        <tr class="has-count ranking-row" data-href="#host/search.php?searchword={search_word}">
+                        <tr class="has-count ranking-row" data-href="#host/search.php?searchword={search_word}" onclick="onRankingClick(this)">
                             <td align="center" style="font-weight:bold; font-size:1.1rem;">{rank_display}</td>
                             <td>{item["anime"]} <span style="font-size:0.8em; color:#777;">({item["type"]})</span></td>
                             <td style="font-weight:bold;">{item["song"]}</td>
@@ -475,6 +479,7 @@ html_content = f"""
         /* --- ダッシュボード(Live)用スタイル: リンクを無効化しレイアウトを自然に --- */
         
         /* Analysis: リンクタグはあるが、テキストのように見せる */
+        /* これにより、ダッシュボード上では「ただの文字」として表示され、幅計算も自然になる */
         a.export-link {{
             color: inherit;
             text-decoration: none;
@@ -491,6 +496,10 @@ html_content = f"""
         th, td {{
             padding: 5px 8px; text-align: left; border-bottom: 1px solid #eee;
             font-size: 13px; vertical-align: middle; line-height: 1.3;
+        }}
+        th {{
+            background-color: var(--primary-color); color: #fff;
+            position: sticky; top: 0; z-index: 10; font-weight: bold;
         }}
 
         .top-section {{
@@ -553,10 +562,6 @@ html_content = f"""
             width: 100%; border-collapse: separate; border-spacing: 0;
             background: #fff; border-radius: 4px; margin-top: 10px; margin-bottom: 20px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }}
-        th {{
-            background-color: var(--primary-color); color: #fff;
-            position: sticky; top: 0; z-index: 10; font-weight: bold;
         }}
         
         tr:nth-child(even) {{ background-color: #fafafa; }}
@@ -683,8 +688,12 @@ html_content = f"""
     </div>
 
 <script>
-    // ダッシュボード上ではURL書き換えを行わない（リンク自体無効化するため）
-    
+    // ダッシュボード上ではこの関数は空にしておく（または動作しないようにする）
+    // 保存後のHTMLで初めて意味を持つ
+    function onRankingClick(row) {{
+        // ダッシュボードでは何もしない
+    }}
+
     function openTab(tabName) {{
         document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
         document.getElementById(tabName).classList.add('active');
@@ -755,12 +764,14 @@ html_content = f"""
         .category-content {{ display: block; }}
         .category-content.collapsed {{ display: none; }}
         
-        /* 保存版用リンクスタイル: ここで初めてリンクらしく見せる */
-        /* ネガティブマージンを使ってセル全体をクリック可能にする */
+        /* ★保存版用スタイル: ここで初めてリンクとして有効化 */
+        
+        /* クール集計: ネガティブマージンを使ってセル全体をクリック可能にする */
+        /* 親tdのpaddingが5px 8pxなので、それを打ち消してセル一杯に広げる */
         a.export-link {{
             display: block; 
-            margin: -5px -8px; /* 親セルのpaddingを打ち消して広げる */
-            padding: 5px 8px;  /* 文字位置を元に戻す */
+            margin: -5px -8px; 
+            padding: 5px 8px;  
             color: #333; 
             text-decoration: none; 
             box-sizing: border-box;
@@ -768,7 +779,7 @@ html_content = f"""
         }}
         a.export-link:hover {{ background-color: #eef2f7; color: #3498db; }}
         
-        /* ランキング行スタイル */
+        /* ランキング: 行ホバー時のスタイル */
         tr.ranking-row {{ cursor: pointer; }}
         tr.ranking-row:hover {{ background-color: #dbeafe; }}
         
@@ -806,33 +817,32 @@ html_content = f"""
     ${{content}}
 
     <script>
-        // ★ 設定: この1行を変えるだけで全リンクに適用されます
+        // ★ 設定: この1行を書き換えるだけで、クール集計・ランキング全てのリンク先が変わります
         const host = 'http://ykr.moe:11059';
+
+        // ランキング行クリック関数（保存後のHTMLでのみ動作）
+        function onRankingClick(row) {{
+            // 文字選択中は発火させない
+            if (window.getSelection().toString().length > 0) return;
+            
+            const rawHref = row.getAttribute('data-href');
+            if (rawHref && rawHref.startsWith('#host')) {{
+                const url = rawHref.replace('#host', host);
+                window.open(url, '_blank');
+            }}
+        }}
 
         document.addEventListener('DOMContentLoaded', () => {{
             
-            // 1. Cool Analysisのリンク置換
+            // クール集計のリンク(Aタグ)のhrefを置換
             document.querySelectorAll('a.export-link').forEach(link => {{
                 const rawHref = link.getAttribute('href');
                 if (rawHref && rawHref.startsWith('#host')) {{
                     link.href = rawHref.replace('#host', host);
                 }}
             }});
-
-            // 2. Rankingの行クリックイベント付与
-            document.querySelectorAll('tr.ranking-row').forEach(row => {{
-                row.addEventListener('click', function(e) {{
-                    // 文字選択中は発火させない
-                    if (window.getSelection().toString().length > 0) return;
-                    
-                    const rawHref = this.getAttribute('data-href');
-                    if (rawHref && rawHref.startsWith('#host')) {{
-                        const url = rawHref.replace('#host', host);
-                        window.open(url, '_blank');
-                    }}
-                }});
-            }});
-
+            
+            // ランキングはonclick属性でonRankingClickを呼ぶので、ここでの処理は不要です
         }});
 
         function toggleCategory(header) {{
