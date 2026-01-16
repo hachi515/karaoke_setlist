@@ -149,9 +149,9 @@ else:
 # ★集計処理 (クール集計 + ランキング用データ収集)
 # ==========================================
 analysis_html_content = "" 
-ranking_html_content = "" # ランキング用HTML格納変数
+ranking_html_content = "" 
 cool_data_exists = False
-ranking_data_list = [] # ランキング計算用のリスト
+ranking_data_list = [] 
 
 cool_file = "cool_analysis.csv" 
 
@@ -295,7 +295,6 @@ if cool_file and os.path.exists(cool_file):
 
                         count = len(target_history[final_mask])
                         
-                        # --- ★ランキング用データ収集 ---
                         ranking_data_list.append({
                             "category": category,
                             "anime": item["anime"],
@@ -304,7 +303,6 @@ if cool_file and os.path.exists(cool_file):
                             "type": item["type"],
                             "count": count
                         })
-                        # ------------------------------
 
                         row_class = "zero-count" if count == 0 else "has-count"
                         
@@ -328,22 +326,17 @@ if cool_file and os.path.exists(cool_file):
             print("クール集計処理完了。")
             
             # ==========================================
-            # ★ランキングHTML生成処理
+            # ★ランキングHTML生成処理 (同率順位対応版)
             # ==========================================
             print("ランキング生成処理開始...")
             
-            # カテゴリごとにランキング生成
             for target_cat in ALLOWED_CATEGORIES:
                 if target_cat not in categorized_data:
                     continue
                     
-                # そのカテゴリで、歌唱数 > 0 のデータを抽出
                 cat_items = [d for d in ranking_data_list if d["category"] == target_cat and d["count"] > 0]
-                
-                # 歌唱数(降順)でソート。同数の場合は曲名順にするなど適宜調整可能
                 cat_items.sort(key=lambda x: x["count"], reverse=True)
                 
-                # 上位20件のみ
                 top_items = cat_items[:20]
                 
                 ranking_html_content += f"""
@@ -368,19 +361,31 @@ if cool_file and os.path.exists(cool_file):
                 if not top_items:
                     ranking_html_content += '<tr><td colspan="5" style="text-align:center; padding:20px;">歌唱データがありません</td></tr>'
                 else:
-                    for rank, item in enumerate(top_items, 1):
-                        rank_class = f"rank-{rank}" if rank <= 3 else "rank-normal"
+                    # --- 同率順位ロジック (競技方式 1224) ---
+                    previous_count = None
+                    current_rank = 0
+                    
+                    for i, item in enumerate(top_items):
+                        # iは0から始まるインデックス。
+                        # 前の件数と異なれば、順位は現在の位置(i+1)になる
+                        # 前の件数と同じなら、順位は更新せず前と同じまま
+                        if item["count"] != previous_count:
+                            current_rank = i + 1
                         
-                        # 1-3位のアイコン・装飾
-                        rank_display = f'<span class="rank-badge {rank_class}">{rank}</span>'
-                        if rank == 1:
+                        previous_count = item["count"]
+                        
+                        # 表示用装飾の判定
+                        rank_class = f"rank-{current_rank}" if current_rank <= 3 else "rank-normal"
+                        
+                        rank_display = f'<span class="rank-badge {rank_class}">{current_rank}</span>'
+                        
+                        if current_rank == 1:
                             rank_display += ' <i class="fas fa-crown" style="color:#FFD700;"></i>'
-                        elif rank == 2:
+                        elif current_rank == 2:
                             rank_display += ' <i class="fas fa-medal" style="color:#C0C0C0;"></i>'
-                        elif rank == 3:
+                        elif current_rank == 3:
                             rank_display += ' <i class="fas fa-medal" style="color:#CD7F32;"></i>'
                             
-                        # バーチャート
                         bar_width = min(item["count"] * 20, 150)
                         bar_html = f'<div class="bar-chart" style="width:{bar_width}px;"></div>'
 
