@@ -62,7 +62,7 @@ def normalize_text(text):
     # 2. 拡張子の削除
     text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
     
-    # 3. 括弧と中身を除去
+    # 3. 括弧と中身を除去 (ファイル名マッチングの精度向上のため一時的にスペース化)
     text = re.sub(r'[\[\(\{【].*?[\]\)\}】]', ' ', text)
     
     # 4. キー変更情報を削除
@@ -156,16 +156,17 @@ ranking_data_list = []
 cool_file = "cool_analysis.csv" 
 offline_file = "offline_list.csv" # オフラインリスト
 
-# --- オフラインリストの読み込み ---
+# --- オフラインリストの読み込みと正規化 ---
 offline_targets = []
 if os.path.exists(offline_file):
     try:
-        # csv読み込み (エンコーディングは環境に合わせて自動または指定)
         offline_df = pd.read_csv(offline_file)
         offline_df = offline_df.fillna("")
-        # 曲名列をリスト化 (曲名列に歌手名等も含まれる前提)
         if '曲名' in offline_df.columns:
-            offline_targets = offline_df['曲名'].astype(str).tolist()
+            # 比較用に事前に正規化しておく
+            raw_targets = offline_df['曲名'].astype(str).tolist()
+            offline_targets = [normalize_text(t) for t in raw_targets]
+            
         print(f"オフラインリスト({offline_file})を読み込みました。件数: {len(offline_targets)}")
     except Exception as e:
         print(f"オフラインリスト読み込みエラー: {e}")
@@ -276,7 +277,8 @@ if cool_file and os.path.exists(cool_file):
                         <thead>
                             <tr>
                                 <th style="width:25%; min-width:180px;">作品名</th>
-                                <th style="width:5%; min-width:40px;">作成</th> <th style="width:10%; min-width:60px;">OP/ED</th>
+                                <th style="width:5%; min-width:40px;">作成</th>
+                                <th style="width:10%; min-width:60px;">OP/ED</th>
                                 <th style="width:20%; min-width:150px;">歌手</th>
                                 <th style="width:25%; min-width:180px;">曲名</th>
                                 <th style="width:15%; min-width:60px;">歌唱数</th>
@@ -296,6 +298,7 @@ if cool_file and os.path.exists(cool_file):
                     for i, item in enumerate(group_items):
                         target_song_norm = normalize_text(item["song"])
                         target_anime_norm = normalize_text(item["anime"])
+                        target_artist_norm = normalize_text(item["artist"])
                         
                         # --- 歌唱数集計 ---
                         song_match_mask = check_match(target_song_norm, target_history['norm_filename'])
@@ -316,14 +319,25 @@ if cool_file and os.path.exists(cool_file):
                         count = len(target_history[final_mask])
                         
                         # --- 作成数(オフラインリスト)集計 ---
-                        # ロジック: offline_targets(曲名カラム)の中に、itemの「曲名」と「歌手」の両方が含まれているか
+                        # ロジック改良: 
+                        # 1. 曲名が含まれていること (必須)
+                        # 2. かつ、(作品名が含まれている OR 歌手名が含まれている)
+                        # ※ すべて正規化後の文字列で比較
                         creation_count = 0
-                        t_song = item["song"]
-                        t_artist = item["artist"]
-                        if t_song and t_artist:
+                        if target_song_norm:
                             for offline_str in offline_targets:
-                                if t_song in offline_str and t_artist in offline_str:
-                                    creation_count += 1
+                                # 曲名が含まれているか確認
+                                if target_song_norm in offline_str:
+                                    # 追加条件: 作品名 または 歌手名 が含まれているか
+                                    hit_anime = (target_anime_norm in offline_str) if target_anime_norm else False
+                                    hit_artist = (target_artist_norm in offline_str) if target_artist_norm else False
+                                    
+                                    # 作品名または歌手名のどちらか片方でも一致すればカウント
+                                    if hit_anime or hit_artist:
+                                        creation_count += 1
+                                    elif not target_anime_norm and not target_artist_norm:
+                                        # 両方空情報なら曲名一致だけでカウント（稀なケース）
+                                        creation_count += 1
 
                         ranking_data_list.append({
                             "category": category,
@@ -383,7 +397,8 @@ if cool_file and os.path.exists(cool_file):
                     continue
                     
                 cat_items = [d for d in ranking_data_list if d["category"] == target_cat and d["count"] > 0]
-                cat_items.sort(key=lambda x: x["count"], reverse=True)
+                # カウント順、同じなら曲名順でソート
+                cat_items.sort(key=lambda x: (x["count"], x["song"]), reverse=True)
                 
                 ranking_html_content += f"""
                 <div class="category-block">
@@ -409,15 +424,21 @@ if cool_file and os.path.exists(cool_file):
                 else:
                     previous_count = None
                     current_rank = 0
+                    real_rank_counter = 0 # 実際の行数カウンタ
                     
                     for i, item in enumerate(cat_items):
+                        real_rank_counter += 1
+                        
+                        # ランキング変動ロジック
                         if item["count"] != previous_count:
-                            current_rank = i + 1
+                            current_rank = real_rank_counter
+                        
+                        # ★ランキング同率処理の変更
+                        # 「20位以内」または「20位と同率」なら表示し続ける
+                        if current_rank > 20 and item["count"] < previous_count:
+                            break
                         
                         previous_count = item["count"]
-                        
-                        if current_rank > 20:
-                            break
                         
                         rank_class = f"rank-{current_rank}" if current_rank <= 3 else "rank-normal"
                         
@@ -606,192 +627,6 @@ html_content = f"""
             user-select: none;
         }}
         .category-content {{ display: block; transition: all 0.3s; }}
-        .category-content.collapsed {{ display: none; }}
-        
-        tr.zero-count {{ color: #ccc; }}
-        .gray-text {{ color: gray !important; }} /* 強制的にグレー */
-        tr.has-count {{ background-color: #fff; color: #333; }}
-        
-        .count-wrapper {{ display: flex; align-items: center; gap: 8px; }}
-        .count-num {{ width: 25px; text-align: right; font-size:1.1rem; }}
-        .bar-chart {{
-            height: 10px; background: linear-gradient(90deg, #3498db, #2980b9);
-            border-radius: 5px;
-        }}
-        td[rowspan] {{
-            background-color: #fff;
-            border-right: 1px solid #eee;
-            vertical-align: middle;
-            font-weight: normal; color: inherit;      
-        }}
-
-        .rank-badge {{
-            display: inline-block; width: 24px; height: 24px; line-height: 24px;
-            border-radius: 50%; text-align: center; color: #fff; font-weight: bold; font-size: 12px;
-            background-color: #95a5a6; 
-        }}
-        .rank-1 {{ background-color: #f1c40f; box-shadow: 0 0 5px #f39c12; font-size: 14px; width: 28px; height: 28px; line-height: 28px; }} 
-        .rank-2 {{ background-color: #bdc3c7; box-shadow: 0 0 5px #7f8c8d; }} 
-        .rank-3 {{ background-color: #d35400; opacity: 0.8; }} 
-        
-        .rankingTable tr:nth-child(1) td {{ background-color: #fffae6; }}
-        .rankingTable tr:nth-child(2) td {{ background-color: #f8f9fa; }}
-
-        @media print {{
-            * {{
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-                color-adjust: exact !important;
-            }}
-            body {{
-                overflow: visible !important;
-                height: auto !important;
-                display: block !important;
-            }}
-            .top-section {{ display: none !important; }}
-            .content-area {{ overflow: visible !important; position: static !important; }}
-            .tab-content {{ 
-                position: static !important; 
-                display: block !important; 
-                overflow: visible !important; 
-                padding: 0 !important;
-            }}
-            .category-content {{ display: block !important; }}
-            
-            tbody.anime-group {{
-                break-inside: avoid;
-                page-break-inside: avoid;
-            }}
-            .category-header {{ page-break-after: avoid; }}
-            thead {{ display: table-header-group; }}
-        }}
-    </style>
-</head>
-<body>
-    <div class="top-section">
-        <div class="header-inner">
-            <h1>Karaoke Dashboard</h1>
-            <div class="update-time">{current_datetime_str} 更新</div>
-        </div>
-        <div class="tabs">
-            <button class="tab-btn active" onclick="openTab('setlist')">セットリスト</button>
-            <button class="tab-btn" onclick="openTab('analysis')">クール集計</button>
-            <button class="tab-btn" onclick="openTab('ranking')">ランキング</button>
-        </div>
-        <div class="controls-row">
-            <div id="ctrl-setlist" class="ctrl-setlist">
-                <input type="text" id="searchInput" class="search-box" placeholder="キーワード (例: 曲名 歌手)...">
-                <button onclick="performSearch()" class="btn"><i class="fas fa-search"></i> 検索</button>
-                <button onclick="resetFilter()" class="btn" style="background:#95a5a6"><i class="fas fa-undo"></i></button>
-                <div class="count-display" id="countDisplay">読み込み中...</div>
-            </div>
-            <div id="ctrl-analysis" class="ctrl-analysis">
-                <button onclick="downloadHTML()" class="btn btn-dl"><i class="fas fa-file-code"></i> HTML保存</button>
-            </div>
-            <div id="ctrl-ranking" class="ctrl-ranking">
-                <button onclick="downloadRanking()" class="btn btn-dl"><i class="fas fa-trophy"></i> ランキング保存</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="content-area">
-        <div id="setlist" class="tab-content active">
-            <table id="setlistTable">
-                <thead><tr>{setlist_headers}</tr></thead>
-                <tbody>{setlist_rows}</tbody>
-            </table>
-            {"" if setlist_rows else '<div style="padding:20px;text-align:center">データがありません</div>'}
-        </div>
-
-        <div id="analysis" class="tab-content">
-            <div style="margin-top:15px; font-size:0.9rem; color:#7f8c8d; text-align:right;">集計対象: 2026/01/01 - 2026/03/31</div>
-            <div id="print-target">
-                {analysis_html_content if cool_data_exists else '<div style="padding:20px;text-align:center;color:#e74c3c;">集計データがありません</div>'}
-            </div>
-        </div>
-
-        <div id="ranking" class="tab-content">
-            <div style="margin-top:15px; font-size:0.9rem; color:#7f8c8d; text-align:right;">集計対象: 2026/01/01 - 2026/03/31</div>
-            <div id="ranking-print-target">
-                {ranking_html_content if ranking_html_content else '<div style="padding:20px;text-align:center;color:#e74c3c;">ランキング対象データがありません</div>'}
-            </div>
-        </div>
-    </div>
-
-<script>
-    // ダッシュボード上では空関数 (クリック無効)
-    function onRankingClick(row) {{
-        // 何もしない
-    }}
-
-    function openTab(tabName) {{
-        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-        document.getElementById(tabName).classList.add('active');
-        
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        
-        let btnIndex = 0;
-        if (tabName === 'analysis') btnIndex = 1;
-        if (tabName === 'ranking') btnIndex = 2;
-        
-        document.querySelectorAll('.tab-btn')[btnIndex].classList.add('active');
-        
-        document.getElementById('ctrl-setlist').style.display = 'none';
-        document.getElementById('ctrl-analysis').style.display = 'none';
-        document.getElementById('ctrl-ranking').style.display = 'none';
-
-        if(tabName === 'setlist') {{
-            document.getElementById('ctrl-setlist').style.display = 'flex';
-        }} else if(tabName === 'analysis') {{
-            document.getElementById('ctrl-analysis').style.display = 'flex';
-        }} else if(tabName === 'ranking') {{
-            document.getElementById('ctrl-ranking').style.display = 'flex';
-        }}
-    }}
-
-    function toggleCategory(header) {{
-        const content = header.nextElementSibling;
-        content.classList.toggle('collapsed');
-        const icon = header.querySelector('i');
-        icon.className = content.classList.contains('collapsed') ? 'fas fa-chevron-right' : 'fas fa-chevron-down';
-        icon.style.float = 'right';
-    }}
-
-    // クール集計のダウンロード
-    function downloadHTML() {{
-        const element = document.getElementById('print-target');
-        const htmlContent = element.innerHTML;
-        generateDownload(htmlContent, 'karaoke_analysis.html', 'クール集計結果');
-    }}
-
-    // ランキングのダウンロード
-    function downloadRanking() {{
-        const element = document.getElementById('ranking-print-target');
-        const htmlContent = element.innerHTML;
-        generateDownload(htmlContent, 'karaoke_ranking.html', 'カラオケ歌唱ランキング');
-    }}
-
-    // ダウンロード共通処理
-    function generateDownload(content, filename, title) {{
-        const fullHtml = `
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <title>${{title}}</title>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <style>
-        body {{ font-family: "Helvetica Neue", Arial, sans-serif; font-size: 13px; color: #333; }}
-        table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; }}
-        th, td {{ border: 1px solid #ccc; padding: 5px 8px; text-align: left; vertical-align: middle; }}
-        th {{ background-color: #2c3e50; color: #fff; }}
-        td[rowspan] {{ background-color: #fff; }}
-        
-        .category-header {{ 
-            background: #667eea; color: white; padding: 10px; margin-top: 20px; 
-            font-weight: bold; border-radius: 4px; cursor: pointer; user-select: none;
-        }}
-        .category-content {{ display: block; }}
         .category-content.collapsed {{ display: none; }}
         
         /* 作成数0のグレーアウト */
