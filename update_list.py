@@ -51,7 +51,7 @@ room_map = {
     11106: "冨塚部屋"
 }
 
-# --- 関数: テキスト正規化 (ご提示のロジックを踏襲) ---
+# --- 関数: テキスト正規化 ---
 def normalize_text(text):
     if not isinstance(text, str):
         return str(text)
@@ -62,7 +62,7 @@ def normalize_text(text):
     # 2. 拡張子の削除
     text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
     
-    # 3. 括弧と中身を除去 (THE REVO対策: これで【FINAL SEASON】などが消える)
+    # 3. 括弧と中身を除去
     text = re.sub(r'[\[\(\{【].*?[\]\)\}】]', ' ', text)
     
     # 4. キー変更情報を削除
@@ -146,10 +146,13 @@ else:
 
 
 # ==========================================
-# ★集計処理 (救済ロジック + HTML出力)
+# ★集計処理 (クール集計 + ランキング用データ収集)
 # ==========================================
 analysis_html_content = "" 
+ranking_html_content = "" # ランキング用HTML格納変数
 cool_data_exists = False
+ranking_data_list = [] # ランキング計算用のリスト
+
 cool_file = "cool_analysis.csv" 
 
 if not os.path.exists(cool_file):
@@ -177,23 +180,16 @@ if cool_file and os.path.exists(cool_file):
             analysis_source_df = final_df.copy()
             analysis_source_df['dt_obj'] = pd.to_datetime(analysis_source_df['取得日'], errors='coerce')
             
-            # --- ★ここが重要: 救済ロジックと正規化の共存 ---
-            # 1. まず「曲名（ファイル名）」を正規化する（これで【FINAL SEASON】などは消える）
+            # --- 正規化と救済ロジック ---
             analysis_source_df['norm_filename'] = analysis_source_df['曲名（ファイル名）'].apply(normalize_text)
             
-            # 2. 次に「作品名」を正規化するが、ここで「-」の場合の救済を行う
             def get_rescued_workname(row):
                 raw_work = str(row['作品名']) if pd.notna(row['作品名']) else ""
                 raw_song = str(row['曲名（ファイル名）']) if pd.notna(row['曲名（ファイル名）']) else ""
-                
-                # 作品名が「-」「空」「nan」の場合のみ、元のファイル名から【】の中身を抽出して作品名とする
                 if raw_work.strip() in ["-", "−", "", "nan"]:
                     match = re.search(r'【(.*?)】', raw_song)
                     if match:
-                        # 抽出した中身を正規化して返す
                         return normalize_text(match.group(1))
-                
-                # それ以外は通常の作品名を正規化して返す
                 return normalize_text(raw_work)
 
             if '作品名' in analysis_source_df.columns:
@@ -249,6 +245,7 @@ if cool_file and os.path.exists(cool_file):
                 else:
                     return source_series.str.contains(safe_target, case=False, na=False)
 
+            # --- クール集計HTML生成 & ランキングデータ収集 ---
             for category, items in categorized_data.items():
                 analysis_html_content += f"""
                 <div class="category-block">
@@ -297,6 +294,18 @@ if cool_file and os.path.exists(cool_file):
                             final_mask = pd.Series([False] * len(target_history))
 
                         count = len(target_history[final_mask])
+                        
+                        # --- ★ランキング用データ収集 ---
+                        ranking_data_list.append({
+                            "category": category,
+                            "anime": item["anime"],
+                            "song": item["song"],
+                            "artist": item["artist"],
+                            "type": item["type"],
+                            "count": count
+                        })
+                        # ------------------------------
+
                         row_class = "zero-count" if count == 0 else "has-count"
                         
                         bar_width = min(count * 20, 150)
@@ -317,6 +326,77 @@ if cool_file and os.path.exists(cool_file):
 
             cool_data_exists = True
             print("クール集計処理完了。")
+            
+            # ==========================================
+            # ★ランキングHTML生成処理
+            # ==========================================
+            print("ランキング生成処理開始...")
+            
+            # カテゴリごとにランキング生成
+            for target_cat in ALLOWED_CATEGORIES:
+                if target_cat not in categorized_data:
+                    continue
+                    
+                # そのカテゴリで、歌唱数 > 0 のデータを抽出
+                cat_items = [d for d in ranking_data_list if d["category"] == target_cat and d["count"] > 0]
+                
+                # 歌唱数(降順)でソート。同数の場合は曲名順にするなど適宜調整可能
+                cat_items.sort(key=lambda x: x["count"], reverse=True)
+                
+                # 上位20件のみ
+                top_items = cat_items[:20]
+                
+                ranking_html_content += f"""
+                <div class="category-block">
+                    <div class="category-header">
+                        {target_cat} ランキング (TOP 20)
+                    </div>
+                    <div class="category-content" style="display:block;">
+                    <table class="rankingTable">
+                        <thead>
+                            <tr>
+                                <th width="10%">順位</th>
+                                <th width="25%">作品名</th>
+                                <th width="25%">曲名</th>
+                                <th width="20%">歌手</th>
+                                <th width="20%">歌唱数</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                """
+                
+                if not top_items:
+                    ranking_html_content += '<tr><td colspan="5" style="text-align:center; padding:20px;">歌唱データがありません</td></tr>'
+                else:
+                    for rank, item in enumerate(top_items, 1):
+                        rank_class = f"rank-{rank}" if rank <= 3 else "rank-normal"
+                        
+                        # 1-3位のアイコン・装飾
+                        rank_display = f'<span class="rank-badge {rank_class}">{rank}</span>'
+                        if rank == 1:
+                            rank_display += ' <i class="fas fa-crown" style="color:#FFD700;"></i>'
+                        elif rank == 2:
+                            rank_display += ' <i class="fas fa-medal" style="color:#C0C0C0;"></i>'
+                        elif rank == 3:
+                            rank_display += ' <i class="fas fa-medal" style="color:#CD7F32;"></i>'
+                            
+                        # バーチャート
+                        bar_width = min(item["count"] * 20, 150)
+                        bar_html = f'<div class="bar-chart" style="width:{bar_width}px;"></div>'
+
+                        ranking_html_content += f"""
+                        <tr class="has-count">
+                            <td align="center" style="font-weight:bold; font-size:1.1rem;">{rank_display}</td>
+                            <td>{item["anime"]} <span style="font-size:0.8em; color:#777;">({item["type"]})</span></td>
+                            <td style="font-weight:bold;">{item["song"]}</td>
+                            <td>{item["artist"]}</td>
+                            <td class="count-cell"><div class="count-wrapper"><span class="count-num">{item["count"]}</span>{bar_html}</div></td>
+                        </tr>
+                        """
+                        
+                ranking_html_content += "</tbody></table></div></div>"
+            print("ランキング生成完了。")
+
         else:
             print("CSV読み込み失敗")
 
@@ -418,6 +498,7 @@ html_content = f"""
 
         .ctrl-setlist {{ display: flex; width: 100%; align-items: center; gap:8px; }}
         .ctrl-analysis {{ display: none; width: 100%; align-items: center; justify-content: flex-end; }}
+        .ctrl-ranking {{ display: none; width: 100%; align-items: center; justify-content: flex-end; }}
 
         .content-area {{
             flex: 1; position: relative; overflow: hidden; 
@@ -475,6 +556,20 @@ html_content = f"""
             font-weight: normal; color: inherit;      
         }}
 
+        /* --- ランキング用スタイル --- */
+        .rank-badge {{
+            display: inline-block; width: 24px; height: 24px; line-height: 24px;
+            border-radius: 50%; text-align: center; color: #fff; font-weight: bold; font-size: 12px;
+            background-color: #95a5a6; /* Default gray */
+        }}
+        .rank-1 {{ background-color: #f1c40f; box-shadow: 0 0 5px #f39c12; font-size: 14px; width: 28px; height: 28px; line-height: 28px; }} /* Gold */
+        .rank-2 {{ background-color: #bdc3c7; box-shadow: 0 0 5px #7f8c8d; }} /* Silver */
+        .rank-3 {{ background-color: #d35400; opacity: 0.8; }} /* Bronze */
+        
+        /* 1位の行だけ少し強調 */
+        .rankingTable tr:nth-child(1) td {{ background-color: #fffae6; }}
+        .rankingTable tr:nth-child(2) td {{ background-color: #f8f9fa; }}
+
         /* --- 印刷用スタイル --- */
         @media print {{
             * {{
@@ -515,6 +610,7 @@ html_content = f"""
         <div class="tabs">
             <button class="tab-btn active" onclick="openTab('setlist')">セットリスト</button>
             <button class="tab-btn" onclick="openTab('analysis')">クール集計</button>
+            <button class="tab-btn" onclick="openTab('ranking')">ランキング</button>
         </div>
         <div class="controls-row">
             <div id="ctrl-setlist" class="ctrl-setlist">
@@ -525,6 +621,9 @@ html_content = f"""
             </div>
             <div id="ctrl-analysis" class="ctrl-analysis">
                 <button onclick="downloadHTML()" class="btn btn-dl"><i class="fas fa-file-code"></i> HTML保存</button>
+            </div>
+            <div id="ctrl-ranking" class="ctrl-ranking">
+                <button onclick="downloadRanking()" class="btn btn-dl"><i class="fas fa-trophy"></i> ランキング保存</button>
             </div>
         </div>
     </div>
@@ -544,6 +643,13 @@ html_content = f"""
                 {analysis_html_content if cool_data_exists else '<div style="padding:20px;text-align:center;color:#e74c3c;">集計データがありません</div>'}
             </div>
         </div>
+
+        <div id="ranking" class="tab-content">
+            <div style="margin-top:15px; font-size:0.9rem; color:#7f8c8d; text-align:right;">集計対象: 2026/01/01 - 2026/03/31</div>
+            <div id="ranking-print-target">
+                {ranking_html_content if ranking_html_content else '<div style="padding:20px;text-align:center;color:#e74c3c;">ランキング対象データがありません</div>'}
+            </div>
+        </div>
     </div>
 
 <script>
@@ -552,15 +658,24 @@ html_content = f"""
         document.getElementById(tabName).classList.add('active');
         
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        const btnIndex = tabName === 'setlist' ? 0 : 1;
+        
+        let btnIndex = 0;
+        if (tabName === 'analysis') btnIndex = 1;
+        if (tabName === 'ranking') btnIndex = 2;
+        
         document.querySelectorAll('.tab-btn')[btnIndex].classList.add('active');
         
+        // コントロール表示切り替え
+        document.getElementById('ctrl-setlist').style.display = 'none';
+        document.getElementById('ctrl-analysis').style.display = 'none';
+        document.getElementById('ctrl-ranking').style.display = 'none';
+
         if(tabName === 'setlist') {{
             document.getElementById('ctrl-setlist').style.display = 'flex';
-            document.getElementById('ctrl-analysis').style.display = 'none';
-        }} else {{
-            document.getElementById('ctrl-setlist').style.display = 'none';
+        }} else if(tabName === 'analysis') {{
             document.getElementById('ctrl-analysis').style.display = 'flex';
+        }} else if(tabName === 'ranking') {{
+            document.getElementById('ctrl-ranking').style.display = 'flex';
         }}
     }}
 
@@ -572,19 +687,32 @@ html_content = f"""
         icon.style.float = 'right';
     }}
 
+    // クール集計のダウンロード
     function downloadHTML() {{
         const element = document.getElementById('print-target');
         const hiddenContents = element.querySelectorAll('.category-content.collapsed');
         hiddenContents.forEach(el => el.classList.remove('collapsed'));
         
         const htmlContent = element.innerHTML;
-        
+        generateDownload(htmlContent, 'karaoke_analysis.html', 'クール集計結果');
+    }}
+
+    // ランキングのダウンロード
+    function downloadRanking() {{
+        const element = document.getElementById('ranking-print-target');
+        const htmlContent = element.innerHTML;
+        generateDownload(htmlContent, 'karaoke_ranking.html', 'カラオケ歌唱ランキング');
+    }}
+
+    // ダウンロード共通処理
+    function generateDownload(content, filename, title) {{
         const fullHtml = `
 <!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>Cool Analysis Output</title>
+    <title>${{title}}</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         body {{ font-family: "Helvetica Neue", Arial, sans-serif; font-size: 13px; color: #333; }}
         table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; }}
@@ -599,6 +727,18 @@ html_content = f"""
         .count-num {{ width: 25px; text-align: right; }}
         .bar-chart {{ height: 10px; background: #3498db; border-radius: 5px; }}
         
+        /* ランキング用スタイル */
+        .rank-badge {{
+            display: inline-block; width: 24px; height: 24px; line-height: 24px;
+            border-radius: 50%; text-align: center; color: #fff; font-weight: bold; font-size: 12px;
+            background-color: #95a5a6;
+        }}
+        .rank-1 {{ background-color: #f1c40f; width: 28px; height: 28px; line-height: 28px; }}
+        .rank-2 {{ background-color: #bdc3c7; }}
+        .rank-3 {{ background-color: #d35400; }}
+        .rankingTable tr:nth-child(1) td {{ background-color: #fffae6; }}
+        .rankingTable tr:nth-child(2) td {{ background-color: #f8f9fa; }}
+
         @media print {{
             * {{
                 -webkit-print-color-adjust: exact !important;
@@ -612,16 +752,16 @@ html_content = f"""
     </style>
 </head>
 <body>
-    <h1>クール集計結果</h1>
+    <h1>${{title}}</h1>
     <div style="text-align:right; font-size:0.9rem; color:#777;">出力日: {current_date_str}</div>
-    ${{htmlContent}}
+    ${{content}}
 </body>
 </html>`;
 
         const blob = new Blob([fullHtml], {{type: 'text/html'}});
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = 'karaoke_analysis.html';
+        link.download = filename;
         link.click();
     }}
 
