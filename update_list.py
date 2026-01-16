@@ -182,23 +182,20 @@ if cool_file and os.path.exists(cool_file):
             ]
 
             categorized_data = {}
+            # 二重カウント防止のため、すべてのターゲット(集計対象)をフラットなリストにも保持
             all_targets = [] 
             
             ALLOWED_CATEGORIES = ["2026年冬アニメ", "2025年秋アニメ"]
             current_category = None
             
             for idx, row in raw_df.iterrows():
-                # --- ★修正: 空行判定を強化（カテゴリ区切り） ---
-                # 行の要素がすべて空、またはNaNの場合
+                # 空行が来たらカテゴリブロック終了とみなす
                 is_empty_line = not any(str(x).strip() for x in row if pd.notna(x))
-                
                 if is_empty_line:
-                    # 空行が来たらカテゴリブロック終了とみなす
                     current_category = None
                     continue
 
                 col0 = str(row[0]).strip()
-
                 is_category_line = any(cat in col0 for cat in ALLOWED_CATEGORIES) and "作品名" not in col0
 
                 if is_category_line:
@@ -217,7 +214,7 @@ if cool_file and os.path.exists(cool_file):
                 
                 if not anime and not song: continue
 
-                # 救済ロジック
+                # ★救済ロジック
                 if anime in ["-", "−", "", "nan"] and song:
                     match = re.search(r'[【\[『（\(](.*?)[】\]』）\)]', song)
                     if match:
@@ -225,23 +222,24 @@ if cool_file and os.path.exists(cool_file):
                         if len(potential_anime) > 0 and potential_anime.upper() not in ["OP", "ED", "MV", "PV", "LIVE"]:
                             anime = potential_anime
 
-                # ターゲットごとのオブジェクトを作成
-                # csv_index を保持して、後で「より下の行にあるもの」を優先できるようにする
+                # ターゲットごとのオブジェクト
                 item = {
                     "anime": anime, 
                     "type": type_, 
                     "artist": artist, 
                     "song": song,
-                    "count": 0, 
+                    "count": 0, # カウント保持用
                     "norm_song": normalize_text(song),
                     "norm_anime": normalize_text(anime),
-                    "csv_index": idx # CSVの行番号を保持
+                    "csv_index": idx # CSVの並び順（ランキング順）を保持
                 }
                 
                 categorized_data[current_category].append(item)
                 all_targets.append(item)
 
-            # --- ★二重カウント防止 & 後勝ちルール ---
+            # --- ★二重カウント防止のための集計ロジック (Best Match) ---
+            # 履歴1行ごとに、最もスコアが高いターゲット1つだけを選んでカウントする
+            
             for h_idx, h_row in target_history.iterrows():
                 h_song = h_row['norm_filename']
                 h_work = h_row['norm_workname']
@@ -257,31 +255,36 @@ if cool_file and os.path.exists(cool_file):
                     # 1. 曲名マッチング
                     is_match = False
                     if re.match(r'^[A-Z0-9\s]+$', t_song):
+                        # 英数字のみの場合、単語境界チェック
                         pattern = r'(?:^|[^A-Z0-9])' + re.escape(t_song) + r'(?:[^A-Z0-9]|$)'
                         if re.search(pattern, h_song):
                             is_match = True
                     else:
+                        # 通常の部分一致
                         if t_song in h_song:
                             is_match = True
                     
                     if not is_match: continue
 
-                    # 2. 作品名チェック
+                    # 2. 作品名チェック (ターゲットに作品名がある場合)
                     if t_anime and t_anime not in ["-", "−"]: 
                         if (t_anime not in h_song) and (not h_work or t_anime not in h_work):
                             continue 
 
                     # 3. スコア計算
-                    score = len(t_song)
-                    if t_song == h_song: score += 1000
-                    if t_anime and t_anime not in ["-", "−"]: score += 500
+                    score = len(t_song) # 基本スコアは一致した曲名の長さ (長いほど具体的)
+                    
+                    if t_song == h_song: 
+                        score += 1000 # 完全一致は非常に強い
+                    
+                    if t_anime and t_anime not in ["-", "−"]: 
+                        score += 500 # 作品名指定があるものは優先度アップ
                     
                     matched_targets.append((score, target))
                 
-                # 最もスコアが高いターゲットを選ぶ
-                # 同点の場合は「CSVの行番号が大きい（後ろにある）」方を優先する（後勝ち）
+                # 候補の中で最もスコアが高いターゲットを1つ選ぶ
                 if matched_targets:
-                    # ソート優先順位: 1.スコア(降順) 2.CSV行番号(降順)
+                    # スコア降順、次にCSVの行番号降順（後勝ち＝重複時は下のカテゴリ優先等のため）
                     matched_targets.sort(key=lambda x: (x[0], x[1]['csv_index']), reverse=True)
                     best_target = matched_targets[0][1]
                     best_target['count'] += 1
@@ -306,7 +309,8 @@ if cool_file and os.path.exists(cool_file):
                         </thead>
                 """
                 
-                items.sort(key=lambda x: x['anime'])
+                # ★修正: ここでのソート(items.sort)を廃止し、CSVの並び順(items)をそのまま使用
+                # groupbyは連続したキーをまとめる仕様なので、CSV上でまとまっていれば統合される
                 def get_anime_key(x): return x['anime']
                 
                 for anime_name, group_iter in groupby(items, key=get_anime_key):
