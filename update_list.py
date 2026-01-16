@@ -8,7 +8,7 @@ from itertools import groupby
 
 # --- 時刻設定 ---
 now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
-current_date_str = now.strftime("%Y/%m/%d") 
+current_date_str = now.strftime("%Y/%m/%d")
 current_datetime_str = now.strftime("%Y/%m/%d %H:%M")
 
 # --- 設定: ポート番号と部屋主の名前の対応表 ---
@@ -156,17 +156,17 @@ ranking_data_list = []
 cool_file = "cool_analysis.csv" 
 offline_file = "offline_list.csv" # オフラインリスト
 
-# --- オフラインリストの読み込みと正規化 ---
+# --- オフラインリストの読み込み ---
 offline_targets = []
 if os.path.exists(offline_file):
     try:
+        # csv読み込み
         offline_df = pd.read_csv(offline_file)
         offline_df = offline_df.fillna("")
+        # 曲名列をリスト化 (曲名列に歌手名等も含まれる前提)
         if '曲名' in offline_df.columns:
-            # 比較用に事前に正規化しておく
-            raw_targets = offline_df['曲名'].astype(str).tolist()
-            offline_targets = [normalize_text(t) for t in raw_targets]
-            
+            # ★修正: 読み込み時点で正規化しておくことでマッチング精度を上げる
+            offline_targets = [normalize_text(str(x)) for x in offline_df['曲名'].tolist()]
         print(f"オフラインリスト({offline_file})を読み込みました。件数: {len(offline_targets)}")
     except Exception as e:
         print(f"オフラインリスト読み込みエラー: {e}")
@@ -277,8 +277,7 @@ if cool_file and os.path.exists(cool_file):
                         <thead>
                             <tr>
                                 <th style="width:25%; min-width:180px;">作品名</th>
-                                <th style="width:5%; min-width:40px;">作成</th>
-                                <th style="width:10%; min-width:60px;">OP/ED</th>
+                                <th style="width:5%; min-width:40px;">作成</th> <th style="width:10%; min-width:60px;">OP/ED</th>
                                 <th style="width:20%; min-width:150px;">歌手</th>
                                 <th style="width:25%; min-width:180px;">曲名</th>
                                 <th style="width:15%; min-width:60px;">歌唱数</th>
@@ -298,7 +297,7 @@ if cool_file and os.path.exists(cool_file):
                     for i, item in enumerate(group_items):
                         target_song_norm = normalize_text(item["song"])
                         target_anime_norm = normalize_text(item["anime"])
-                        target_artist_norm = normalize_text(item["artist"])
+                        target_artist_norm = normalize_text(item["artist"]) # 歌手名も正規化
                         
                         # --- 歌唱数集計 ---
                         song_match_mask = check_match(target_song_norm, target_history['norm_filename'])
@@ -318,25 +317,21 @@ if cool_file and os.path.exists(cool_file):
 
                         count = len(target_history[final_mask])
                         
-                        # --- 作成数(オフラインリスト)集計 ---
-                        # ロジック:
-                        # 1. 曲名が含まれていること (必須)
-                        # 2. かつ、(作品名が含まれている OR 歌手名が含まれている)
-                        # ※正規化済みの offline_targets リストを使用
+                        # --- ★作成数(オフラインリスト)集計 修正 ---
+                        # ロジック: 正規化した曲名がオフラインリスト(正規化済)に含まれているか
+                        # 歌手名がある場合は、それも含まれているかを確認して精度を高める
                         creation_count = 0
+                        
                         if target_song_norm:
                             for offline_str in offline_targets:
-                                # 曲名の一致を確認
+                                # 曲名が含まれているか
                                 if target_song_norm in offline_str:
-                                    # 作品名の一致(部分一致) または 歌手名の一致を確認
-                                    hit_anime = (target_anime_norm in offline_str) if target_anime_norm else False
-                                    hit_artist = (target_artist_norm in offline_str) if target_artist_norm else False
-                                    
-                                    # 「曲名」かつ「作品名または歌手名」が含まれていればカウント
-                                    if hit_anime or hit_artist:
-                                        creation_count += 1
-                                    elif not target_anime_norm and not target_artist_norm:
-                                        # 作品名も歌手名もない場合(稀)は曲名のみでカウント
+                                    # 歌手名も指定されている場合、それも含まれているかチェック
+                                    if target_artist_norm:
+                                        if target_artist_norm in offline_str:
+                                            creation_count += 1
+                                    else:
+                                        # 歌手名指定がない場合は曲名一致だけでカウント
                                         creation_count += 1
 
                         ranking_data_list.append({
@@ -348,19 +343,18 @@ if cool_file and os.path.exists(cool_file):
                             "count": count
                         })
 
-                        # 行スタイル判定: 作成有無が0の場合はグレー文字
+                        # 行スタイル判定
                         row_class = ""
                         if creation_count == 0:
                             row_class = "gray-text"
                         elif count == 0:
-                            row_class = "zero-count" # 歌唱数0のみの場合(作成ありなら)
+                            row_class = "zero-count"
                         else:
                             row_class = "has-count"
                         
                         bar_width = min(count * 20, 150)
                         bar_html = f'<div class="bar-chart" style="width:{bar_width}px;"></div>' if count > 0 else ""
                         
-                        # ★リンク生成
                         clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
                         search_word = f"{clean_anime} {item['song']}"
                         
@@ -397,8 +391,7 @@ if cool_file and os.path.exists(cool_file):
                     continue
                     
                 cat_items = [d for d in ranking_data_list if d["category"] == target_cat and d["count"] > 0]
-                # カウント順(降順)、同じなら曲名順(昇順)
-                cat_items.sort(key=lambda x: (-x["count"], x["song"]))
+                cat_items.sort(key=lambda x: x["count"], reverse=True)
                 
                 ranking_html_content += f"""
                 <div class="category-block">
@@ -424,18 +417,14 @@ if cool_file and os.path.exists(cool_file):
                 else:
                     previous_count = None
                     current_rank = 0
-                    real_rank_counter = 0 # 実際の行数カウンタ
                     
                     for i, item in enumerate(cat_items):
-                        real_rank_counter += 1
-                        
-                        # ランキング計算
+                        # カウントが前回と異なる場合のみ順位を更新
                         if item["count"] != previous_count:
-                            current_rank = real_rank_counter
+                            current_rank = i + 1
                         
-                        # ★ランキング足切り判定
-                        # 20位を超えていて、かつ直前のカウント(20位のカウント)より小さい場合にbreak
-                        if current_rank > 20 and item["count"] < previous_count:
+                        # ★修正: 20位以内、または20位と同率の場合は表示し続ける
+                        if current_rank > 20:
                             break
                         
                         previous_count = item["count"]
@@ -461,8 +450,7 @@ if cool_file and os.path.exists(cool_file):
                         <tr class="has-count ranking-row" data-href="#host/search.php?searchword={search_word}" onclick="onRankingClick(this)">
                             <td align="center" style="font-weight:bold; font-size:1.1rem;">{rank_display}</td>
                             <td>{item["anime"]} <span style="font-size:0.8em; color:#777;">({item["type"]})</span></td>
-                            <td>{item["song"]}</td>
-                            <td>{item["artist"]}</td>
+                            <td>{item["song"]}</td> <td>{item["artist"]}</td>
                             <td class="count-cell"><div class="count-wrapper"><span class="count-num">{item["count"]}</span>{bar_html}</div></td>
                         </tr>
                         """
@@ -630,39 +618,32 @@ html_content = f"""
         .category-content {{ display: block; transition: all 0.3s; }}
         .category-content.collapsed {{ display: none; }}
         
-        /* 作成数0のグレーアウト */
-        .gray-text {{ color: gray !important; }}
         tr.zero-count {{ color: #ccc; }}
-        
-        /* ★保存版用スタイル: リンク有効化 */
-        /* ネガティブマージンでセル全体をクリック可能にする */
-        a.export-link {{
-            display: block; 
-            margin: -5px -8px; 
-            padding: 5px 8px;  
-            color: #333; 
-            text-decoration: none; 
-            box-sizing: border-box;
-            cursor: pointer;
-        }}
-        a.export-link:hover {{ background-color: #eef2f7; color: #3498db; }}
-        
-        /* ランキング: 行ホバー */
-        tr.ranking-row {{ cursor: pointer; }}
-        tr.ranking-row:hover {{ background-color: #dbeafe; }}
+        .gray-text {{ color: gray !important; }} /* 強制的にグレー */
+        tr.has-count {{ background-color: #fff; color: #333; }}
         
         .count-wrapper {{ display: flex; align-items: center; gap: 8px; }}
-        .count-num {{ width: 25px; text-align: right; }}
-        .bar-chart {{ height: 10px; background: #3498db; border-radius: 5px; }}
-        
+        .count-num {{ width: 25px; text-align: right; font-size:1.1rem; }}
+        .bar-chart {{
+            height: 10px; background: linear-gradient(90deg, #3498db, #2980b9);
+            border-radius: 5px;
+        }}
+        td[rowspan] {{
+            background-color: #fff;
+            border-right: 1px solid #eee;
+            vertical-align: middle;
+            font-weight: normal; color: inherit;      
+        }}
+
         .rank-badge {{
             display: inline-block; width: 24px; height: 24px; line-height: 24px;
             border-radius: 50%; text-align: center; color: #fff; font-weight: bold; font-size: 12px;
-            background-color: #95a5a6;
+            background-color: #95a5a6; 
         }}
-        .rank-1 {{ background-color: #f1c40f; width: 28px; height: 28px; line-height: 28px; }}
-        .rank-2 {{ background-color: #bdc3c7; }}
-        .rank-3 {{ background-color: #d35400; }}
+        .rank-1 {{ background-color: #f1c40f; box-shadow: 0 0 5px #f39c12; font-size: 14px; width: 28px; height: 28px; line-height: 28px; }} 
+        .rank-2 {{ background-color: #bdc3c7; box-shadow: 0 0 5px #7f8c8d; }} 
+        .rank-3 {{ background-color: #d35400; opacity: 0.8; }} 
+        
         .rankingTable tr:nth-child(1) td {{ background-color: #fffae6; }}
         .rankingTable tr:nth-child(2) td {{ background-color: #f8f9fa; }}
 
@@ -672,71 +653,137 @@ html_content = f"""
                 print-color-adjust: exact !important;
                 color-adjust: exact !important;
             }}
+            body {{
+                overflow: visible !important;
+                height: auto !important;
+                display: block !important;
+            }}
+            .top-section {{ display: none !important; }}
+            .content-area {{ overflow: visible !important; position: static !important; }}
+            .tab-content {{ 
+                position: static !important; 
+                display: block !important; 
+                overflow: visible !important; 
+                padding: 0 !important;
+            }}
             .category-content {{ display: block !important; }}
-            tbody.anime-group {{ break-inside: avoid; page-break-inside: avoid; }}
+            
+            tbody.anime-group {{
+                break-inside: avoid;
+                page-break-inside: avoid;
+            }}
             .category-header {{ page-break-after: avoid; }}
             thead {{ display: table-header-group; }}
         }}
     </style>
 </head>
 <body>
-    <h1>${{title}}</h1>
-    <div style="text-align:right; font-size:0.9rem; color:#777;">出力日: {current_date_str}</div>
-    ${{content}}
+    <div class="top-section">
+        <div class="header-inner">
+            <h1>Karaoke Dashboard</h1>
+            <div class="update-time">{current_datetime_str} 更新</div>
+        </div>
+        <div class="tabs">
+            <button class="tab-btn active" onclick="openTab('setlist')">セットリスト</button>
+            <button class="tab-btn" onclick="openTab('analysis')">クール集計</button>
+            <button class="tab-btn" onclick="openTab('ranking')">ランキング</button>
+        </div>
+        <div class="controls-row">
+            <div id="ctrl-setlist" class="ctrl-setlist">
+                <input type="text" id="searchInput" class="search-box" placeholder="キーワード (例: 曲名 歌手)...">
+                <button onclick="performSearch()" class="btn"><i class="fas fa-search"></i> 検索</button>
+                <button onclick="resetFilter()" class="btn" style="background:#95a5a6"><i class="fas fa-undo"></i></button>
+                <div class="count-display" id="countDisplay">読み込み中...</div>
+            </div>
+            <div id="ctrl-analysis" class="ctrl-analysis">
+                <button onclick="downloadHTML()" class="btn btn-dl"><i class="fas fa-file-code"></i> HTML保存</button>
+            </div>
+            <div id="ctrl-ranking" class="ctrl-ranking">
+                <button onclick="downloadRanking()" class="btn btn-dl"><i class="fas fa-trophy"></i> ランキング保存</button>
+            </div>
+        </div>
+    </div>
 
-    <script>
-        // ★ リンク先ホスト (ここを1箇所変更するだけで全リンクに適用)
-        const host = 'http://ykr.moe:11059';
+    <div class="content-area">
+        <div id="setlist" class="tab-content active">
+            <table id="setlistTable">
+                <thead><tr>{setlist_headers}</tr></thead>
+                <tbody>{setlist_rows}</tbody>
+            </table>
+            {"" if setlist_rows else '<div style="padding:20px;text-align:center">データがありません</div>'}
+        </div>
 
-        // ランキング行クリック機能 (保存版でのみ有効)
-        function onRankingClick(row) {{
-            if (window.getSelection().toString().length > 0) return;
-            
-            const rawHref = row.getAttribute('data-href');
-            if (rawHref && rawHref.startsWith('#host')) {{
-                const url = rawHref.replace('#host', host);
-                window.open(url, '_blank');
-            }}
+        <div id="analysis" class="tab-content">
+            <div style="margin-top:15px; font-size:0.9rem; color:#7f8c8d; text-align:right;">集計対象: 2026/01/01 - 2026/03/31</div>
+            <div id="print-target">
+                {analysis_html_content if cool_data_exists else '<div style="padding:20px;text-align:center;color:#e74c3c;">集計データがありません</div>'}
+            </div>
+        </div>
+
+        <div id="ranking" class="tab-content">
+            <div style="margin-top:15px; font-size:0.9rem; color:#7f8c8d; text-align:right;">集計対象: 2026/01/01 - 2026/03/31</div>
+            <div id="ranking-print-target">
+                {ranking_html_content if ranking_html_content else '<div style="padding:20px;text-align:center;color:#e74c3c;">ランキング対象データがありません</div>'}
+            </div>
+        </div>
+    </div>
+
+<script>
+    // ダッシュボード上では空関数 (クリック無効)
+    function onRankingClick(row) {{
+        // 何もしない
+    }}
+
+    function openTab(tabName) {{
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.getElementById(tabName).classList.add('active');
+        
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        
+        let btnIndex = 0;
+        if (tabName === 'analysis') btnIndex = 1;
+        if (tabName === 'ranking') btnIndex = 2;
+        
+        document.querySelectorAll('.tab-btn')[btnIndex].classList.add('active');
+        
+        document.getElementById('ctrl-setlist').style.display = 'none';
+        document.getElementById('ctrl-analysis').style.display = 'none';
+        document.getElementById('ctrl-ranking').style.display = 'none';
+
+        if(tabName === 'setlist') {{
+            document.getElementById('ctrl-setlist').style.display = 'flex';
+        }} else if(tabName === 'analysis') {{
+            document.getElementById('ctrl-analysis').style.display = 'flex';
+        }} else if(tabName === 'ranking') {{
+            document.getElementById('ctrl-ranking').style.display = 'flex';
         }}
+    }}
 
-        document.addEventListener('DOMContentLoaded', () => {{
-            
-            // クール集計のリンク(Aタグ) href置換
-            document.querySelectorAll('a.export-link').forEach(link => {{
-                const rawHref = link.getAttribute('href');
-                if (rawHref && rawHref.startsWith('#host')) {{
-                    link.href = rawHref.replace('#host', host);
-                }}
-            }});
-        }});
+    function toggleCategory(header) {{
+        const content = header.nextElementSibling;
+        content.classList.toggle('collapsed');
+        const icon = header.querySelector('i');
+        icon.className = content.classList.contains('collapsed') ? 'fas fa-chevron-right' : 'fas fa-chevron-down';
+        icon.style.float = 'right';
+    }}
 
-        function toggleCategory(header) {{
-            const content = header.nextElementSibling;
-            content.classList.toggle('collapsed');
-            const icon = header.querySelector('i');
-            if(icon) {{
-                icon.className = content.classList.contains('collapsed') ? 'fas fa-chevron-right' : 'fas fa-chevron-down';
-                icon.style.float = 'right';
-            }}
-        }}
+    // クール集計のダウンロード
+    function downloadHTML() {{
+        const element = document.getElementById('print-target');
+        const htmlContent = element.innerHTML;
+        generateDownload(htmlContent, 'karaoke_analysis.html', 'クール集計結果');
+    }}
 
-        // クール集計のダウンロード
-        function downloadHTML() {{
-            const element = document.getElementById('print-target');
-            const htmlContent = element.innerHTML;
-            generateDownload(htmlContent, 'karaoke_analysis.html', 'クール集計結果');
-        }}
+    // ランキングのダウンロード
+    function downloadRanking() {{
+        const element = document.getElementById('ranking-print-target');
+        const htmlContent = element.innerHTML;
+        generateDownload(htmlContent, 'karaoke_ranking.html', 'カラオケ歌唱ランキング');
+    }}
 
-        // ランキングのダウンロード
-        function downloadRanking() {{
-            const element = document.getElementById('ranking-print-target');
-            const htmlContent = element.innerHTML;
-            generateDownload(htmlContent, 'karaoke_ranking.html', 'カラオケ歌唱ランキング');
-        }}
-
-        // ダウンロード共通処理
-        function generateDownload(content, filename, title) {{
-            const fullHtml = `
+    // ダウンロード共通処理
+    function generateDownload(content, filename, title) {{
+        const fullHtml = `
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -850,85 +897,84 @@ html_content = f"""
 </body>
 </html>`;
 
-            const blob = new Blob([fullHtml], {{type: 'text/html'}});
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = filename;
-            link.click();
-        }}
-    </script>
-    <script>
-        const searchInput = document.getElementById("searchInput");
-        const table = document.getElementById("setlistTable");
-        const countDisplay = document.getElementById('countDisplay');
-        let tableData = [];
-        let tbodyRows = [];
+        const blob = new Blob([fullHtml], {{type: 'text/html'}});
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = filename;
+        link.click();
+    }}
 
-        window.addEventListener('DOMContentLoaded', () => {{
-            const tbody = table.tBodies[0];
-            if (tbody) {{
-                tbodyRows = Array.from(tbody.rows);
-                tableData = tbodyRows.map(row => row.innerText.toUpperCase());
-                countDisplay.innerText = '全 ' + tbodyRows.length + ' 件';
-            }}
-        }});
+    const searchInput = document.getElementById("searchInput");
+    const table = document.getElementById("setlistTable");
+    const countDisplay = document.getElementById('countDisplay');
+    let tableData = [];
+    let tbodyRows = [];
 
-        searchInput.addEventListener("keyup", function(event) {{
-            if (event.key === "Enter") performSearch();
-        }});
-
-        function performSearch() {{
-            const filter = searchInput.value.toUpperCase();
-            const keywords = filter.replace(/　/g, " ").split(" ").filter(k => k.length > 0);
-            let visibleCount = 0;
-            const total = tableData.length;
-            
-            for (let i = 0; i < total; i++) {{
-                let isMatch = true;
-                const rowText = tableData[i];
-                for (let k = 0; k < keywords.length; k++) {{
-                    if (rowText.indexOf(keywords[k]) === -1) {{
-                        isMatch = false; break;
-                    }}
-                }}
-                
-                if (isMatch || keywords.length === 0) {{
-                    tbodyRows[i].classList.remove('hidden');
-                    visibleCount++;
-                }} else {{
-                    tbodyRows[i].classList.add('hidden');
-                }}
-            }}
-            countDisplay.innerText = '表示: ' + visibleCount + ' / ' + total;
-        }}
-
-        function resetFilter() {{
-            searchInput.value = "";
-            performSearch();
-        }}
-
-        function sortTable(n) {{
-            const tbody = table.tBodies[0];
-            const rows = Array.from(tbody.rows);
-            const th = table.querySelectorAll('th')[n];
-            let dir = th.getAttribute('data-dir') === 'asc' ? 'desc' : 'asc';
-            
-            table.querySelectorAll('th').forEach(h => h.setAttribute('data-dir', ''));
-            th.setAttribute('data-dir', dir);
-
-            rows.sort((a, b) => {{
-                const valA = a.cells[n].innerText.trim();
-                const valB = b.cells[n].innerText.trim();
-                if (!isNaN(valA) && !isNaN(valB) && valA!=='' && valB!=='') {{
-                    return dir === 'asc' ? valA - valB : valB - valA;
-                }}
-                return dir === 'asc' ? valA.localeCompare(valB,'ja') : valB.localeCompare(valA,'ja');
-            }});
-            rows.forEach(row => tbody.appendChild(row));
-            tbodyRows = rows;
+    window.addEventListener('DOMContentLoaded', () => {{
+        const tbody = table.tBodies[0];
+        if (tbody) {{
+            tbodyRows = Array.from(tbody.rows);
             tableData = tbodyRows.map(row => row.innerText.toUpperCase());
+            countDisplay.innerText = '全 ' + tbodyRows.length + ' 件';
         }}
-    </script>
+    }});
+
+    searchInput.addEventListener("keyup", function(event) {{
+        if (event.key === "Enter") performSearch();
+    }});
+
+    function performSearch() {{
+        const filter = searchInput.value.toUpperCase();
+        const keywords = filter.replace(/　/g, " ").split(" ").filter(k => k.length > 0);
+        let visibleCount = 0;
+        const total = tableData.length;
+        
+        for (let i = 0; i < total; i++) {{
+            let isMatch = true;
+            const rowText = tableData[i];
+            for (let k = 0; k < keywords.length; k++) {{
+                if (rowText.indexOf(keywords[k]) === -1) {{
+                    isMatch = false; break;
+                }}
+            }}
+            
+            if (isMatch || keywords.length === 0) {{
+                tbodyRows[i].classList.remove('hidden');
+                visibleCount++;
+            }} else {{
+                tbodyRows[i].classList.add('hidden');
+            }}
+        }}
+        countDisplay.innerText = '表示: ' + visibleCount + ' / ' + total;
+    }}
+
+    function resetFilter() {{
+        searchInput.value = "";
+        performSearch();
+    }}
+
+    function sortTable(n) {{
+        const tbody = table.tBodies[0];
+        const rows = Array.from(tbody.rows);
+        const th = table.querySelectorAll('th')[n];
+        let dir = th.getAttribute('data-dir') === 'asc' ? 'desc' : 'asc';
+        
+        table.querySelectorAll('th').forEach(h => h.setAttribute('data-dir', ''));
+        th.setAttribute('data-dir', dir);
+
+        rows.sort((a, b) => {{
+            const valA = a.cells[n].innerText.trim();
+            const valB = b.cells[n].innerText.trim();
+            if (!isNaN(valA) && !isNaN(valB) && valA!=='' && valB!=='') {{
+                return dir === 'asc' ? valA - valB : valB - valA;
+            }}
+            return dir === 'asc' ? valA.localeCompare(valB,'ja') : valB.localeCompare(valA,'ja');
+        }});
+        rows.forEach(row => tbody.appendChild(row));
+        tbodyRows = rows;
+        tableData = tbodyRows.map(row => row.innerText.toUpperCase());
+    }}
+</script>
 </body>
 </html>
 """
