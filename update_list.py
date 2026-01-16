@@ -313,7 +313,7 @@ if cool_file and os.path.exists(cool_file):
                         bar_width = min(count * 20, 150)
                         bar_html = f'<div class="bar-chart" style="width:{bar_width}px;"></div>' if count > 0 else ""
                         
-                        # ★リンク生成 (作品名 + 半角スペース + 曲名)
+                        # ★リンク生成
                         search_word = f"{item['anime']} {item['song']}"
                         link_tag_start = f'<a href="#host/search.php?searchword={search_word}" class="search-link" target="_blank">'
                         
@@ -764,6 +764,7 @@ html_content = f"""
     // クール集計のダウンロード
     function downloadHTML() {{
         const element = document.getElementById('print-target');
+        // 保存時はそのままのHTML(#host付き)を取得
         const htmlContent = element.innerHTML;
         generateDownload(htmlContent, 'karaoke_analysis.html', 'クール集計結果');
     }}
@@ -771,6 +772,7 @@ html_content = f"""
     // ランキングのダウンロード
     function downloadRanking() {{
         const element = document.getElementById('ranking-print-target');
+        // 保存時はそのままのHTML(#host付き)を取得
         const htmlContent = element.innerHTML;
         generateDownload(htmlContent, 'karaoke_ranking.html', 'カラオケ歌唱ランキング');
     }}
@@ -843,10 +845,11 @@ html_content = f"""
     ${{content}}
 
     <script>
+        // ★ ここを1箇所書き換えるだけで済むようにする
         const host = 'http://ykr.moe:11059';
 
         document.addEventListener('DOMContentLoaded', () => {{
-            // リンク書き換え (通常リンク)
+            // 通常リンクの置換
             document.querySelectorAll('a').forEach(link => {{
                 const rawHref = link.getAttribute('href');
                 if (rawHref && rawHref.startsWith('#host')) {{
@@ -854,7 +857,7 @@ html_content = f"""
                 }}
             }});
 
-            // リンク書き換え (行クリック)
+            // ランキング行クリック
             document.querySelectorAll('tr.ranking-row').forEach(row => {{
                 row.addEventListener('click', function(e) {{
                     if (window.getSelection().toString().length > 0) return;
