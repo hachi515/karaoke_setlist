@@ -62,7 +62,7 @@ def normalize_text(text):
     # 2. 拡張子の削除
     text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
     
-    # 3. 括弧と中身を除去 (ファイル名マッチングの精度向上のため一時的にスペース化)
+    # 3. 括弧と中身を除去
     text = re.sub(r'[\[\(\{【].*?[\]\)\}】]', ' ', text)
     
     # 4. キー変更情報を削除
@@ -461,7 +461,8 @@ if cool_file and os.path.exists(cool_file):
                         <tr class="has-count ranking-row" data-href="#host/search.php?searchword={search_word}" onclick="onRankingClick(this)">
                             <td align="center" style="font-weight:bold; font-size:1.1rem;">{rank_display}</td>
                             <td>{item["anime"]} <span style="font-size:0.8em; color:#777;">({item["type"]})</span></td>
-                            <td>{item["song"]}</td> <td>{item["artist"]}</td>
+                            <td>{item["song"]}</td>
+                            <td>{item["artist"]}</td>
                             <td class="count-cell"><div class="count-wrapper"><span class="count-num">{item["count"]}</span>{bar_html}</div></td>
                         </tr>
                         """
@@ -709,7 +710,7 @@ html_content = f"""
             }});
         }});
 
-function toggleCategory(header) {{
+        function toggleCategory(header) {{
             const content = header.nextElementSibling;
             content.classList.toggle('collapsed');
             const icon = header.querySelector('i');
@@ -718,88 +719,216 @@ function toggleCategory(header) {{
                 icon.style.float = 'right';
             }}
         }}
-    </script>
-</body>
-</html>
 
-        const blob = new Blob([fullHtml], {{type: 'text/html'}});
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = filename;
-        link.click();
-    }}
-
-    const searchInput = document.getElementById("searchInput");
-    const table = document.getElementById("setlistTable");
-    const countDisplay = document.getElementById('countDisplay');
-    let tableData = [];
-    let tbodyRows = [];
-
-    window.addEventListener('DOMContentLoaded', () => {{
-        const tbody = table.tBodies[0];
-        if (tbody) {{
-            tbodyRows = Array.from(tbody.rows);
-            tableData = tbodyRows.map(row => row.innerText.toUpperCase());
-            countDisplay.innerText = '全 ' + tbodyRows.length + ' 件';
+        // クール集計のダウンロード
+        function downloadHTML() {{
+            const element = document.getElementById('print-target');
+            const htmlContent = element.innerHTML;
+            generateDownload(htmlContent, 'karaoke_analysis.html', 'クール集計結果');
         }}
-    }});
 
-    searchInput.addEventListener("keyup", function(event) {{
-        if (event.key === "Enter") performSearch();
-    }});
+        // ランキングのダウンロード
+        function downloadRanking() {{
+            const element = document.getElementById('ranking-print-target');
+            const htmlContent = element.innerHTML;
+            generateDownload(htmlContent, 'karaoke_ranking.html', 'カラオケ歌唱ランキング');
+        }}
 
-    function performSearch() {{
-        const filter = searchInput.value.toUpperCase();
-        const keywords = filter.replace(/　/g, " ").split(" ").filter(k => k.length > 0);
-        let visibleCount = 0;
-        const total = tableData.length;
+        // ダウンロード共通処理
+        function generateDownload(content, filename, title) {{
+            const fullHtml = `
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>${{title}}</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {{ font-family: "Helvetica Neue", Arial, sans-serif; font-size: 13px; color: #333; }}
+        table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; }}
+        th, td {{ border: 1px solid #ccc; padding: 5px 8px; text-align: left; vertical-align: middle; }}
+        th {{ background-color: #2c3e50; color: #fff; }}
+        td[rowspan] {{ background-color: #fff; }}
         
-        for (let i = 0; i < total; i++) {{
-            let isMatch = true;
-            const rowText = tableData[i];
-            for (let k = 0; k < keywords.length; k++) {{
-                if (rowText.indexOf(keywords[k]) === -1) {{
-                    isMatch = false; break;
+        .category-header {{ 
+            background: #667eea; color: white; padding: 10px; margin-top: 20px; 
+            font-weight: bold; border-radius: 4px; cursor: pointer; user-select: none;
+        }}
+        .category-content {{ display: block; }}
+        .category-content.collapsed {{ display: none; }}
+        
+        /* 作成数0のグレーアウト */
+        .gray-text {{ color: gray !important; }}
+        tr.zero-count {{ color: #ccc; }}
+        
+        /* ★保存版用スタイル: リンク有効化 */
+        /* ネガティブマージンでセル全体をクリック可能にする */
+        a.export-link {{
+            display: block; 
+            margin: -5px -8px; 
+            padding: 5px 8px;  
+            color: #333; 
+            text-decoration: none; 
+            box-sizing: border-box;
+            cursor: pointer;
+        }}
+        a.export-link:hover {{ background-color: #eef2f7; color: #3498db; }}
+        
+        /* ランキング: 行ホバー */
+        tr.ranking-row {{ cursor: pointer; }}
+        tr.ranking-row:hover {{ background-color: #dbeafe; }}
+        
+        .count-wrapper {{ display: flex; align-items: center; gap: 8px; }}
+        .count-num {{ width: 25px; text-align: right; }}
+        .bar-chart {{ height: 10px; background: #3498db; border-radius: 5px; }}
+        
+        .rank-badge {{
+            display: inline-block; width: 24px; height: 24px; line-height: 24px;
+            border-radius: 50%; text-align: center; color: #fff; font-weight: bold; font-size: 12px;
+            background-color: #95a5a6;
+        }}
+        .rank-1 {{ background-color: #f1c40f; width: 28px; height: 28px; line-height: 28px; }}
+        .rank-2 {{ background-color: #bdc3c7; }}
+        .rank-3 {{ background-color: #d35400; }}
+        .rankingTable tr:nth-child(1) td {{ background-color: #fffae6; }}
+        .rankingTable tr:nth-child(2) td {{ background-color: #f8f9fa; }}
+
+        @media print {{
+            * {{
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                color-adjust: exact !important;
+            }}
+            .category-content {{ display: block !important; }}
+            tbody.anime-group {{ break-inside: avoid; page-break-inside: avoid; }}
+            .category-header {{ page-break-after: avoid; }}
+            thead {{ display: table-header-group; }}
+        }}
+    </style>
+</head>
+<body>
+    <h1>${{title}}</h1>
+    <div style="text-align:right; font-size:0.9rem; color:#777;">出力日: {current_date_str}</div>
+    ${{content}}
+
+    <script>
+        // ★ リンク先ホスト (ここを1箇所変更するだけで全リンクに適用)
+        const host = 'http://ykr.moe:11059';
+
+        // ランキング行クリック機能 (保存版でのみ有効)
+        function onRankingClick(row) {{
+            if (window.getSelection().toString().length > 0) return;
+            
+            const rawHref = row.getAttribute('data-href');
+            if (rawHref && rawHref.startsWith('#host')) {{
+                const url = rawHref.replace('#host', host);
+                window.open(url, '_blank');
+            }}
+        }}
+
+        document.addEventListener('DOMContentLoaded', () => {{
+            
+            // クール集計のリンク(Aタグ) href置換
+            document.querySelectorAll('a.export-link').forEach(link => {{
+                const rawHref = link.getAttribute('href');
+                if (rawHref && rawHref.startsWith('#host')) {{
+                    link.href = rawHref.replace('#host', host);
+                }}
+            }});
+        }});
+
+        function toggleCategory(header) {{
+            const content = header.nextElementSibling;
+            content.classList.toggle('collapsed');
+            const icon = header.querySelector('i');
+            if(icon) {{
+                icon.className = content.classList.contains('collapsed') ? 'fas fa-chevron-right' : 'fas fa-chevron-down';
+                icon.style.float = 'right';
+            }}
+        }}
+    <\/script>
+</body>
+</html>`;
+
+            const blob = new Blob([fullHtml], {{type: 'text/html'}});
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            link.click();
+        }}
+    </script>
+    <script>
+        const searchInput = document.getElementById("searchInput");
+        const table = document.getElementById("setlistTable");
+        const countDisplay = document.getElementById('countDisplay');
+        let tableData = [];
+        let tbodyRows = [];
+
+        window.addEventListener('DOMContentLoaded', () => {{
+            const tbody = table.tBodies[0];
+            if (tbody) {{
+                tbodyRows = Array.from(tbody.rows);
+                tableData = tbodyRows.map(row => row.innerText.toUpperCase());
+                countDisplay.innerText = '全 ' + tbodyRows.length + ' 件';
+            }}
+        }});
+
+        searchInput.addEventListener("keyup", function(event) {{
+            if (event.key === "Enter") performSearch();
+        }});
+
+        function performSearch() {{
+            const filter = searchInput.value.toUpperCase();
+            const keywords = filter.replace(/　/g, " ").split(" ").filter(k => k.length > 0);
+            let visibleCount = 0;
+            const total = tableData.length;
+            
+            for (let i = 0; i < total; i++) {{
+                let isMatch = true;
+                const rowText = tableData[i];
+                for (let k = 0; k < keywords.length; k++) {{
+                    if (rowText.indexOf(keywords[k]) === -1) {{
+                        isMatch = false; break;
+                    }}
+                }}
+                
+                if (isMatch || keywords.length === 0) {{
+                    tbodyRows[i].classList.remove('hidden');
+                    visibleCount++;
+                }} else {{
+                    tbodyRows[i].classList.add('hidden');
                 }}
             }}
-            
-            if (isMatch || keywords.length === 0) {{
-                tbodyRows[i].classList.remove('hidden');
-                visibleCount++;
-            }} else {{
-                tbodyRows[i].classList.add('hidden');
-            }}
+            countDisplay.innerText = '表示: ' + visibleCount + ' / ' + total;
         }}
-        countDisplay.innerText = '表示: ' + visibleCount + ' / ' + total;
-    }}
 
-    function resetFilter() {{
-        searchInput.value = "";
-        performSearch();
-    }}
+        function resetFilter() {{
+            searchInput.value = "";
+            performSearch();
+        }}
 
-    function sortTable(n) {{
-        const tbody = table.tBodies[0];
-        const rows = Array.from(tbody.rows);
-        const th = table.querySelectorAll('th')[n];
-        let dir = th.getAttribute('data-dir') === 'asc' ? 'desc' : 'asc';
-        
-        table.querySelectorAll('th').forEach(h => h.setAttribute('data-dir', ''));
-        th.setAttribute('data-dir', dir);
+        function sortTable(n) {{
+            const tbody = table.tBodies[0];
+            const rows = Array.from(tbody.rows);
+            const th = table.querySelectorAll('th')[n];
+            let dir = th.getAttribute('data-dir') === 'asc' ? 'desc' : 'asc';
+            
+            table.querySelectorAll('th').forEach(h => h.setAttribute('data-dir', ''));
+            th.setAttribute('data-dir', dir);
 
-        rows.sort((a, b) => {{
-            const valA = a.cells[n].innerText.trim();
-            const valB = b.cells[n].innerText.trim();
-            if (!isNaN(valA) && !isNaN(valB) && valA!=='' && valB!=='') {{
-                return dir === 'asc' ? valA - valB : valB - valA;
-            }}
-            return dir === 'asc' ? valA.localeCompare(valB,'ja') : valB.localeCompare(valA,'ja');
-        }});
-        rows.forEach(row => tbody.appendChild(row));
-        tbodyRows = rows;
-        tableData = tbodyRows.map(row => row.innerText.toUpperCase());
-    }}
-</script>
+            rows.sort((a, b) => {{
+                const valA = a.cells[n].innerText.trim();
+                const valB = b.cells[n].innerText.trim();
+                if (!isNaN(valA) && !isNaN(valB) && valA!=='' && valB!=='') {{
+                    return dir === 'asc' ? valA - valB : valB - valA;
+                }}
+                return dir === 'asc' ? valA.localeCompare(valB,'ja') : valB.localeCompare(valA,'ja');
+            }});
+            rows.forEach(row => tbody.appendChild(row));
+            tbodyRows = rows;
+            tableData = tbodyRows.map(row => row.innerText.toUpperCase());
+        }}
+    </script>
 </body>
 </html>
 """
@@ -807,4 +936,3 @@ function toggleCategory(header) {{
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
     print("HTML生成完了: index.html")
-
