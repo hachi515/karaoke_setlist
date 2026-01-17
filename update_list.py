@@ -55,7 +55,7 @@ room_map = {
     11101: "えみち部屋",
     11102: "るえ部屋",
     11103: "ながし部屋",
-    11106: "冨塚部屋"
+    11106: "冨塚部屋",
     11107: "ブルーベリー部屋"
 }
 
@@ -992,5 +992,6 @@ html_content = f"""
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
     print("HTML生成完了: index.html")
+
 
 
