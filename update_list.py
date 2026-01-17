@@ -5,7 +5,7 @@ import os
 import re
 import unicodedata
 import glob
-import shutil  # 【追加】バックアップ機能用
+import shutil  # バックアップ用
 from itertools import groupby
 
 # --- 時刻設定 ---
@@ -60,13 +60,13 @@ room_map = {
     11107: "ブルーベリー部屋"
 }
 
-# --- 関数: テキスト正規化 (検索キー用・履歴データ用) ---
+# --- 関数: テキスト正規化 ---
 def normalize_text(text):
     if not isinstance(text, str):
         return str(text)
     text = unicodedata.normalize('NFKC', text)
     text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
-    text = re.sub(r'[\[\(\{【].*?[\]\)\}】]', ' ', text) # 括弧除去
+    text = re.sub(r'[\[\(\{【].*?[\]\)\}】]', ' ', text)
     text = re.sub(r'(key|KEY)?\s*[\+\-]\s*[0-9]+', ' ', text)
     text = re.sub(r'原キー', ' ', text)
     text = re.sub(r'(キー)?変更[:：]?', ' ', text)
@@ -74,7 +74,6 @@ def normalize_text(text):
     text = re.sub(r'\s+', ' ', text).strip()
     return text.upper()
 
-# --- 関数: オフラインリスト用正規化 (括弧の中身を保持する) ---
 def normalize_offline_text(text):
     if not isinstance(text, str):
         return str(text)
@@ -87,7 +86,6 @@ def normalize_offline_text(text):
     text = re.sub(r'\s+', ' ', text).strip()
     return text.upper()
 
-# --- 関数: 数値を序数表記(1st, 2nd...)に変換 ---
 def get_ordinal_str(n):
     if 11 <= (n % 100) <= 13:
         suffix = 'th'
@@ -95,7 +93,7 @@ def get_ordinal_str(n):
         suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
     return f"{n}{suffix}"
 
-# --- 1. 過去データ読み込み (複数ファイル対応) ---
+# --- 1. 過去データ読み込み ---
 history_files = glob.glob("history*.csv")
 history_dfs = []
 
@@ -107,7 +105,7 @@ if history_files:
             df = df.fillna("")
             history_dfs.append(df)
         except Exception as e:
-            print(f"ファイル読み込みエラー({f}): {e}")
+            print(f"★警告: ファイル読み込みエラー({f}): {e}")
 else:
     print("過去ログファイルが見つかりません。新規作成します。")
 
@@ -124,9 +122,10 @@ print("データを取得中...")
 for port in target_ports:
     url = f"http://Ykr.moe:{port}/simplelist.php"
     try:
-        response = requests.get(url, timeout=10) # タイムアウト延長
+        # ★変更点: タイムアウトを30秒に延長
+        response = requests.get(url, timeout=30)
         response.raise_for_status()
-        response.encoding = response.apparent_encoding # 文字化け対策
+        response.encoding = response.apparent_encoding
         
         dfs = pd.read_html(response.content)
         if dfs:
@@ -138,12 +137,11 @@ for port in target_ports:
                 new_data_frames.append(df)
             
     except Exception as e:
-        # ポート切れでもエラー停止せず、既存の履歴を維持する
-        pass 
-        # print(f"ポート {port} の取得失敗(オフラインの可能性): {e}")
+        # 取得エラーでも停止せず、既存データ保護のために続行
+        pass
 
 # --- 3. データの結合・整理 ---
-# ★修正: 新規データがなくても処理を続行（整理・保存のため）
+# 新規データがなくても、既存データの整理・保存を行うためにコピーを作成
 final_df = history_df.copy()
 
 if new_data_frames:
@@ -157,44 +155,45 @@ if not final_df.empty:
         if col in final_df.columns:
             final_df = final_df[final_df[col] != col]
 
-    # ★重要修正: 重複削除のキーに「取得日」を追加
-    # これにより、部屋がリセットされても日付が違えばデータが消えません
+    # ★重要変更点: 重複チェックに「取得日」を追加
+    # これにより、部屋リセット後も別日のデータとして保持されます
     subset_cols = ['取得日', '部屋主', '順番', '曲名（ファイル名）', '歌った人']
     existing_cols = [c for c in subset_cols if c in final_df.columns]
     
-    # keep='last'で同日の重複があれば最新を採用
+    # keep='last' で重複時は最新の情報を優先
     final_df = final_df.drop_duplicates(subset=existing_cols, keep='last')
     final_df = final_df.fillna("")
 
     if '順番' in final_df.columns:
         final_df['順番'] = pd.to_numeric(final_df['順番'], errors='coerce')
         
-    # 最新順にソート (HTML表示用)
+    # 最新順にソート
     final_df['temp_date'] = pd.to_datetime(final_df['取得日'], errors='coerce')
     final_df = final_df.sort_values(by=['temp_date', '順番'], ascending=[False, False])
     final_df = final_df.drop(columns=['temp_date'])
     
-    # カラム並び替え
     cols = list(final_df.columns)
     if '部屋主' in cols:
         cols.insert(0, cols.pop(cols.index('部屋主')))
         final_df = final_df[cols]
 
-    # --- 4. 保存処理 (分割保存 + バックアップ) ---
+    # --- 4. 保存処理 (バックアップ機能付き) ---
     print("履歴ファイルを保存処理中...")
     
-    # ★追加: 自動バックアップ
+    # ★追加: 自動バックアップ (backupフォルダへ退避)
     backup_dir = "backup"
     os.makedirs(backup_dir, exist_ok=True)
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    for f in glob.glob("history_*.csv"):
+    
+    current_files = glob.glob("history_*.csv")
+    for f in current_files:
         try:
             shutil.copy(f, os.path.join(backup_dir, f"{f}.{timestamp}.bak"))
-        except:
-            pass
+        except Exception as e:
+            print(f"バックアップ作成失敗({f}): {e}")
 
-    # ★追加: 保存前に古いファイルを削除 (ファイル数が減った場合のゴミ残り防止)
-    for f in glob.glob("history_*.csv"):
+    # ★追加: 保存前に古いhistoryファイルを削除 (ファイルの重複・ゾンビ化防止)
+    for f in current_files:
         try:
             os.remove(f)
         except:
@@ -206,28 +205,30 @@ if not final_df.empty:
     save_df = save_df.sort_values(by=['temp_date_sort', '順番'], ascending=[True, True])
     save_df = save_df.drop(columns=['temp_date_sort'])
     
-    # 4000行ごとに分割して保存
+    # 4000行ごとに分割保存
     chunk_size = 4000
     total_rows = len(save_df)
     
-    for i in range(0, total_rows, chunk_size):
-        chunk = save_df.iloc[i : i + chunk_size]
-        
-        file_num = (i // chunk_size) + 1
-        suffix = get_ordinal_str(file_num)
-        filename = f"history_{suffix}.csv"
-        
-        chunk.to_csv(filename, index=False, encoding='utf-8-sig')
-        print(f" -> {filename} を保存しました ({len(chunk)}行)")
+    if total_rows == 0:
+        print("保存するデータがありません。")
+    else:
+        for i in range(0, total_rows, chunk_size):
+            chunk = save_df.iloc[i : i + chunk_size]
+            file_num = (i // chunk_size) + 1
+            suffix = get_ordinal_str(file_num)
+            filename = f"history_{suffix}.csv"
+            
+            chunk.to_csv(filename, index=False, encoding='utf-8-sig')
+            print(f" -> {filename} を保存しました ({len(chunk)}行)")
 
     print("履歴ファイルの更新完了。")
 
 else:
-    print("データが存在しません。")
+    print("データが存在しません。更新をスキップします。")
 
 
 # ==========================================
-# ★集計処理 (クール集計 + ランキング用データ収集)
+# ★集計処理 (変更なし)
 # ==========================================
 
 analysis_html_content = "" 
@@ -237,7 +238,7 @@ ranking_data_list = []
 
 cool_file = "cool_analysis.csv" 
 
-# オフラインリスト (複数ファイル対応)
+# オフラインリスト
 offline_files = [
     "offline_list_2026_1st.csv",
     "offline_list_2025_1st.csv",
@@ -253,19 +254,14 @@ for file_path in offline_files:
             if '曲名' in offline_df.columns:
                 targets = [normalize_offline_text(str(x)) for x in offline_df['曲名'].tolist()]
                 offline_targets.extend(targets)
-                print(f"オフラインリスト({file_path})を読み込みました。追加件数: {len(targets)}")
+                print(f"オフラインリスト({file_path})を読み込みました。")
             else:
-                print(f"オフラインリスト({file_path})に'曲名'カラムが見つかりません。")
+                pass
         except Exception as e:
             print(f"オフラインリスト({file_path})読み込みエラー: {e}")
-    else:
-        pass
-
-print(f"オフラインリスト合計件数: {len(offline_targets)}")
-
 
 if not os.path.exists(cool_file):
-    possible_files = [f for f in os.listdir('.') if f.endswith('.csv') and 'history' not in f and 'offline' not in f]
+    possible_files = [f for f in os.listdir('.') if f.endswith('.csv') and 'history' not in f and 'offline' not in f and 'backup' not in f]
     if possible_files:
         cool_file = possible_files[0]
 
@@ -275,14 +271,12 @@ if cool_file and os.path.exists(cool_file):
         for enc in ['utf-8-sig', 'cp932', 'shift_jis']:
             try:
                 raw_df = pd.read_csv(cool_file, header=None, encoding=enc)
-                print(f"集計表({cool_file})をエンコーディング {enc} で読み込みました。")
                 break
             except UnicodeDecodeError:
                 continue
         
         if raw_df is not None:
             raw_df = raw_df.fillna("")
-            print("CSV内の重複行を削除中...")
             raw_df = raw_df.drop_duplicates(keep='last')
             
             start_date = pd.to_datetime("2026/01/01")
@@ -449,9 +443,7 @@ if cool_file and os.path.exists(cool_file):
                 analysis_html_content += "</table></div></div>"
 
             cool_data_exists = True
-            print("クール集計処理完了。")
             
-            print("ランキング生成処理開始...")
             for target_cat in ALLOWED_CATEGORIES:
                 if target_cat not in categorized_data:
                     continue
@@ -511,16 +503,13 @@ if cool_file and os.path.exists(cool_file):
                         </tr>
                         """
                 ranking_html_content += "</tbody></table></div></div>"
-            print("ランキング生成完了。")
         else:
             print("CSV読み込み失敗")
     except Exception as e:
         print(f"集計エラー: {e}")
-        import traceback
-        traceback.print_exc()
 
 # ==========================================
-# HTML生成 (HTML出力・印刷設定)
+# HTML生成
 # ==========================================
 
 columns_to_hide = ['コメント'] 
