@@ -5,13 +5,11 @@ import os
 import re
 import unicodedata
 import glob
-import sys
 from itertools import groupby
 
 # --- 時刻設定 ---
 now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
 current_date_str = now.strftime("%Y/%m/%d")
-current_datetime_str = now.strftime("%Y/%m/%d %H:%M")
 
 # --- 設定: ポート番号と部屋主の名前の対応表 ---
 room_map = {
@@ -61,8 +59,10 @@ room_map = {
 }
 
 # --- ファイル名設定 ---
-# 分割せず、この1つのファイルに追記していきます
 HISTORY_FILE = "history.csv"
+
+# ★重要: 保存するカラムの順番を固定する (ズレ防止)
+FIXED_COLUMNS = ['取得日', '部屋主', '順番', '作品名', '歌手名', '曲名（ファイル名）', '歌った人', 'キー', 'コメント']
 
 # --- 関数定義 ---
 def normalize_text(text):
@@ -88,28 +88,9 @@ def normalize_offline_text(text):
     text = re.sub(r'\s+', ' ', text).strip()
     return text.upper()
 
-# --- 1. 初期化・データ移行処理 ---
-# history.csv がなく、history_*.csv がある場合は統合して history.csv を作る
-if not os.path.exists(HISTORY_FILE):
-    split_files = glob.glob("history_*.csv")
-    if split_files:
-        print(f"古い形式のファイル({len(split_files)}個)を検知しました。'{HISTORY_FILE}' に統合します...")
-        dfs = []
-        for f in split_files:
-            try:
-                dfs.append(pd.read_csv(f))
-            except: pass
-        if dfs:
-            merged_df = pd.concat(dfs, ignore_index=True)
-            # 念のため重複削除して保存
-            merged_df.drop_duplicates(inplace=True)
-            merged_df.to_csv(HISTORY_FILE, index=False, encoding='utf-8-sig')
-            print(" -> 統合完了。今後はこのファイルに追記します。")
-
-# --- 2. 新しいデータ取得 ---
+# --- 1. 新しいデータ取得 ---
 target_ports = list(room_map.keys())
 new_data_frames = []
-connection_error_occurred = False
 
 print("最新データを取得中...")
 
@@ -124,67 +105,89 @@ for port in target_ports:
         if dfs:
             df = dfs[0]
             if not df.empty:
-                df = df.fillna("") 
-                df['部屋主'] = room_map[port]
-                df['取得日'] = current_date_str
-                new_data_frames.append(df)
+                # ★修正: 取得したデータのカラム名を明示的に設定 (NaN防止)
+                # simplelist.phpの一般的な並びに合わせる
+                # 通常: [番号, 曲名, 歌手, 歌った人, キー, コメント...] の順
+                # カラム数が足りない場合などは柔軟に対応
+                
+                # 一旦カラム名をリセットして番号順でアクセスできるようにする
+                df.columns = range(df.shape[1])
+                
+                # 必要なデータを抽出してリネーム
+                temp_df = pd.DataFrame()
+                
+                # 列の場所を指定 (サイトの仕様に合わせて調整)
+                if df.shape[1] >= 1: temp_df['順番'] = df[0]
+                if df.shape[1] >= 2: temp_df['曲名（ファイル名）'] = df[1]
+                if df.shape[1] >= 3: temp_df['歌手名'] = df[2]
+                if df.shape[1] >= 4: temp_df['歌った人'] = df[3]
+                if df.shape[1] >= 5: temp_df['キー'] = df[4]
+                # 作品名やコメントがない場合は空文字で埋める
+                temp_df['作品名'] = "" 
+                temp_df['コメント'] = ""
+
+                # 共通情報を付与
+                temp_df = temp_df.fillna("") 
+                temp_df['部屋主'] = room_map.get(port, f"Port {port}")
+                temp_df['取得日'] = current_date_str
+                
+                new_data_frames.append(temp_df)
     except Exception as e:
-        print(f"ポート {port} 接続エラー: {e}")
-        connection_error_occurred = True
+        # エラー時は何もしない（追記しない＝データは消えない）
+        pass
 
-# --- 3. 追記保存処理 (ここが変更点) ---
-# エラーがあっても、取れたデータがあればそれは追記する（過去データは消えないため安全）
-# ただし、データが一つも取れなかった場合は何もしない
-
+# --- 2. 追記保存処理 ---
 if new_data_frames:
-    print("新しいデータを追記保存します...")
+    print("新しいデータを整理して追記します...")
     new_df = pd.concat(new_data_frames, ignore_index=True)
 
-    # クリーニング
-    clean_check_cols = ['部屋主', '曲名（ファイル名）', '作品名', '歌手名']
-    for col in clean_check_cols:
-        if col in new_df.columns:
-            new_df = new_df[new_df[col] != col]
-            
-    # ★重要: 追記モード('a')で保存
-    # 既存の history.csv を読み込まず、ただ末尾に追加するだけなので、
-    # 既存データが消えることは絶対にありません。
+    # 数値変換とソート
+    if '順番' in new_df.columns:
+        new_df['順番'] = pd.to_numeric(new_df['順番'], errors='coerce')
+
+    # ★ご指定のソート順: 番号大きい方が上、1が一番下 (降順)
+    new_df = new_df.sort_values(by='順番', ascending=False)
+
+    # ★重要: カラムの並び順を強制的に統一する (これがズレの原因でした)
+    # 足りないカラムがあれば自動で作成(NaN回避)
+    for col in FIXED_COLUMNS:
+        if col not in new_df.columns:
+            new_df[col] = ""
     
-    # ファイルが存在しない場合はヘッダーを付ける、存在する場合はヘッダーなしで追記
+    # 指定の順番に並べ替え
+    new_df = new_df[FIXED_COLUMNS]
+
+    # ファイル書き込み
     file_exists = os.path.exists(HISTORY_FILE)
     write_header = not file_exists
     
     try:
         new_df.to_csv(HISTORY_FILE, mode='a', header=write_header, index=False, encoding='utf-8-sig')
-        print(f" -> '{HISTORY_FILE}' に {len(new_df)} 件のデータを追記しました。")
+        print(f" -> '{HISTORY_FILE}' に {len(new_df)} 件のデータを追記しました。(大きい数字が上)")
     except PermissionError:
-        print(f"【エラー】'{HISTORY_FILE}' が開けません。Excelなどで開いている場合は閉じてください。")
-        # 追記失敗しても既存データは無事です
+        print(f"【エラー】'{HISTORY_FILE}' が開けません。閉じてから再実行してください。")
 else:
     print("新しいデータ取得なし（追記スキップ）")
 
 
 # ==========================================
 # ★集計・HTML生成処理
-# (追記した history.csv を読み込んで、画面表示用に整形・重複削除する)
 # ==========================================
-
 print("HTML生成用のデータを準備中...")
 
 if os.path.exists(HISTORY_FILE):
     try:
-        # ここで初めて全データを読み込む（表示用）
+        # 表示用に全読み込み
         history_df = pd.read_csv(HISTORY_FILE, encoding='utf-8-sig')
         history_df = history_df.fillna("")
         
-        # ★表示用の重複排除（ファイルは触らず、メモリ上だけで綺麗にする）
-        # 追記型だと重複が溜まっていくので、HTMLにする時だけ最新を残して重複を消す
+        # 重複排除 (表示用)
         subset_cols = ['取得日', '部屋主', '順番', '曲名（ファイル名）', '歌った人']
-        existing_cols = [c for c in subset_cols if c in history_df.columns]
+        # カラムが存在するかチェックしてからdrop_duplicates
+        existing_check = [c for c in subset_cols if c in history_df.columns]
+        final_df = history_df.drop_duplicates(subset=existing_check, keep='last')
         
-        final_df = history_df.drop_duplicates(subset=existing_cols, keep='last')
-        
-        # ソート（新しい順）
+        # 最終的な表示順序 (日付新しい順、その中で番号大きい順)
         if '順番' in final_df.columns:
             final_df['順番'] = pd.to_numeric(final_df['順番'], errors='coerce')
         
@@ -192,7 +195,7 @@ if os.path.exists(HISTORY_FILE):
         final_df = final_df.sort_values(by=['temp_date', '順番'], ascending=[False, False])
         final_df = final_df.drop(columns=['temp_date'])
         
-        # カラム順序
+        # カラム並び替え (部屋主を先頭に)
         cols = list(final_df.columns)
         if '部屋主' in cols:
             cols.insert(0, cols.pop(cols.index('部屋主')))
@@ -202,7 +205,6 @@ if os.path.exists(HISTORY_FILE):
         print(f"履歴ファイル読み込みエラー: {e}")
         final_df = pd.DataFrame()
 else:
-    print("履歴ファイルがありません。")
     final_df = pd.DataFrame()
 
 
@@ -238,7 +240,7 @@ for file_path in offline_files:
             print(f"オフラインリスト({file_path})読み込みエラー: {e}")
 
 if not os.path.exists(cool_file):
-    possible_files = [f for f in os.listdir('.') if f.endswith('.csv') and 'history' not in f and 'offline' not in f and 'backup' not in f and 'temp' not in f]
+    possible_files = [f for f in os.listdir('.') if f.endswith('.csv') and 'history' not in f and 'offline' not in f]
     if possible_files:
         cool_file = possible_files[0]
 
