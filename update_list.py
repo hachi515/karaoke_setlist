@@ -13,7 +13,6 @@ current_date_str = now.strftime("%Y/%m/%d")
 current_datetime_str = now.strftime("%Y/%m/%d %H:%M")
 
 # --- 設定: ポート番号と部屋主の名前の対応表 ---
-# (最新のリストを使用)
 room_map = {
     11000: "ゆーふうりん部屋",
     11001: "ゆーふうりん部屋",
@@ -86,10 +85,6 @@ def normalize_offline_text(text):
     text = re.sub(r'[~〜～\-_=,.]', ' ', text)
     text = re.sub(r'\s+', ' ', text).strip()
     return text.upper()
-
-# ==========================================
-# ★ここを修正: 履歴更新ロジックを「読み込み結合＆重複削除」方式に戻しました
-# ==========================================
 
 # --- 1. 既存ファイル読み込み ---
 if os.path.exists(HISTORY_FILE):
@@ -165,17 +160,18 @@ if new_data_frames:
     # 実際に存在するカラムだけでチェック
     existing_cols = [c for c in subset_cols if c in combined_df.columns]
     
-    # 重複排除 (古いデータを残す設定 keep='first' ですが、必要なら 'last' に変更可能)
-    # ここでは2日前の正常版に合わせて 'first' (既存優先) にします
+    # 重複排除 (古いデータを残す設定 keep='first')
     final_df = combined_df.drop_duplicates(subset=existing_cols, keep='first')
     
     # 欠損値埋め
     final_df = final_df.fillna("")
 
-    # ソート処理
+    # --- ★修正箇所: 順番を整数化 ---
     if '順番' in final_df.columns:
-        final_df['順番'] = pd.to_numeric(final_df['順番'], errors='coerce')
+        # 一旦数値型に変換 -> NaNを0に置換 -> 整数型(int)にキャスト
+        final_df['順番'] = pd.to_numeric(final_df['順番'], errors='coerce').fillna(0).astype(int)
 
+    # ソート処理
     if '取得日' in final_df.columns:
         final_df['temp_date'] = pd.to_datetime(final_df['取得日'], errors='coerce')
         final_df = final_df.sort_values(by=['temp_date', '順番'], ascending=[False, False])
@@ -187,7 +183,7 @@ if new_data_frames:
         cols.insert(0, cols.pop(cols.index('部屋主')))
         final_df = final_df[cols]
 
-    # 保存 (mode='w' で上書き保存し、きれいな状態を保つ)
+    # 保存 (mode='w' で上書き保存)
     try:
         final_df.to_csv(HISTORY_FILE, index=False, encoding='utf-8-sig')
         print(f" -> '{HISTORY_FILE}' を更新しました。(全 {len(final_df)} 件)")
@@ -196,10 +192,13 @@ if new_data_frames:
 else:
     print("新しいデータが取得できませんでした。履歴は更新されません。")
     final_df = history_df
+    # 既存データの表示用整形
+    if '順番' in final_df.columns:
+         final_df['順番'] = pd.to_numeric(final_df['順番'], errors='coerce').fillna(0).astype(int)
 
 
 # ==========================================
-# ★集計・HTML生成処理 (最新機能はそのまま維持)
+# ★集計・HTML生成処理
 # ==========================================
 print("HTML生成用のデータを準備中...")
 
