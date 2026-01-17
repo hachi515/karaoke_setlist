@@ -10,8 +10,10 @@ from itertools import groupby
 # --- 時刻設定 ---
 now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
 current_date_str = now.strftime("%Y/%m/%d")
+current_datetime_str = now.strftime("%Y/%m/%d %H:%M")
 
 # --- 設定: ポート番号と部屋主の名前の対応表 ---
+# (最新のリストを使用)
 room_map = {
     11000: "ゆーふうりん部屋",
     11001: "ゆーふうりん部屋",
@@ -85,23 +87,26 @@ def normalize_offline_text(text):
     text = re.sub(r'\s+', ' ', text).strip()
     return text.upper()
 
-# --- 1. 既存ファイルのカラム構成を確認 ---
-# デフォルトの8列（ファイルがない場合用）
-# 注: simplelist.phpの内容+取得日+部屋主でちょうど8列になる想定
-target_columns = ['取得日', '部屋主', '順番', '曲名（ファイル名）', '歌手名', '歌った人', 'キー', 'コメント']
+# ==========================================
+# ★ここを修正: 履歴更新ロジックを「読み込み結合＆重複削除」方式に戻しました
+# ==========================================
 
+# --- 1. 既存ファイル読み込み ---
 if os.path.exists(HISTORY_FILE):
     try:
-        # ヘッダーだけ読んで列名を取得する
-        header_df = pd.read_csv(HISTORY_FILE, nrows=0, encoding='utf-8-sig')
-        target_columns = list(header_df.columns)
-        print(f"既存のhistory.csvに合わせて、以下の列構成で追記します:")
-        print(target_columns)
+        print(f"既存の {HISTORY_FILE} を読み込んでいます...")
+        history_df = pd.read_csv(HISTORY_FILE, encoding='utf-8-sig')
+        # カラム名にゴミが入っている場合のクリーニング
+        clean_check_cols = ['部屋主', '曲名（ファイル名）', '作品名', '歌手名']
+        for col in clean_check_cols:
+            if col in history_df.columns:
+                history_df = history_df[history_df[col] != col]
     except Exception as e:
         print(f"既存ファイル読み込み警告: {e}")
-        print("デフォルトの列構成を使用します。")
+        history_df = pd.DataFrame()
 else:
-    print("history.csvが見つかりません。新規作成します。")
+    print("既存の履歴ファイルが見つかりません。新規作成します。")
+    history_df = pd.DataFrame()
 
 # --- 2. 新しいデータ取得 ---
 target_ports = list(room_map.keys())
@@ -123,7 +128,7 @@ for port in target_ports:
                 # カラム名をリセットして番号順でアクセス
                 df.columns = range(df.shape[1])
                 
-                # 必要なデータを抽出してリネーム
+                # 必要なデータを抽出してリネーム（列ズレ防止のため明示的に指定）
                 temp_df = pd.DataFrame()
                 
                 # simplelist.php の一般的な並び順に対応
@@ -147,83 +152,56 @@ for port in target_ports:
     except Exception as e:
         pass
 
-# --- 3. 追記保存処理 ---
+# --- 3. 結合・重複排除・保存 ---
 if new_data_frames:
-    print("新しいデータを整理して追記します...")
+    print("データを結合して整理中...")
     new_df = pd.concat(new_data_frames, ignore_index=True)
-
-    if '順番' in new_df.columns:
-        new_df['順番'] = pd.to_numeric(new_df['順番'], errors='coerce')
-
-    # ソート順: 番号大きい方が上
-    new_df = new_df.sort_values(by='順番', ascending=False)
-
-    # ★重要: 既存ファイルの列構成に強制的に合わせる
-    # これにより「8列のファイルに9列を書き込む」エラーを防ぎます
-    for col in target_columns:
-        if col not in new_df.columns:
-            new_df[col] = "" # 足りない列は空欄で埋める
     
-    # 余分な列は捨て、順番も既存に合わせる
-    new_df = new_df[target_columns]
-
-    file_exists = os.path.exists(HISTORY_FILE)
-    write_header = not file_exists
+    # 既存データと新データを結合
+    combined_df = pd.concat([history_df, new_df], ignore_index=True)
     
+    # 重複判定のカラム設定
+    subset_cols = ['部屋主', '順番', '曲名（ファイル名）', '歌った人']
+    # 実際に存在するカラムだけでチェック
+    existing_cols = [c for c in subset_cols if c in combined_df.columns]
+    
+    # 重複排除 (古いデータを残す設定 keep='first' ですが、必要なら 'last' に変更可能)
+    # ここでは2日前の正常版に合わせて 'first' (既存優先) にします
+    final_df = combined_df.drop_duplicates(subset=existing_cols, keep='first')
+    
+    # 欠損値埋め
+    final_df = final_df.fillna("")
+
+    # ソート処理
+    if '順番' in final_df.columns:
+        final_df['順番'] = pd.to_numeric(final_df['順番'], errors='coerce')
+
+    if '取得日' in final_df.columns:
+        final_df['temp_date'] = pd.to_datetime(final_df['取得日'], errors='coerce')
+        final_df = final_df.sort_values(by=['temp_date', '順番'], ascending=[False, False])
+        final_df = final_df.drop(columns=['temp_date'])
+
+    # 列の並び替え（部屋主を先頭に）
+    cols = list(final_df.columns)
+    if '部屋主' in cols:
+        cols.insert(0, cols.pop(cols.index('部屋主')))
+        final_df = final_df[cols]
+
+    # 保存 (mode='w' で上書き保存し、きれいな状態を保つ)
     try:
-        # mode='a' (append) で追記のみ行う。既存データは触らない。
-        new_df.to_csv(HISTORY_FILE, mode='a', header=write_header, index=False, encoding='utf-8-sig')
-        print(f" -> '{HISTORY_FILE}' に {len(new_df)} 件のデータを追記しました。")
+        final_df.to_csv(HISTORY_FILE, index=False, encoding='utf-8-sig')
+        print(f" -> '{HISTORY_FILE}' を更新しました。(全 {len(final_df)} 件)")
     except PermissionError:
         print(f"【エラー】'{HISTORY_FILE}' が開けません。閉じてから再実行してください。")
 else:
-    print("新しいデータ取得なし（追記スキップ）")
+    print("新しいデータが取得できませんでした。履歴は更新されません。")
+    final_df = history_df
 
 
 # ==========================================
-# ★集計・HTML生成処理
+# ★集計・HTML生成処理 (最新機能はそのまま維持)
 # ==========================================
 print("HTML生成用のデータを準備中...")
-
-if os.path.exists(HISTORY_FILE):
-    try:
-        # 表示用に全読み込み
-        history_df = pd.read_csv(HISTORY_FILE, encoding='utf-8-sig')
-        history_df = history_df.fillna("")
-        
-        # 重複排除 (表示用のみ、ファイルは触らない)
-        subset_cols = ['取得日', '部屋主', '順番', '曲名（ファイル名）', '歌った人']
-        # 実際に存在するカラムだけで重複チェック
-        check_cols = [c for c in subset_cols if c in history_df.columns]
-        
-        if check_cols:
-            final_df = history_df.drop_duplicates(subset=check_cols, keep='last')
-        else:
-            final_df = history_df
-        
-        # ソート
-        if '順番' in final_df.columns:
-            final_df['順番'] = pd.to_numeric(final_df['順番'], errors='coerce')
-        
-        if '取得日' in final_df.columns:
-            final_df['temp_date'] = pd.to_datetime(final_df['取得日'], errors='coerce')
-            final_df = final_df.sort_values(by=['temp_date', '順番'], ascending=[False, False])
-            final_df = final_df.drop(columns=['temp_date'])
-        
-        # カラム並び替え (部屋主先頭)
-        cols = list(final_df.columns)
-        if '部屋主' in cols:
-            cols.insert(0, cols.pop(cols.index('部屋主')))
-            final_df = final_df[cols]
-            
-    except Exception as e:
-        print(f"履歴ファイル読み込みエラー: {e}")
-        final_df = pd.DataFrame()
-else:
-    final_df = pd.DataFrame()
-
-
-# --- 以降、集計・HTML生成（変更なし） ---
 
 analysis_html_content = "" 
 ranking_html_content = "" 
@@ -513,8 +491,6 @@ if cool_file and os.path.exists(cool_file):
 # ==========================================
 # HTML生成
 # ==========================================
-
-current_datetime_str = datetime.datetime.now().strftime("%Y/%m/%d %H:%M")
 
 columns_to_hide = ['コメント'] 
 if not final_df.empty:
