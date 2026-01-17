@@ -61,9 +61,6 @@ room_map = {
 # --- ファイル名設定 ---
 HISTORY_FILE = "history.csv"
 
-# ★重要: 保存するカラムの順番を固定する (ズレ防止)
-FIXED_COLUMNS = ['取得日', '部屋主', '順番', '作品名', '歌手名', '曲名（ファイル名）', '歌った人', 'キー', 'コメント']
-
 # --- 関数定義 ---
 def normalize_text(text):
     if not isinstance(text, str): return str(text)
@@ -88,7 +85,25 @@ def normalize_offline_text(text):
     text = re.sub(r'\s+', ' ', text).strip()
     return text.upper()
 
-# --- 1. 新しいデータ取得 ---
+# --- 1. 既存ファイルのカラム構成を確認 ---
+# デフォルトの8列（ファイルがない場合用）
+# 注: simplelist.phpの内容+取得日+部屋主でちょうど8列になる想定
+target_columns = ['取得日', '部屋主', '順番', '曲名（ファイル名）', '歌手名', '歌った人', 'キー', 'コメント']
+
+if os.path.exists(HISTORY_FILE):
+    try:
+        # ヘッダーだけ読んで列名を取得する
+        header_df = pd.read_csv(HISTORY_FILE, nrows=0, encoding='utf-8-sig')
+        target_columns = list(header_df.columns)
+        print(f"既存のhistory.csvに合わせて、以下の列構成で追記します:")
+        print(target_columns)
+    except Exception as e:
+        print(f"既存ファイル読み込み警告: {e}")
+        print("デフォルトの列構成を使用します。")
+else:
+    print("history.csvが見つかりません。新規作成します。")
+
+# --- 2. 新しいデータ取得 ---
 target_ports = list(room_map.keys())
 new_data_frames = []
 
@@ -105,65 +120,60 @@ for port in target_ports:
         if dfs:
             df = dfs[0]
             if not df.empty:
-                # ★修正: 取得したデータのカラム名を明示的に設定 (NaN防止)
-                # simplelist.phpの一般的な並びに合わせる
-                # 通常: [番号, 曲名, 歌手, 歌った人, キー, コメント...] の順
-                # カラム数が足りない場合などは柔軟に対応
-                
-                # 一旦カラム名をリセットして番号順でアクセスできるようにする
+                # カラム名をリセットして番号順でアクセス
                 df.columns = range(df.shape[1])
                 
                 # 必要なデータを抽出してリネーム
                 temp_df = pd.DataFrame()
                 
-                # 列の場所を指定 (サイトの仕様に合わせて調整)
+                # simplelist.php の一般的な並び順に対応
                 if df.shape[1] >= 1: temp_df['順番'] = df[0]
                 if df.shape[1] >= 2: temp_df['曲名（ファイル名）'] = df[1]
                 if df.shape[1] >= 3: temp_df['歌手名'] = df[2]
                 if df.shape[1] >= 4: temp_df['歌った人'] = df[3]
                 if df.shape[1] >= 5: temp_df['キー'] = df[4]
-                # 作品名やコメントがない場合は空文字で埋める
+                if df.shape[1] >= 6: temp_df['コメント'] = df[5]
+                
+                # 不足カラムの補完
                 temp_df['作品名'] = "" 
-                temp_df['コメント'] = ""
+                if 'コメント' not in temp_df.columns:
+                    temp_df['コメント'] = ""
 
-                # 共通情報を付与
                 temp_df = temp_df.fillna("") 
                 temp_df['部屋主'] = room_map.get(port, f"Port {port}")
                 temp_df['取得日'] = current_date_str
                 
                 new_data_frames.append(temp_df)
     except Exception as e:
-        # エラー時は何もしない（追記しない＝データは消えない）
         pass
 
-# --- 2. 追記保存処理 ---
+# --- 3. 追記保存処理 ---
 if new_data_frames:
     print("新しいデータを整理して追記します...")
     new_df = pd.concat(new_data_frames, ignore_index=True)
 
-    # 数値変換とソート
     if '順番' in new_df.columns:
         new_df['順番'] = pd.to_numeric(new_df['順番'], errors='coerce')
 
-    # ★ご指定のソート順: 番号大きい方が上、1が一番下 (降順)
+    # ソート順: 番号大きい方が上
     new_df = new_df.sort_values(by='順番', ascending=False)
 
-    # ★重要: カラムの並び順を強制的に統一する (これがズレの原因でした)
-    # 足りないカラムがあれば自動で作成(NaN回避)
-    for col in FIXED_COLUMNS:
+    # ★重要: 既存ファイルの列構成に強制的に合わせる
+    # これにより「8列のファイルに9列を書き込む」エラーを防ぎます
+    for col in target_columns:
         if col not in new_df.columns:
-            new_df[col] = ""
+            new_df[col] = "" # 足りない列は空欄で埋める
     
-    # 指定の順番に並べ替え
-    new_df = new_df[FIXED_COLUMNS]
+    # 余分な列は捨て、順番も既存に合わせる
+    new_df = new_df[target_columns]
 
-    # ファイル書き込み
     file_exists = os.path.exists(HISTORY_FILE)
     write_header = not file_exists
     
     try:
+        # mode='a' (append) で追記のみ行う。既存データは触らない。
         new_df.to_csv(HISTORY_FILE, mode='a', header=write_header, index=False, encoding='utf-8-sig')
-        print(f" -> '{HISTORY_FILE}' に {len(new_df)} 件のデータを追記しました。(大きい数字が上)")
+        print(f" -> '{HISTORY_FILE}' に {len(new_df)} 件のデータを追記しました。")
     except PermissionError:
         print(f"【エラー】'{HISTORY_FILE}' が開けません。閉じてから再実行してください。")
 else:
@@ -181,21 +191,26 @@ if os.path.exists(HISTORY_FILE):
         history_df = pd.read_csv(HISTORY_FILE, encoding='utf-8-sig')
         history_df = history_df.fillna("")
         
-        # 重複排除 (表示用)
+        # 重複排除 (表示用のみ、ファイルは触らない)
         subset_cols = ['取得日', '部屋主', '順番', '曲名（ファイル名）', '歌った人']
-        # カラムが存在するかチェックしてからdrop_duplicates
-        existing_check = [c for c in subset_cols if c in history_df.columns]
-        final_df = history_df.drop_duplicates(subset=existing_check, keep='last')
+        # 実際に存在するカラムだけで重複チェック
+        check_cols = [c for c in subset_cols if c in history_df.columns]
         
-        # 最終的な表示順序 (日付新しい順、その中で番号大きい順)
+        if check_cols:
+            final_df = history_df.drop_duplicates(subset=check_cols, keep='last')
+        else:
+            final_df = history_df
+        
+        # ソート
         if '順番' in final_df.columns:
             final_df['順番'] = pd.to_numeric(final_df['順番'], errors='coerce')
         
-        final_df['temp_date'] = pd.to_datetime(final_df['取得日'], errors='coerce')
-        final_df = final_df.sort_values(by=['temp_date', '順番'], ascending=[False, False])
-        final_df = final_df.drop(columns=['temp_date'])
+        if '取得日' in final_df.columns:
+            final_df['temp_date'] = pd.to_datetime(final_df['取得日'], errors='coerce')
+            final_df = final_df.sort_values(by=['temp_date', '順番'], ascending=[False, False])
+            final_df = final_df.drop(columns=['temp_date'])
         
-        # カラム並び替え (部屋主を先頭に)
+        # カラム並び替え (部屋主先頭)
         cols = list(final_df.columns)
         if '部屋主' in cols:
             cols.insert(0, cols.pop(cols.index('部屋主')))
@@ -208,7 +223,7 @@ else:
     final_df = pd.DataFrame()
 
 
-# --- 以降、変更なし（クール集計・ランキング・HTML生成） ---
+# --- 以降、集計・HTML生成（変更なし） ---
 
 analysis_html_content = "" 
 ranking_html_content = "" 
@@ -262,234 +277,244 @@ if cool_file and os.path.exists(cool_file):
             end_date = pd.to_datetime("2026/03/31")
             
             analysis_source_df = final_df.copy()
-            analysis_source_df['dt_obj'] = pd.to_datetime(analysis_source_df['取得日'], errors='coerce')
-            
-            analysis_source_df['norm_filename'] = analysis_source_df['曲名（ファイル名）'].apply(normalize_text)
-            
-            def get_rescued_workname(row):
-                raw_work = str(row['作品名']) if pd.notna(row['作品名']) else ""
-                raw_song = str(row['曲名（ファイル名）']) if pd.notna(row['曲名（ファイル名）']) else ""
-                if raw_work.strip() in ["-", "−", "", "nan"]:
-                    match = re.search(r'【(.*?)】', raw_song)
-                    if match:
-                        return normalize_text(match.group(1))
-                return normalize_text(raw_work)
-
-            if '作品名' in analysis_source_df.columns:
-                analysis_source_df['norm_workname'] = analysis_source_df.apply(get_rescued_workname, axis=1)
-            else:
-                analysis_source_df['norm_workname'] = ""
-
-            exclude_keywords = ['test', 'テスト', 'システム', 'admin', 'System']
-            
-            target_history = analysis_source_df[
-                (analysis_source_df['dt_obj'] >= start_date) & 
-                (analysis_source_df['dt_obj'] <= end_date) &
-                (~analysis_source_df['歌った人'].astype(str).apply(lambda x: any(k in x for k in exclude_keywords)))
-            ]
-
-            categorized_data = {}
-            ALLOWED_CATEGORIES = ["2026年冬アニメ", "2025年秋アニメ"]
-            current_category = None
-            
-            for idx, row in raw_df.iterrows():
-                if not any(str(x).strip() for x in row): continue
-                col0 = str(row[0]).strip()
-
-                is_category_line = any(cat in col0 for cat in ALLOWED_CATEGORIES) and "作品名" not in col0
-                if is_category_line:
-                    current_category = col0
-                    if current_category not in categorized_data:
-                        categorized_data[current_category] = []
-                    continue
-                if "作品名" in col0: continue
-                if current_category is None: continue
-
-                anime = str(row[0]).strip() if len(row) > 0 else ""
-                type_ = str(row[1]).strip() if len(row) > 1 else ""
-                artist = str(row[2]).strip() if len(row) > 2 else ""
-                song = str(row[3]).strip() if len(row) > 3 else ""
-                if not anime and not song: continue
-
-                categorized_data[current_category].append({
-                    "anime": anime, "type": type_, "artist": artist, "song": song
-                })
-
-            def check_match(target_text, source_series):
-                if not target_text:
-                    return pd.Series([False] * len(source_series))
-                safe_target = re.escape(target_text)
-                if re.match(r'^[A-Z0-9\s]+$', target_text):
-                    pattern = r'(?:^|[^A-Z0-9])' + safe_target + r'(?:[^A-Z0-9]|$)'
-                    return source_series.str.contains(pattern, regex=True, case=False, na=False)
-                else:
-                    return source_series.str.contains(safe_target, case=False, na=False)
-
-            for category, items in categorized_data.items():
-                analysis_html_content += f"""
-                <div class="category-block">
-                    <div class="category-header" onclick="toggleCategory(this)">
-                        {category} <i class="fas fa-chevron-down" style="float:right;"></i>
-                    </div>
-                    <div class="category-content">
-                    <table class="analysisTable">
-                        <thead>
-                            <tr>
-                                <th style="width:25%; min-width:180px;">作品名</th>
-                                <th style="width:5%; min-width:40px;">作成</th> <th style="width:10%; min-width:60px;">OP/ED</th>
-                                <th style="width:20%; min-width:150px;">歌手</th>
-                                <th style="width:25%; min-width:180px;">曲名</th>
-                                <th style="width:15%; min-width:60px;">歌唱数</th>
-                            </tr>
-                        </thead>
-                """
+            if not analysis_source_df.empty and '取得日' in analysis_source_df.columns:
+                analysis_source_df['dt_obj'] = pd.to_datetime(analysis_source_df['取得日'], errors='coerce')
                 
-                items.sort(key=lambda x: x['anime'])
-                def get_anime_key(x): return x['anime']
+                # 曲名カラムの特定
+                song_col = '曲名（ファイル名）' if '曲名（ファイル名）' in analysis_source_df.columns else ''
+                if not song_col and '曲名' in analysis_source_df.columns: song_col = '曲名'
                 
-                for anime_name, group_iter in groupby(items, key=get_anime_key):
-                    group_items = list(group_iter)
-                    rowspan = len(group_items)
-                    analysis_html_content += '<tbody class="anime-group">'
+                if song_col:
+                    analysis_source_df['norm_filename'] = analysis_source_df[song_col].apply(normalize_text)
                     
-                    for i, item in enumerate(group_items):
-                        target_song_norm = normalize_text(item["song"])
-                        target_anime_norm = normalize_text(item["anime"])
-                        
-                        song_match_mask = check_match(target_song_norm, target_history['norm_filename'])
-                        anime_match_mask = (
-                            target_history['norm_filename'].str.contains(re.escape(target_anime_norm), case=False, na=False) |
-                            target_history['norm_workname'].str.contains(re.escape(target_anime_norm), case=False, na=False)
-                        )
-                        
-                        if target_song_norm and target_anime_norm:
-                            final_mask = song_match_mask & anime_match_mask
-                        elif target_song_norm:
-                            final_mask = song_match_mask
-                        elif target_anime_norm:
-                            final_mask = anime_match_mask
-                        else:
-                            final_mask = pd.Series([False] * len(target_history))
+                    def get_rescued_workname(row):
+                        raw_work = str(row['作品名']) if '作品名' in row and pd.notna(row['作品名']) else ""
+                        raw_song = str(row[song_col]) if pd.notna(row[song_col]) else ""
+                        if raw_work.strip() in ["-", "−", "", "nan"]:
+                            match = re.search(r'【(.*?)】', raw_song)
+                            if match:
+                                return normalize_text(match.group(1))
+                        return normalize_text(raw_work)
 
-                        count = len(target_history[final_mask])
-                        
-                        creation_count = 0
-                        if target_song_norm:
-                            for offline_str in offline_targets:
-                                if target_song_norm in offline_str:
-                                    if target_anime_norm:
-                                        if target_anime_norm in offline_str:
-                                            creation_count += 1
-                                    else:
-                                        creation_count += 1
+                    if '作品名' in analysis_source_df.columns:
+                        analysis_source_df['norm_workname'] = analysis_source_df.apply(get_rescued_workname, axis=1)
+                    else:
+                        analysis_source_df['norm_workname'] = ""
 
-                        ranking_data_list.append({
-                            "category": category,
-                            "anime": item["anime"],
-                            "song": item["song"],
-                            "artist": item["artist"],
-                            "type": item["type"],
-                            "count": count
-                        })
-
-                        row_class = ""
-                        if creation_count == 0:
-                            row_class = "gray-text"
-                        elif count == 0:
-                            row_class = "zero-count"
-                        else:
-                            row_class = "has-count"
-                        
-                        bar_width = min(count * 20, 150)
-                        bar_html = f'<div class="bar-chart" style="width:{bar_width}px;"></div>' if count > 0 else ""
-                        
-                        clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
-                        search_word = f"{clean_anime} {item['song']}"
-                        link_tag_start = f'<a href="#host/search.php?searchword={search_word}" class="export-link" target="_blank">'
-                        
-                        analysis_html_content += f'<tr class="{row_class}">'
-                        if i == 0:
-                            analysis_html_content += f'<td rowspan="{rowspan}">{item["anime"]}</td>'
-                        
-                        analysis_html_content += f'<td align="center">{creation_count}</td>'
-                        analysis_html_content += f'<td align="center">{link_tag_start}{item["type"]}</a></td>'
-                        analysis_html_content += f'<td>{link_tag_start}{item["artist"]}</a></td>'
-                        analysis_html_content += f'<td>{link_tag_start}{item["song"]}</a></td>'
-                        analysis_html_content += f'<td class="count-cell"><div class="count-wrapper"><span class="count-num">{count}</span>{bar_html}</div></td>'
-                        analysis_html_content += '</tr>'
+                    exclude_keywords = ['test', 'テスト', 'システム', 'admin', 'System']
                     
-                    analysis_html_content += '</tbody>'
-                analysis_html_content += "</table></div></div>"
+                    # 歌った人カラムの特定
+                    singer_col = '歌った人' if '歌った人' in analysis_source_df.columns else ''
+                    
+                    if singer_col:
+                        target_history = analysis_source_df[
+                            (analysis_source_df['dt_obj'] >= start_date) & 
+                            (analysis_source_df['dt_obj'] <= end_date) &
+                            (~analysis_source_df[singer_col].astype(str).apply(lambda x: any(k in x for k in exclude_keywords)))
+                        ]
 
-            cool_data_exists = True
-            
-            for target_cat in ALLOWED_CATEGORIES:
-                if target_cat not in categorized_data:
-                    continue
-                cat_items = [d for d in ranking_data_list if d["category"] == target_cat and d["count"] > 0]
-                cat_items.sort(key=lambda x: x["count"], reverse=True)
-                
-                ranking_html_content += f"""
-                <div class="category-block">
-                    <div class="category-header" onclick="toggleCategory(this)">
-                        {target_cat} ランキング (TOP 20) <i class="fas fa-chevron-down" style="float:right;"></i>
-                    </div>
-                    <div class="category-content">
-                    <table class="rankingTable">
-                        <thead>
-                            <tr>
-                                <th style="width:10%; min-width:60px;">順位</th>
-                                <th style="width:25%; min-width:180px;">作品名</th>
-                                <th style="width:25%; min-width:180px;">曲名</th>
-                                <th style="width:20%; min-width:150px;">歌手</th>
-                                <th style="width:20%; min-width:60px;">歌唱数</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                """
-                if not cat_items:
-                    ranking_html_content += '<tr><td colspan="5" style="text-align:center; padding:20px;">歌唱データがありません</td></tr>'
-                else:
-                    previous_count = None
-                    current_rank = 0
-                    for i, item in enumerate(cat_items):
-                        if item["count"] != previous_count:
-                            current_rank = i + 1
-                        if current_rank > 20:
-                            break
-                        previous_count = item["count"]
+                        categorized_data = {}
+                        ALLOWED_CATEGORIES = ["2026年冬アニメ", "2025年秋アニメ"]
+                        current_category = None
                         
-                        rank_class = f"rank-{current_rank}" if current_rank <= 3 else "rank-normal"
-                        rank_display = f'<span class="rank-badge {rank_class}">{current_rank}</span>'
-                        if current_rank == 1:
-                            rank_display += ' <i class="fas fa-crown" style="color:#FFD700;"></i>'
-                        elif current_rank == 2:
-                            rank_display += ' <i class="fas fa-medal" style="color:#C0C0C0;"></i>'
-                        elif current_rank == 3:
-                            rank_display += ' <i class="fas fa-medal" style="color:#CD7F32;"></i>'
+                        for idx, row in raw_df.iterrows():
+                            if not any(str(x).strip() for x in row): continue
+                            col0 = str(row[0]).strip()
+
+                            is_category_line = any(cat in col0 for cat in ALLOWED_CATEGORIES) and "作品名" not in col0
+                            if is_category_line:
+                                current_category = col0
+                                if current_category not in categorized_data:
+                                    categorized_data[current_category] = []
+                                continue
+                            if "作品名" in col0: continue
+                            if current_category is None: continue
+
+                            anime = str(row[0]).strip() if len(row) > 0 else ""
+                            type_ = str(row[1]).strip() if len(row) > 1 else ""
+                            artist = str(row[2]).strip() if len(row) > 2 else ""
+                            song = str(row[3]).strip() if len(row) > 3 else ""
+                            if not anime and not song: continue
+
+                            categorized_data[current_category].append({
+                                "anime": anime, "type": type_, "artist": artist, "song": song
+                            })
+
+                        def check_match(target_text, source_series):
+                            if not target_text:
+                                return pd.Series([False] * len(source_series))
+                            safe_target = re.escape(target_text)
+                            if re.match(r'^[A-Z0-9\s]+$', target_text):
+                                pattern = r'(?:^|[^A-Z0-9])' + safe_target + r'(?:[^A-Z0-9]|$)'
+                                return source_series.str.contains(pattern, regex=True, case=False, na=False)
+                            else:
+                                return source_series.str.contains(safe_target, case=False, na=False)
+
+                        for category, items in categorized_data.items():
+                            analysis_html_content += f"""
+                            <div class="category-block">
+                                <div class="category-header" onclick="toggleCategory(this)">
+                                    {category} <i class="fas fa-chevron-down" style="float:right;"></i>
+                                </div>
+                                <div class="category-content">
+                                <table class="analysisTable">
+                                    <thead>
+                                        <tr>
+                                            <th style="width:25%; min-width:180px;">作品名</th>
+                                            <th style="width:5%; min-width:40px;">作成</th> <th style="width:10%; min-width:60px;">OP/ED</th>
+                                            <th style="width:20%; min-width:150px;">歌手</th>
+                                            <th style="width:25%; min-width:180px;">曲名</th>
+                                            <th style="width:15%; min-width:60px;">歌唱数</th>
+                                        </tr>
+                                    </thead>
+                            """
                             
-                        bar_width = min(item["count"] * 20, 150)
-                        bar_html = f'<div class="bar-chart" style="width:{bar_width}px;"></div>'
-                        clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
-                        search_word = f"{clean_anime} {item['song']}"
+                            items.sort(key=lambda x: x['anime'])
+                            def get_anime_key(x): return x['anime']
+                            
+                            for anime_name, group_iter in groupby(items, key=get_anime_key):
+                                group_items = list(group_iter)
+                                rowspan = len(group_items)
+                                analysis_html_content += '<tbody class="anime-group">'
+                                
+                                for i, item in enumerate(group_items):
+                                    target_song_norm = normalize_text(item["song"])
+                                    target_anime_norm = normalize_text(item["anime"])
+                                    
+                                    song_match_mask = check_match(target_song_norm, target_history['norm_filename'])
+                                    anime_match_mask = (
+                                        target_history['norm_filename'].str.contains(re.escape(target_anime_norm), case=False, na=False) |
+                                        target_history['norm_workname'].str.contains(re.escape(target_anime_norm), case=False, na=False)
+                                    )
+                                    
+                                    if target_song_norm and target_anime_norm:
+                                        final_mask = song_match_mask & anime_match_mask
+                                    elif target_song_norm:
+                                        final_mask = song_match_mask
+                                    elif target_anime_norm:
+                                        final_mask = anime_match_mask
+                                    else:
+                                        final_mask = pd.Series([False] * len(target_history))
+
+                                    count = len(target_history[final_mask])
+                                    
+                                    creation_count = 0
+                                    if target_song_norm:
+                                        for offline_str in offline_targets:
+                                            if target_song_norm in offline_str:
+                                                if target_anime_norm:
+                                                    if target_anime_norm in offline_str:
+                                                        creation_count += 1
+                                                else:
+                                                    creation_count += 1
+
+                                    ranking_data_list.append({
+                                        "category": category,
+                                        "anime": item["anime"],
+                                        "song": item["song"],
+                                        "artist": item["artist"],
+                                        "type": item["type"],
+                                        "count": count
+                                    })
+
+                                    row_class = ""
+                                    if creation_count == 0:
+                                        row_class = "gray-text"
+                                    elif count == 0:
+                                        row_class = "zero-count"
+                                    else:
+                                        row_class = "has-count"
+                                    
+                                    bar_width = min(count * 20, 150)
+                                    bar_html = f'<div class="bar-chart" style="width:{bar_width}px;"></div>' if count > 0 else ""
+                                    
+                                    clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
+                                    search_word = f"{clean_anime} {item['song']}"
+                                    link_tag_start = f'<a href="#host/search.php?searchword={search_word}" class="export-link" target="_blank">'
+                                    
+                                    analysis_html_content += f'<tr class="{row_class}">'
+                                    if i == 0:
+                                        analysis_html_content += f'<td rowspan="{rowspan}">{item["anime"]}</td>'
+                                    
+                                    analysis_html_content += f'<td align="center">{creation_count}</td>'
+                                    analysis_html_content += f'<td align="center">{link_tag_start}{item["type"]}</a></td>'
+                                    analysis_html_content += f'<td>{link_tag_start}{item["artist"]}</a></td>'
+                                    analysis_html_content += f'<td>{link_tag_start}{item["song"]}</a></td>'
+                                    analysis_html_content += f'<td class="count-cell"><div class="count-wrapper"><span class="count-num">{count}</span>{bar_html}</div></td>'
+                                    analysis_html_content += '</tr>'
+                                
+                                analysis_html_content += '</tbody>'
+                            analysis_html_content += "</table></div></div>"
+
+                        cool_data_exists = True
                         
-                        ranking_html_content += f"""
-                        <tr class="has-count ranking-row" data-href="#host/search.php?searchword={search_word}" onclick="onRankingClick(this)">
-                            <td align="center" style="font-weight:bold; font-size:1.1rem;">{rank_display}</td>
-                            <td>{item["anime"]} <span style="font-size:0.8em; color:#777;">({item["type"]})</span></td>
-                            <td>{item["song"]}</td> <td>{item["artist"]}</td>
-                            <td class="count-cell"><div class="count-wrapper"><span class="count-num">{item["count"]}</span>{bar_html}</div></td>
-                        </tr>
-                        """
-                ranking_html_content += "</tbody></table></div></div>"
-        else:
-            print("CSV読み込み失敗")
+                        for target_cat in ALLOWED_CATEGORIES:
+                            if target_cat not in categorized_data:
+                                continue
+                            cat_items = [d for d in ranking_data_list if d["category"] == target_cat and d["count"] > 0]
+                            cat_items.sort(key=lambda x: x["count"], reverse=True)
+                            
+                            ranking_html_content += f"""
+                            <div class="category-block">
+                                <div class="category-header" onclick="toggleCategory(this)">
+                                    {target_cat} ランキング (TOP 20) <i class="fas fa-chevron-down" style="float:right;"></i>
+                                </div>
+                                <div class="category-content">
+                                <table class="rankingTable">
+                                    <thead>
+                                        <tr>
+                                            <th style="width:10%; min-width:60px;">順位</th>
+                                            <th style="width:25%; min-width:180px;">作品名</th>
+                                            <th style="width:25%; min-width:180px;">曲名</th>
+                                            <th style="width:20%; min-width:150px;">歌手</th>
+                                            <th style="width:20%; min-width:60px;">歌唱数</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                            """
+                            if not cat_items:
+                                ranking_html_content += '<tr><td colspan="5" style="text-align:center; padding:20px;">歌唱データがありません</td></tr>'
+                            else:
+                                previous_count = None
+                                current_rank = 0
+                                for i, item in enumerate(cat_items):
+                                    if item["count"] != previous_count:
+                                        current_rank = i + 1
+                                    if current_rank > 20:
+                                        break
+                                    previous_count = item["count"]
+                                    
+                                    rank_class = f"rank-{current_rank}" if current_rank <= 3 else "rank-normal"
+                                    rank_display = f'<span class="rank-badge {rank_class}">{current_rank}</span>'
+                                    if current_rank == 1:
+                                        rank_display += ' <i class="fas fa-crown" style="color:#FFD700;"></i>'
+                                    elif current_rank == 2:
+                                        rank_display += ' <i class="fas fa-medal" style="color:#C0C0C0;"></i>'
+                                    elif current_rank == 3:
+                                        rank_display += ' <i class="fas fa-medal" style="color:#CD7F32;"></i>'
+                                        
+                                    bar_width = min(item["count"] * 20, 150)
+                                    bar_html = f'<div class="bar-chart" style="width:{bar_width}px;"></div>'
+                                    clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
+                                    search_word = f"{clean_anime} {item['song']}"
+                                    
+                                    ranking_html_content += f"""
+                                    <tr class="has-count ranking-row" data-href="#host/search.php?searchword={search_word}" onclick="onRankingClick(this)">
+                                        <td align="center" style="font-weight:bold; font-size:1.1rem;">{rank_display}</td>
+                                        <td>{item["anime"]} <span style="font-size:0.8em; color:#777;">({item["type"]})</span></td>
+                                        <td>{item["song"]}</td> <td>{item["artist"]}</td>
+                                        <td class="count-cell"><div class="count-wrapper"><span class="count-num">{item["count"]}</span>{bar_html}</div></td>
+                                    </tr>
+                                    """
+                            ranking_html_content += "</tbody></table></div></div>"
     except Exception as e:
         print(f"集計エラー: {e}")
 
 # ==========================================
-# HTML生成 (HTML出力・印刷設定)
+# HTML生成
 # ==========================================
+
+current_datetime_str = datetime.datetime.now().strftime("%Y/%m/%d %H:%M")
 
 columns_to_hide = ['コメント'] 
 if not final_df.empty:
