@@ -5,6 +5,7 @@ import os
 import re
 import unicodedata
 import glob
+import shutil  # 【追加】バックアップ機能用
 from itertools import groupby
 
 # --- 時刻設定 ---
@@ -37,7 +38,7 @@ room_map = {
     11059: "つぼはち部屋",
     11063: "なぎ部屋",
     11064: "naoo部屋",
-    11066: "芝ちゃん部屋",  # 設定自体は存在しています
+    11066: "芝ちゃん部屋",
     11067: "crom部屋",
     11068: "けんしん部屋",
     11069: "けんちぃ部屋",
@@ -123,42 +124,46 @@ print("データを取得中...")
 for port in target_ports:
     url = f"http://Ykr.moe:{port}/simplelist.php"
     try:
-        # ★修正: タイムアウトを10秒に延長
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, timeout=10) # タイムアウト延長
         response.raise_for_status()
-        
-        # ★修正: 文字化け対策
-        response.encoding = response.apparent_encoding
+        response.encoding = response.apparent_encoding # 文字化け対策
         
         dfs = pd.read_html(response.content)
         if dfs:
             df = dfs[0]
-            df = df.fillna("") 
-            df['部屋主'] = room_map[port]
-            df['取得日'] = current_date_str
-            new_data_frames.append(df)
+            if not df.empty:
+                df = df.fillna("") 
+                df['部屋主'] = room_map[port]
+                df['取得日'] = current_date_str
+                new_data_frames.append(df)
             
     except Exception as e:
-        # ★修正: エラー時に詳細を表示して原因特定しやすくする
-        print(f"ポート {port} ({room_map.get(port, 'Unknown')}) の取得失敗: {e}")
+        # ポート切れでもエラー停止せず、既存の履歴を維持する
+        pass 
+        # print(f"ポート {port} の取得失敗(オフラインの可能性): {e}")
 
 # --- 3. データの結合・整理 ---
-final_df = history_df # デフォルト
+# ★修正: 新規データがなくても処理を続行（整理・保存のため）
+final_df = history_df.copy()
 
 if new_data_frames:
     new_df = pd.concat(new_data_frames, ignore_index=True)
-    combined_df = pd.concat([history_df, new_df], ignore_index=True)
+    final_df = pd.concat([final_df, new_df], ignore_index=True)
 
+if not final_df.empty:
     # クリーニング
     clean_check_cols = ['部屋主', '曲名（ファイル名）', '作品名', '歌手名']
     for col in clean_check_cols:
-        if col in combined_df.columns:
-            combined_df = combined_df[combined_df[col] != col]
+        if col in final_df.columns:
+            final_df = final_df[final_df[col] != col]
 
-    # 重複削除
-    subset_cols = ['部屋主', '順番', '曲名（ファイル名）', '歌った人']
-    existing_cols = [c for c in subset_cols if c in combined_df.columns]
-    final_df = combined_df.drop_duplicates(subset=existing_cols, keep='first')
+    # ★重要修正: 重複削除のキーに「取得日」を追加
+    # これにより、部屋がリセットされても日付が違えばデータが消えません
+    subset_cols = ['取得日', '部屋主', '順番', '曲名（ファイル名）', '歌った人']
+    existing_cols = [c for c in subset_cols if c in final_df.columns]
+    
+    # keep='last'で同日の重複があれば最新を採用
+    final_df = final_df.drop_duplicates(subset=existing_cols, keep='last')
     final_df = final_df.fillna("")
 
     if '順番' in final_df.columns:
@@ -175,10 +180,27 @@ if new_data_frames:
         cols.insert(0, cols.pop(cols.index('部屋主')))
         final_df = final_df[cols]
 
-    # --- 4. 保存処理 (分割保存) ---
-    print("履歴ファイルを保存中...")
+    # --- 4. 保存処理 (分割保存 + バックアップ) ---
+    print("履歴ファイルを保存処理中...")
     
-    # 保存用に「古い順」に並べ替える (積み上げ保存のため)
+    # ★追加: 自動バックアップ
+    backup_dir = "backup"
+    os.makedirs(backup_dir, exist_ok=True)
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    for f in glob.glob("history_*.csv"):
+        try:
+            shutil.copy(f, os.path.join(backup_dir, f"{f}.{timestamp}.bak"))
+        except:
+            pass
+
+    # ★追加: 保存前に古いファイルを削除 (ファイル数が減った場合のゴミ残り防止)
+    for f in glob.glob("history_*.csv"):
+        try:
+            os.remove(f)
+        except:
+            pass
+    
+    # 保存用に「古い順」に並べ替える
     save_df = final_df.copy()
     save_df['temp_date_sort'] = pd.to_datetime(save_df['取得日'], errors='coerce')
     save_df = save_df.sort_values(by=['temp_date_sort', '順番'], ascending=[True, True])
@@ -201,7 +223,7 @@ if new_data_frames:
     print("履歴ファイルの更新完了。")
 
 else:
-    print("新しいデータなし。過去データを使用。")
+    print("データが存在しません。")
 
 
 # ==========================================
@@ -992,6 +1014,3 @@ html_content = f"""
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
     print("HTML生成完了: index.html")
-
-
-
