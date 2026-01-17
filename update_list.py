@@ -5,7 +5,8 @@ import os
 import re
 import unicodedata
 import glob
-import shutil  # バックアップ用
+import shutil
+import sys  # 強制終了用
 from itertools import groupby
 
 # --- 時刻設定 ---
@@ -60,10 +61,9 @@ room_map = {
     11107: "ブルーベリー部屋"
 }
 
-# --- 関数: テキスト正規化 ---
+# --- 関数定義 ---
 def normalize_text(text):
-    if not isinstance(text, str):
-        return str(text)
+    if not isinstance(text, str): return str(text)
     text = unicodedata.normalize('NFKC', text)
     text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
     text = re.sub(r'[\[\(\{【].*?[\]\)\}】]', ' ', text)
@@ -75,8 +75,7 @@ def normalize_text(text):
     return text.upper()
 
 def normalize_offline_text(text):
-    if not isinstance(text, str):
-        return str(text)
+    if not isinstance(text, str): return str(text)
     text = unicodedata.normalize('NFKC', text)
     text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
     text = re.sub(r'(key|KEY)?\s*[\+\-]\s*[0-9]+', ' ', text)
@@ -87,42 +86,54 @@ def normalize_offline_text(text):
     return text.upper()
 
 def get_ordinal_str(n):
-    if 11 <= (n % 100) <= 13:
-        suffix = 'th'
-    else:
-        suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
+    if 11 <= (n % 100) <= 13: suffix = 'th'
+    else: suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
     return f"{n}{suffix}"
 
-# --- 1. 過去データ読み込み ---
+# --- 1. 過去データ読み込み (セーフティ機能付き) ---
 history_files = glob.glob("history*.csv")
 history_dfs = []
+initial_row_count = 0
+
+print(f"過去ログファイルを読み込み中... ({len(history_files)}ファイル)")
 
 if history_files:
-    print(f"過去ログファイルを検出しました: {history_files}")
     for f in history_files:
         try:
+            # エクセルで開いているとここでエラーになる
             df = pd.read_csv(f, encoding='utf-8-sig')
             df = df.fillna("")
             history_dfs.append(df)
+        except PermissionError:
+            print(f"【致命的エラー】ファイル '{f}' が開けません。Excel等で開いていませんか？")
+            print("データを保護するため、処理を中断します。")
+            input("Enterキーを押して終了してください...")
+            sys.exit() # 強制終了
         except Exception as e:
-            print(f"★警告: ファイル読み込みエラー({f}): {e}")
+            print(f"【エラー】ファイル '{f}' の読み込みに失敗: {e}")
+            print("安全のため処理を中断します。")
+            sys.exit() # 強制終了
 else:
-    print("過去ログファイルが見つかりません。新規作成します。")
+    print("過去ログファイルが見つかりません。新規作成モードで動作します。")
 
 if history_dfs:
     history_df = pd.concat(history_dfs, ignore_index=True)
+    initial_row_count = len(history_df)
+    print(f" -> 既存データ: {initial_row_count}件 読み込み完了")
 else:
     history_df = pd.DataFrame()
+
 
 # --- 2. 新しいデータ取得 ---
 target_ports = list(room_map.keys())
 new_data_frames = []
+error_count = 0
 
-print("データを取得中...")
+print("各部屋のデータを取得中...")
 for port in target_ports:
     url = f"http://Ykr.moe:{port}/simplelist.php"
     try:
-        # ★変更点: タイムアウトを30秒に延長
+        # タイムアウト30秒
         response = requests.get(url, timeout=30)
         response.raise_for_status()
         response.encoding = response.apparent_encoding
@@ -135,39 +146,43 @@ for port in target_ports:
                 df['部屋主'] = room_map[port]
                 df['取得日'] = current_date_str
                 new_data_frames.append(df)
-            
+            else:
+                # テーブルはあるが空の場合（正常な通信だが曲がない）
+                pass
     except Exception as e:
-        # 取得エラーでも停止せず、既存データ保護のために続行
-        pass
+        # 通信エラー時は「無視」する（重要：ここで空データを追加しないことで既存を守る）
+        error_count += 1
+        # print(f"ポート {port} 取得スキップ") 
+
+if error_count > 0:
+    print(f"注意: {error_count}件の部屋で通信を確認できませんでした。(既存の履歴は保持されます)")
 
 # --- 3. データの結合・整理 ---
-# 新規データがなくても、既存データの整理・保存を行うためにコピーを作成
 final_df = history_df.copy()
 
 if new_data_frames:
     new_df = pd.concat(new_data_frames, ignore_index=True)
     final_df = pd.concat([final_df, new_df], ignore_index=True)
 
+# 処理対象データがある場合のみ実行
 if not final_df.empty:
-    # クリーニング
+    # 不要ヘッダー行の削除
     clean_check_cols = ['部屋主', '曲名（ファイル名）', '作品名', '歌手名']
     for col in clean_check_cols:
         if col in final_df.columns:
             final_df = final_df[final_df[col] != col]
 
-    # ★重要変更点: 重複チェックに「取得日」を追加
-    # これにより、部屋リセット後も別日のデータとして保持されます
+    # ★重複削除（日付を含む厳密なキー）
     subset_cols = ['取得日', '部屋主', '順番', '曲名（ファイル名）', '歌った人']
     existing_cols = [c for c in subset_cols if c in final_df.columns]
     
-    # keep='last' で重複時は最新の情報を優先
     final_df = final_df.drop_duplicates(subset=existing_cols, keep='last')
     final_df = final_df.fillna("")
-
+    
+    # 順番の数値化とソート
     if '順番' in final_df.columns:
         final_df['順番'] = pd.to_numeric(final_df['順番'], errors='coerce')
-        
-    # 最新順にソート
+    
     final_df['temp_date'] = pd.to_datetime(final_df['取得日'], errors='coerce')
     final_df = final_df.sort_values(by=['temp_date', '順番'], ascending=[False, False])
     final_df = final_df.drop(columns=['temp_date'])
@@ -177,51 +192,72 @@ if not final_df.empty:
         cols.insert(0, cols.pop(cols.index('部屋主')))
         final_df = final_df[cols]
 
-    # --- 4. 保存処理 (バックアップ機能付き) ---
+    # --- 4. 保存処理 (安全対策: 減少チェック + 一時ファイル保存) ---
+    final_row_count = len(final_df)
+    
+    # 【安全装置】データが極端に減っていないかチェック
+    # (重複排除で多少減るのはOKだが、半分以下になるなどは異常)
+    if initial_row_count > 0 and final_row_count < (initial_row_count * 0.8):
+        print("【警告】保存しようとしているデータ件数が、読み込み時より大幅に減っています！")
+        print(f"読込時: {initial_row_count}件 -> 保存時: {final_row_count}件")
+        print("データ消失を防ぐため、今回の保存は中止します。")
+        print("原因: 通信エラーによる取得失敗、または重複判定の誤作動の可能性があります。")
+        # 処理は続けるが、ファイル保存はスキップ、または別名保存などの対応
+        # ここでは安全重視で「保存せずに終了」します
+        input("Enterキーを押して終了してください（ファイルは更新されません）...")
+        sys.exit()
+
     print("履歴ファイルを保存処理中...")
     
-    # ★追加: 自動バックアップ (backupフォルダへ退避)
+    # 1. バックアップ作成
     backup_dir = "backup"
     os.makedirs(backup_dir, exist_ok=True)
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    
-    current_files = glob.glob("history_*.csv")
-    for f in current_files:
+    for f in glob.glob("history_*.csv"):
         try:
             shutil.copy(f, os.path.join(backup_dir, f"{f}.{timestamp}.bak"))
-        except Exception as e:
-            print(f"バックアップ作成失敗({f}): {e}")
+        except: pass
 
-    # ★追加: 保存前に古いhistoryファイルを削除 (ファイルの重複・ゾンビ化防止)
-    for f in current_files:
-        try:
-            os.remove(f)
-        except:
-            pass
-    
-    # 保存用に「古い順」に並べ替える
+    # 2. 一時ファイルとして保存 (temp_history_*.csv)
+    # いきなり本番ファイルを消さず、まずTempを作る
     save_df = final_df.copy()
     save_df['temp_date_sort'] = pd.to_datetime(save_df['取得日'], errors='coerce')
     save_df = save_df.sort_values(by=['temp_date_sort', '順番'], ascending=[True, True])
     save_df = save_df.drop(columns=['temp_date_sort'])
     
-    # 4000行ごとに分割保存
     chunk_size = 4000
     total_rows = len(save_df)
+    temp_files = []
     
-    if total_rows == 0:
-        print("保存するデータがありません。")
-    else:
-        for i in range(0, total_rows, chunk_size):
-            chunk = save_df.iloc[i : i + chunk_size]
-            file_num = (i // chunk_size) + 1
-            suffix = get_ordinal_str(file_num)
-            filename = f"history_{suffix}.csv"
+    try:
+        if total_rows == 0:
+            print("保存するデータがありません。")
+        else:
+            for i in range(0, total_rows, chunk_size):
+                chunk = save_df.iloc[i : i + chunk_size]
+                file_num = (i // chunk_size) + 1
+                suffix = get_ordinal_str(file_num)
+                temp_filename = f"temp_history_{suffix}.csv" # 一時ファイル名
+                
+                chunk.to_csv(temp_filename, index=False, encoding='utf-8-sig')
+                temp_files.append(temp_filename)
+                
+            # 3. 保存成功を確認してから、本番ファイルを置き換える
+            # 古いhistoryファイルを削除
+            for f in glob.glob("history_*.csv"):
+                os.remove(f)
             
-            chunk.to_csv(filename, index=False, encoding='utf-8-sig')
-            print(f" -> {filename} を保存しました ({len(chunk)}行)")
-
-    print("履歴ファイルの更新完了。")
+            # Tempファイルを本番名にリネーム
+            for temp_f in temp_files:
+                final_name = temp_f.replace("temp_", "")
+                os.rename(temp_f, final_name)
+                print(f" -> {final_name} を保存しました")
+                
+        print("履歴ファイルの更新完了。")
+        
+    except Exception as e:
+        print(f"【保存エラー】ファイルの書き込み中にエラーが発生しました: {e}")
+        print("一時ファイルが残っている可能性があります。元のhistoryファイルは保護されているか確認してください。")
 
 else:
     print("データが存在しません。更新をスキップします。")
@@ -261,7 +297,7 @@ for file_path in offline_files:
             print(f"オフラインリスト({file_path})読み込みエラー: {e}")
 
 if not os.path.exists(cool_file):
-    possible_files = [f for f in os.listdir('.') if f.endswith('.csv') and 'history' not in f and 'offline' not in f and 'backup' not in f]
+    possible_files = [f for f in os.listdir('.') if f.endswith('.csv') and 'history' not in f and 'offline' not in f and 'backup' not in f and 'temp' not in f]
     if possible_files:
         cool_file = possible_files[0]
 
