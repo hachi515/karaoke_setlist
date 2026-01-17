@@ -56,6 +56,7 @@ room_map = {
     11102: "るえ部屋",
     11103: "ながし部屋",
     11106: "冨塚部屋"
+    11107: "ブルーベリー部屋"
 }
 
 # --- 関数: テキスト正規化 (検索キー用・履歴データ用) ---
@@ -991,4 +992,5 @@ html_content = f"""
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
     print("HTML生成完了: index.html")
+
 
