@@ -31,7 +31,7 @@ room_map = {
     11059: "つぼはち部屋",
     11063: "なぎ部屋",
     11064: "naoo部屋",
-    11066: "芝ちゃん部屋",
+    11066: "芝ちゃん部屋",  # 設定自体は存在しています
     11067: "crom部屋",
     11068: "けんしん部屋",
     11069: "けんちぃ部屋",
@@ -88,7 +88,6 @@ def get_ordinal_str(n):
     return f"{n}{suffix}"
 
 # --- 1. 過去データ読み込み (複数ファイル対応) ---
-# history.csv, history_1st.csv, history_2nd.csv... 全て読み込む
 history_files = glob.glob("history*.csv")
 history_dfs = []
 
@@ -117,8 +116,12 @@ print("データを取得中...")
 for port in target_ports:
     url = f"http://Ykr.moe:{port}/simplelist.php"
     try:
-        response = requests.get(url, timeout=5)
+        # ★修正: タイムアウトを10秒に延長
+        response = requests.get(url, timeout=10)
         response.raise_for_status()
+        
+        # ★修正: 文字化け対策
+        response.encoding = response.apparent_encoding
         
         dfs = pd.read_html(response.content)
         if dfs:
@@ -127,8 +130,10 @@ for port in target_ports:
             df['部屋主'] = room_map[port]
             df['取得日'] = current_date_str
             new_data_frames.append(df)
+            
     except Exception as e:
-        pass 
+        # ★修正: エラー時に詳細を表示して原因特定しやすくする
+        print(f"ポート {port} ({room_map.get(port, 'Unknown')}) の取得失敗: {e}")
 
 # --- 3. データの結合・整理 ---
 final_df = history_df # デフォルト
@@ -137,7 +142,7 @@ if new_data_frames:
     new_df = pd.concat(new_data_frames, ignore_index=True)
     combined_df = pd.concat([history_df, new_df], ignore_index=True)
 
-    # クリーニング: ヘッダー行の誤混入などを削除
+    # クリーニング
     clean_check_cols = ['部屋主', '曲名（ファイル名）', '作品名', '歌手名']
     for col in clean_check_cols:
         if col in combined_df.columns:
@@ -169,7 +174,6 @@ if new_data_frames:
     # 保存用に「古い順」に並べ替える (積み上げ保存のため)
     save_df = final_df.copy()
     save_df['temp_date_sort'] = pd.to_datetime(save_df['取得日'], errors='coerce')
-    # 日付昇順、順番昇順 (古いものが上)
     save_df = save_df.sort_values(by=['temp_date_sort', '順番'], ascending=[True, True])
     save_df = save_df.drop(columns=['temp_date_sort'])
     
@@ -177,13 +181,9 @@ if new_data_frames:
     chunk_size = 4000
     total_rows = len(save_df)
     
-    # 既存の history.csv があれば削除するか、ユーザーに任せる（今回は上書き防止のため分割ファイルのみ生成）
-    # ※運用上 history.csv が残っていると次回も読み込まれるが、drop_duplicatesで弾かれるので問題なし
-    
     for i in range(0, total_rows, chunk_size):
         chunk = save_df.iloc[i : i + chunk_size]
         
-        # ファイル番号 (1, 2, 3...)
         file_num = (i // chunk_size) + 1
         suffix = get_ordinal_str(file_num)
         filename = f"history_{suffix}.csv"
@@ -200,7 +200,6 @@ else:
 # ==========================================
 # ★集計処理 (クール集計 + ランキング用データ収集)
 # ==========================================
-# (以下、HTML生成等のロジックは final_df を使うので変更なし)
 
 analysis_html_content = "" 
 ranking_html_content = "" 
@@ -231,7 +230,6 @@ for file_path in offline_files:
         except Exception as e:
             print(f"オフラインリスト({file_path})読み込みエラー: {e}")
     else:
-        # print(f"オフラインリスト({file_path})が見つかりません。") # 存在しない場合のエラーログ抑制
         pass
 
 print(f"オフラインリスト合計件数: {len(offline_targets)}")
