@@ -90,7 +90,7 @@ def get_ordinal_str(n):
     else: suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
     return f"{n}{suffix}"
 
-# --- 1. 過去データ読み込み (セーフティ機能付き) ---
+# --- 1. 過去データ読み込み ---
 history_files = glob.glob("history*.csv")
 history_dfs = []
 initial_row_count = 0
@@ -124,17 +124,17 @@ else:
     history_df = pd.DataFrame()
 
 
-# --- 2. 新しいデータ取得 ---
+# --- 2. 新しいデータ取得 (★修正: エラー時は即停止) ---
 target_ports = list(room_map.keys())
 new_data_frames = []
-error_count = 0
+connection_error_occurred = False # エラーフラグ
 
 print("各部屋のデータを取得中...")
 for port in target_ports:
     url = f"http://Ykr.moe:{port}/simplelist.php"
     try:
-        # タイムアウト30秒
-        response = requests.get(url, timeout=30)
+        # タイムアウト20秒
+        response = requests.get(url, timeout=20)
         response.raise_for_status()
         response.encoding = response.apparent_encoding
         
@@ -150,14 +150,29 @@ for port in target_ports:
                 # テーブルはあるが空の場合（正常な通信だが曲がない）
                 pass
     except Exception as e:
-        # 通信エラー時は「無視」する（重要：ここで空データを追加しないことで既存を守る）
-        error_count += 1
-        # print(f"ポート {port} 取得スキップ") 
+        # ★重要: 通信エラー発生時はフラグを立てて、後で保存をブロックする
+        print(f"【通信エラー】ポート {port} に接続できませんでした: {e}")
+        connection_error_occurred = True
 
-if error_count > 0:
-    print(f"注意: {error_count}件の部屋で通信を確認できませんでした。(既存の履歴は保持されます)")
+# ★安全装置：通信エラーがあった場合、保存せずに終了
+if connection_error_occurred:
+    print("\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+    print("【警告】通信エラーが発生したため、処理を中断します。")
+    print("既存の履歴ファイルを守るため、保存は行いません。")
+    print("（ここで保存すると、データが不完全な状態で上書きされる危険があります）")
+    print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+    input("Enterキーを押して終了してください...")
+    sys.exit() # プログラム終了
+
+if not new_data_frames:
+    print("\n【警告】新しいデータが1件も取得できませんでした。")
+    print("全ポートがオフラインの可能性があります。保存せずに終了します。")
+    input("Enterキーを押して終了してください...")
+    sys.exit()
+
 
 # --- 3. データの結合・整理 ---
+print("データを結合しています...")
 final_df = history_df.copy()
 
 if new_data_frames:
@@ -172,7 +187,8 @@ if not final_df.empty:
         if col in final_df.columns:
             final_df = final_df[final_df[col] != col]
 
-    # ★重複削除（日付を含む厳密なキー）
+    # ★重複削除（最低限の設定）
+    # 日付・部屋・順番・曲名・歌手すべてが一致する場合のみ削除
     subset_cols = ['取得日', '部屋主', '順番', '曲名（ファイル名）', '歌った人']
     existing_cols = [c for c in subset_cols if c in final_df.columns]
     
@@ -192,21 +208,9 @@ if not final_df.empty:
         cols.insert(0, cols.pop(cols.index('部屋主')))
         final_df = final_df[cols]
 
-    # --- 4. 保存処理 (安全対策: 減少チェック + 一時ファイル保存) ---
+    # --- 4. 保存処理 (バックアップ + 一時ファイル保存) ---
     final_row_count = len(final_df)
     
-    # 【安全装置】データが極端に減っていないかチェック
-    # (重複排除で多少減るのはOKだが、半分以下になるなどは異常)
-    if initial_row_count > 0 and final_row_count < (initial_row_count * 0.8):
-        print("【警告】保存しようとしているデータ件数が、読み込み時より大幅に減っています！")
-        print(f"読込時: {initial_row_count}件 -> 保存時: {final_row_count}件")
-        print("データ消失を防ぐため、今回の保存は中止します。")
-        print("原因: 通信エラーによる取得失敗、または重複判定の誤作動の可能性があります。")
-        # 処理は続けるが、ファイル保存はスキップ、または別名保存などの対応
-        # ここでは安全重視で「保存せずに終了」します
-        input("Enterキーを押して終了してください（ファイルは更新されません）...")
-        sys.exit()
-
     print("履歴ファイルを保存処理中...")
     
     # 1. バックアップ作成
