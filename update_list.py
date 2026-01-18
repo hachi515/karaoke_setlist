@@ -86,13 +86,11 @@ def normalize_offline_text(text):
     text = re.sub(r'\s+', ' ', text).strip()
     return text.upper()
 
-# ★データクリーニング関数（キー削除・作品名抽出）
-def clean_and_extract_work(row):
-    song = str(row['曲名（ファイル名）'])
-    work = ""
-    
-    # 1. キー変更情報の削除 (履歴タブ同様の処理)
-    # (Key+2), [原キー], Key: -1 などのパターンを除去
+# ★追加関数: キー変更情報のみを削除する (作品名の抽出・移動はしない)
+def remove_key_info(text):
+    if not isinstance(text, str): return str(text)
+    song = text
+    # (Key+2), [原キー], Key: -1, キー変更-2 などのパターンを削除
     key_patterns = [
         r'[\(（\[【]\s*(?:key|KEY|キー)?\s*(?:[\+\-±]\d+|原キー|変更なし)\s*[\)）\]】]',
         r'(?:key|KEY|キー)[:：]?\s*[\+\-±]\d+',
@@ -101,26 +99,7 @@ def clean_and_extract_work(row):
     for pat in key_patterns:
         song = re.sub(pat, '', song, flags=re.IGNORECASE)
     
-    # 2. 作品名の抽出
-    # キー情報を削除した後、残っている括弧書きを作品名として抽出する
-    # 例: "曲名 (作品名)" -> song="曲名", work="作品名"
-    # 括弧のパターン: () または 【】
-    match = re.search(r'[\(（【](.+?)[\)）】]', song)
-    if match:
-        extracted = match.group(1).strip()
-        # 明らかに作品名でないもの（短い数字のみや拡張子など）を除外する簡易フィルタ
-        if len(extracted) > 1 and not re.match(r'^[0-9]+$', extracted):
-            work = extracted
-            # 曲名から作品名部分を削除（整形）
-            song = song.replace(match.group(0), '').strip()
-    
-    song = song.strip()
-    
-    # 歌手名、歌った人も文字列化して返す
-    singer_name = str(row['歌手名']) if pd.notna(row['歌手名']) else ""
-    sung_by = str(row['歌った人']) if pd.notna(row['歌った人']) else ""
-    
-    return pd.Series([song, work, singer_name, sung_by], index=['曲名（ファイル名）', '作品名', '歌手名', '歌った人'])
+    return song.strip()
 
 # --- 1. 既存ファイル読み込み ---
 if os.path.exists(HISTORY_FILE):
@@ -159,27 +138,26 @@ for port in target_ports:
                 # カラム名をリセットして番号順でアクセス
                 df.columns = range(df.shape[1])
                 
-                # 一時データフレーム作成
                 temp_df = pd.DataFrame()
                 
                 if df.shape[1] >= 1: temp_df['順番'] = df[0]
-                # 曲名・歌手・歌った人・コメントを仮取得
-                if df.shape[1] >= 2: temp_df['曲名（ファイル名）'] = df[1]
+                
+                # ★修正: 曲名からキー情報のみ削除
+                if df.shape[1] >= 2:
+                    temp_df['曲名（ファイル名）'] = df[1].apply(remove_key_info)
+                else:
+                    temp_df['曲名（ファイル名）'] = ""
+
+                # 作品名カラムを用意 (抽出や移動はせず、空欄で初期化)
+                temp_df['作品名'] = ""
+
                 if df.shape[1] >= 3: temp_df['歌手名'] = df[2]
                 if df.shape[1] >= 4: temp_df['歌った人'] = df[3]
+                if df.shape[1] >= 5: temp_df['キー'] = df[4]
                 if df.shape[1] >= 6: temp_df['コメント'] = df[5]
-                else: temp_df['コメント'] = ""
-
-                # ★クリーニングと作品名抽出の適用
-                if '曲名（ファイル名）' in temp_df.columns:
-                    cleaned_data = temp_df.apply(clean_and_extract_work, axis=1)
-                    temp_df['曲名（ファイル名）'] = cleaned_data['曲名（ファイル名）']
-                    temp_df['作品名'] = cleaned_data['作品名']
-                    # 元の歌手名などが空の場合の補完
-                    if '歌手名' in cleaned_data: temp_df['歌手名'] = cleaned_data['歌手名']
-                    if '歌った人' in cleaned_data: temp_df['歌った人'] = cleaned_data['歌った人']
-                else:
-                    temp_df['作品名'] = ""
+                
+                if 'コメント' not in temp_df.columns:
+                    temp_df['コメント'] = ""
 
                 temp_df = temp_df.fillna("") 
                 temp_df['部屋主'] = room_map.get(port, f"Port {port}")
@@ -197,14 +175,13 @@ if new_data_frames:
     # 既存データと新データを結合
     combined_df = pd.concat([history_df, new_df], ignore_index=True)
     
-    # ★重複判定のカラム設定 (ご要望通り: 順番, 曲名, 作品名, 歌手名, 歌った人 + 部屋主)
+    # ★修正: 重複判定のカラム設定（作品名、歌手名を追加して厳密に判定）
     subset_cols = ['部屋主', '順番', '曲名（ファイル名）', '作品名', '歌手名', '歌った人']
     
     # 実際に存在するカラムだけでチェック
     existing_cols = [c for c in subset_cols if c in combined_df.columns]
     
     # 重複排除 (古いデータを残す設定 keep='first')
-    # これにより、既に存在する履歴と同じ内容(作品名含む)であれば追加されません
     final_df = combined_df.drop_duplicates(subset=existing_cols, keep='first')
     
     # 欠損値埋め
@@ -923,8 +900,6 @@ html_content = f"""
     }}
     
     function onRankingClick(row) {{
-        // クリックで検索フィルタを発動させる機能
-        // ただし現在のタブがランキングなので、セットリストタブへ移動してから検索する
         const searchWord = row.getAttribute('data-href').split('searchword=')[1];
         if(searchWord) {{
             const decoded = decodeURIComponent(searchWord);
