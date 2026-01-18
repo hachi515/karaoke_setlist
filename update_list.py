@@ -83,6 +83,10 @@ for port, room in room_map.items():
     except Exception:
         pass
 
+# ポート番号だけのゴミ行を除去
+if '曲名（ファイル名）' in combined_df.columns:
+    combined_df = combined_df[combined_df['曲名（ファイル名）'] != '']
+
 # =========================
 # 3. 結合・重複排除
 # =========================
@@ -894,4 +898,5 @@ html_content = f"""
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
     print("HTML生成完了: index.html")
+
 
