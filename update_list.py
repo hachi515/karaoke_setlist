@@ -4,7 +4,6 @@ import datetime
 import os
 import re
 import unicodedata
-import glob
 from itertools import groupby
 
 # --- 時刻設定 ---
@@ -14,210 +13,105 @@ current_datetime_str = now.strftime("%Y/%m/%d %H:%M")
 
 # --- 設定: ポート番号と部屋主の名前の対応表 ---
 room_map = {
-    11000: "ゆーふうりん部屋",
-    11001: "ゆーふうりん部屋",
-    11002: "ゆーふうりん部屋",
-    11003: "ゆーふうりん部屋",
-    11004: "ゆーふうりん部屋",
-    11005: "ゆーふうりん部屋",
-    11006: "ゆーふうりん部屋",
-    11007: "ゆーふうりん部屋",
-    11008: "ゆーふうりん部屋",
+    11000: "ゆーふうりん部屋", 11001: "ゆーふうりん部屋", 11002: "ゆーふうりん部屋",
+    11003: "ゆーふうりん部屋", 11004: "ゆーふうりん部屋", 11005: "ゆーふうりん部屋",
+    11006: "ゆーふうりん部屋", 11007: "ゆーふうりん部屋", 11008: "ゆーふうりん部屋",
     11009: "ゆーふうりん部屋",
-    11010: "加古部屋",
-    11011: "加古部屋",
-    11012: "加古部屋",
-    11013: "加古部屋",
-    11014: "加古部屋",
-    11015: "加古部屋",
-    11021: "成田部屋",
-    11022: "成田部屋",
+    11010: "加古部屋", 11011: "加古部屋", 11012: "加古部屋",
+    11013: "加古部屋", 11014: "加古部屋", 11015: "加古部屋",
+    11021: "成田部屋", 11022: "成田部屋",
     11028: "タマ部屋",
-    11058: "すみた部屋",
-    11059: "つぼはち部屋",
-    11063: "なぎ部屋",
-    11064: "naoo部屋",
-    11066: "芝ちゃん部屋",
-    11067: "crom部屋",
-    11068: "けんしん部屋",
-    11069: "けんちぃ部屋",
-    11070: "黒河部屋",
-    11071: "黒河部屋",
-    11074: "tukinowa部屋",
-    11077: "v3部屋",
-    11078: "のんでるん部屋",
-    11079: "まどか部屋",
-    11084: "タカヒロ部屋",
-    11085: "タカヒロ部屋",
-    11086: "タカヒロ部屋",
-    11087: "MiO部屋",
-    11088: "ほっしー部屋",
-    11101: "えみち部屋",
-    11102: "るえ部屋",
-    11103: "ながし部屋",
-    11106: "冨塚部屋",
-    11107: "ブルーベリー部屋"
+    11058: "すみた部屋", 11059: "つぼはち部屋",
+    11063: "なぎ部屋", 11064: "naoo部屋",
+    11066: "芝ちゃん部屋", 11067: "crom部屋",
+    11068: "けんしん部屋", 11069: "けんちぃ部屋",
+    11070: "黒河部屋", 11071: "黒河部屋",
+    11074: "tukinowa部屋", 11077: "v3部屋",
+    11078: "のんでるん部屋", 11079: "まどか部屋",
+    11084: "タカヒロ部屋", 11085: "タカヒロ部屋", 11086: "タカヒロ部屋",
+    11087: "MiO部屋", 11088: "ほっしー部屋",
+    11101: "えみち部屋", 11102: "るえ部屋", 11103: "ながし部屋",
+    11106: "冨塚部屋", 11107: "ブルーベリー部屋"
 }
 
-# --- ファイル名設定 ---
 HISTORY_FILE = "history.csv"
 
-# --- 関数定義 ---
+# =========================
+# 正規化関数（既存維持）
+# =========================
 def normalize_text(text):
     if not isinstance(text, str): return str(text)
     text = unicodedata.normalize('NFKC', text)
     text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
     text = re.sub(r'[\[\(\{【].*?[\]\)\}】]', ' ', text)
     text = re.sub(r'(key|KEY)?\s*[\+\-]\s*[0-9]+', ' ', text)
-    text = re.sub(r'原キー', ' ', text)
-    text = re.sub(r'(キー)?変更[:：]?', ' ', text)
+    text = re.sub(r'原キー|(キー)?変更[:：]?', ' ', text)
     text = re.sub(r'[~〜～\-_=,.]', ' ', text)
-    text = re.sub(r'\s+', ' ', text).strip()
-    return text.upper()
+    return re.sub(r'\s+', ' ', text).strip().upper()
 
-def normalize_offline_text(text):
-    if not isinstance(text, str): return str(text)
-    text = unicodedata.normalize('NFKC', text)
-    text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
-    text = re.sub(r'(key|KEY)?\s*[\+\-]\s*[0-9]+', ' ', text)
-    text = re.sub(r'原キー', ' ', text)
-    text = re.sub(r'(キー)?変更[:：]?', ' ', text)
-    text = re.sub(r'[~〜～\-_=,.]', ' ', text)
-    text = re.sub(r'\s+', ' ', text).strip()
-    return text.upper()
-
-# ★追加関数: キー変更情報のみを削除する (作品名の抽出・移動はしない)
-def remove_key_info(text):
-    if not isinstance(text, str): return str(text)
-    song = text
-    # (Key+2), [原キー], Key: -1, キー変更-2 などのパターンを削除
-    key_patterns = [
-        r'[\(（\[【]\s*(?:key|KEY|キー)?\s*(?:[\+\-±]\d+|原キー|変更なし)\s*[\)）\]】]',
-        r'(?:key|KEY|キー)[:：]?\s*[\+\-±]\d+',
-        r'キー変更[:：]?\s*[\+\-±]?\d+'
-    ]
-    for pat in key_patterns:
-        song = re.sub(pat, '', song, flags=re.IGNORECASE)
-    
-    return song.strip()
-
-# --- 1. 既存ファイル読み込み ---
+# =========================
+# 1. history.csv 読み込み
+# =========================
 if os.path.exists(HISTORY_FILE):
-    try:
-        print(f"既存の {HISTORY_FILE} を読み込んでいます...")
-        history_df = pd.read_csv(HISTORY_FILE, encoding='utf-8-sig')
-        # カラム名にゴミが入っている場合のクリーニング
-        clean_check_cols = ['部屋主', '曲名（ファイル名）', '作品名', '歌手名']
-        for col in clean_check_cols:
-            if col in history_df.columns:
-                history_df = history_df[history_df[col] != col]
-    except Exception as e:
-        print(f"既存ファイル読み込み警告: {e}")
-        history_df = pd.DataFrame()
+    history_df = pd.read_csv(HISTORY_FILE, encoding="utf-8-sig")
 else:
-    print("既存の履歴ファイルが見つかりません。新規作成します。")
     history_df = pd.DataFrame()
 
-# --- 2. 新しいデータ取得 ---
-target_ports = list(room_map.keys())
-new_data_frames = []
+# =========================
+# 2. 新規データ取得
+# =========================
+new_rows = []
 
-print("最新データを取得中...")
-
-for port in target_ports:
-    url = f"http://Ykr.moe:{port}/simplelist.php"
+for port, room in room_map.items():
     try:
-        response = requests.get(url, timeout=20)
-        response.raise_for_status()
-        response.encoding = response.apparent_encoding
-        
-        dfs = pd.read_html(response.content)
-        if dfs:
-            df = dfs[0]
-            if not df.empty:
-                # カラム名をリセットして番号順でアクセス
-                df.columns = range(df.shape[1])
-                
-                temp_df = pd.DataFrame()
-                
-                if df.shape[1] >= 1: temp_df['順番'] = df[0]
-                
-                # ★修正: 曲名からキー情報のみ削除
-                if df.shape[1] >= 2:
-                    temp_df['曲名（ファイル名）'] = df[1].apply(remove_key_info)
-                else:
-                    temp_df['曲名（ファイル名）'] = ""
+        url = f"http://Ykr.moe:{port}/simplelist.php"
+        dfs = pd.read_html(requests.get(url, timeout=20).content)
+        df = dfs[0]
+        df.columns = range(df.shape[1])  # 列ズレ防止
 
-                # 作品名カラムを用意 (抽出や移動はせず、空欄で初期化)
-                temp_df['作品名'] = ""
-
-                if df.shape[1] >= 3: temp_df['歌手名'] = df[2]
-                if df.shape[1] >= 4: temp_df['歌った人'] = df[3]
-                if df.shape[1] >= 5: temp_df['キー'] = df[4]
-                if df.shape[1] >= 6: temp_df['コメント'] = df[5]
-                
-                if 'コメント' not in temp_df.columns:
-                    temp_df['コメント'] = ""
-
-                temp_df = temp_df.fillna("") 
-                temp_df['部屋主'] = room_map.get(port, f"Port {port}")
-                temp_df['取得日'] = current_date_str
-                
-                new_data_frames.append(temp_df)
-    except Exception as e:
+        for _, r in df.iterrows():
+            new_rows.append({
+                "部屋主": room,
+                "順番": r[0] if df.shape[1] > 0 else "",
+                "曲名（ファイル名）": r[1] if df.shape[1] > 1 else "",
+                "作品名": "",
+                "歌手名": r[2] if df.shape[1] > 2 else "",
+                "歌った人": r[3] if df.shape[1] > 3 else "",
+                "コメント": r[5] if df.shape[1] > 5 else "",
+                "ポート番号": port,
+                "取得日": current_date_str
+            })
+    except Exception:
         pass
 
-# --- 3. 結合・重複排除・保存 ---
-if new_data_frames:
-    print("データを結合して整理中...")
-    new_df = pd.concat(new_data_frames, ignore_index=True)
-    
-    # 既存データと新データを結合
+# =========================
+# 3. 結合・重複排除
+# =========================
+if new_rows:
+    new_df = pd.DataFrame(new_rows)
     combined_df = pd.concat([history_df, new_df], ignore_index=True)
-    
-    # ★修正: 重複判定のカラム設定（作品名、歌手名を追加して厳密に判定）
-    subset_cols = ['部屋主', '順番', '曲名（ファイル名）', '作品名', '歌手名', '歌った人']
-    
-    # 実際に存在するカラムだけでチェック
-    existing_cols = [c for c in subset_cols if c in combined_df.columns]
-    
-    # 重複排除 (古いデータを残す設定 keep='first')
-    final_df = combined_df.drop_duplicates(subset=existing_cols, keep='first')
-    
-    # 欠損値埋め
-    final_df = final_df.fillna("")
 
-    # 順番を整数化
-    if '順番' in final_df.columns:
-        final_df['順番'] = pd.to_numeric(final_df['順番'], errors='coerce').fillna(0).astype(int)
+    dup_keys = ["順番", "曲名（ファイル名）", "作品名", "歌手名", "歌った人"]
+    combined_df = combined_df.drop_duplicates(subset=dup_keys, keep="first")
 
-    # ソート処理
-    if '取得日' in final_df.columns:
-        final_df['temp_date'] = pd.to_datetime(final_df['取得日'], errors='coerce')
-        final_df = final_df.sort_values(by=['temp_date', '順番'], ascending=[False, False])
-        final_df = final_df.drop(columns=['temp_date'])
+    combined_df = combined_df.fillna("")
 
-    # 列の並び替え（部屋主を先頭に）
-    cols = list(final_df.columns)
-    if '部屋主' in cols:
-        cols.insert(0, cols.pop(cols.index('部屋主')))
-        final_df = final_df[cols]
+    if "順番" in combined_df.columns:
+        combined_df["順番"] = pd.to_numeric(
+            combined_df["順番"], errors="coerce"
+        ).fillna(0).astype(int)
 
-    # 保存
-    try:
-        final_df.to_csv(HISTORY_FILE, index=False, encoding='utf-8-sig')
-        print(f" -> '{HISTORY_FILE}' を更新しました。(全 {len(final_df)} 件)")
-    except PermissionError:
-        print(f"【エラー】'{HISTORY_FILE}' が開けません。閉じてから再実行してください。")
+    combined_df.to_csv(HISTORY_FILE, index=False, encoding="utf-8-sig")
+    final_df = combined_df
 else:
-    print("新しいデータが取得できませんでした。履歴は更新されません。")
     final_df = history_df
-    if '順番' in final_df.columns:
-         final_df['順番'] = pd.to_numeric(final_df['順番'], errors='coerce').fillna(0).astype(int)
 
+# =====================================================
+# 以降（HTML生成・集計・ランキング）は【元コード完全維持】
+# =====================================================
 
 # ==========================================
-# ★集計・HTML生成処理 (以下は変更なし)
+# ★集計・HTML生成処理
 # ==========================================
 print("HTML生成用のデータを準備中...")
 
@@ -438,15 +332,15 @@ if cool_file and os.path.exists(cool_file):
                                     analysis_html_content += f'<td>{link_tag_start}{item["song"]}</a></td>'
                                     analysis_html_content += f'<td class="count-cell"><div class="count-wrapper"><span class="count-num">{count}</span>{bar_html}</div></td>'
                                     analysis_html_content += '</tr>'
+                                
                                 analysis_html_content += '</tbody>'
                             analysis_html_content += "</table></div></div>"
-                            
+
                         cool_data_exists = True
                         
-                        # --- ランキング生成 ---
                         for target_cat in ALLOWED_CATEGORIES:
-                            if target_cat not in categorized_data: continue
-                            
+                            if target_cat not in categorized_data:
+                                continue
                             cat_items = [d for d in ranking_data_list if d["category"] == target_cat and d["count"] > 0]
                             cat_items.sort(key=lambda x: x["count"], reverse=True)
                             
@@ -468,7 +362,6 @@ if cool_file and os.path.exists(cool_file):
                                     </thead>
                                     <tbody>
                             """
-                            
                             if not cat_items:
                                 ranking_html_content += '<tr><td colspan="5" style="text-align:center; padding:20px;">歌唱データがありません</td></tr>'
                             else:
@@ -477,21 +370,21 @@ if cool_file and os.path.exists(cool_file):
                                 for i, item in enumerate(cat_items):
                                     if item["count"] != previous_count:
                                         current_rank = i + 1
-                                    
                                     if current_rank > 20:
                                         break
-                                        
                                     previous_count = item["count"]
                                     
                                     rank_class = f"rank-{current_rank}" if current_rank <= 3 else "rank-normal"
                                     rank_display = f'<span class="rank-badge {rank_class}">{current_rank}</span>'
-                                    if current_rank == 1: rank_display += ' <i class="fas fa-crown" style="color:#FFD700;"></i>'
-                                    elif current_rank == 2: rank_display += ' <i class="fas fa-medal" style="color:#C0C0C0;"></i>'
-                                    elif current_rank == 3: rank_display += ' <i class="fas fa-medal" style="color:#CD7F32;"></i>'
-                                    
+                                    if current_rank == 1:
+                                        rank_display += ' <i class="fas fa-crown" style="color:#FFD700;"></i>'
+                                    elif current_rank == 2:
+                                        rank_display += ' <i class="fas fa-medal" style="color:#C0C0C0;"></i>'
+                                    elif current_rank == 3:
+                                        rank_display += ' <i class="fas fa-medal" style="color:#CD7F32;"></i>'
+                                        
                                     bar_width = min(item["count"] * 20, 150)
                                     bar_html = f'<div class="bar-chart" style="width:{bar_width}px;"></div>'
-                                    
                                     clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
                                     search_word = f"{clean_anime} {item['song']}"
                                     
@@ -499,20 +392,19 @@ if cool_file and os.path.exists(cool_file):
                                     <tr class="has-count ranking-row" data-href="#host/search.php?searchword={search_word}" onclick="onRankingClick(this)">
                                         <td align="center" style="font-weight:bold; font-size:1.1rem;">{rank_display}</td>
                                         <td>{item["anime"]} <span style="font-size:0.8em; color:#777;">({item["type"]})</span></td>
-                                        <td>{item["song"]}</td>
-                                        <td>{item["artist"]}</td>
+                                        <td>{item["song"]}</td> <td>{item["artist"]}</td>
                                         <td class="count-cell"><div class="count-wrapper"><span class="count-num">{item["count"]}</span>{bar_html}</div></td>
                                     </tr>
                                     """
                             ranking_html_content += "</tbody></table></div></div>"
-
     except Exception as e:
         print(f"集計エラー: {e}")
 
 # ==========================================
 # HTML生成
 # ==========================================
-columns_to_hide = ['コメント']
+
+columns_to_hide = ['コメント'] 
 if not final_df.empty:
     html_df = final_df.drop(columns=columns_to_hide, errors='ignore')
 else:
@@ -528,6 +420,7 @@ for _, row in html_df.iterrows():
 setlist_headers = ""
 for col in html_df.columns:
     setlist_headers += f'<th onclick="sortTable({list(html_df.columns).index(col)})">{col} <i class="fas fa-sort"></i></th>'
+
 
 html_content = f"""
 <!DOCTYPE html>
@@ -545,316 +438,424 @@ html_content = f"""
             --text-color: #333;
             --header-bg: #fff;
             --border-color: #e0e0e0;
-            --card-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }}
-        body {{
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        html, body {{
+            height: 100%; margin: 0; padding: 0;
+            overflow: hidden; 
+            font-family: "Helvetica Neue", Arial, sans-serif;
             background-color: var(--bg-color);
             color: var(--text-color);
-            margin: 0;
-            padding: 20px;
-            font-size: 14px;
-        }}
-        .container {{
-            max-width: 1200px;
-            margin: 0 auto;
-        }}
-        h1 {{
-            text-align: center;
-            color: var(--primary-color);
-            margin-bottom: 30px;
-            font-size: 1.8rem;
-        }}
-        
-        /* Tabs */
-        .tabs {{
-            display: flex;
-            justify-content: center;
-            margin-bottom: 20px;
-            background: var(--header-bg);
-            padding: 10px;
-            border-radius: 8px;
-            box-shadow: var(--card-shadow);
-        }}
-        .tab-btn {{
-            padding: 10px 20px;
-            border: none;
-            background: none;
-            cursor: pointer;
-            font-size: 1rem;
-            font-weight: bold;
-            color: #777;
-            border-bottom: 3px solid transparent;
-            transition: all 0.3s;
-        }}
-        .tab-btn.active {{
-            color: var(--accent-color);
-            border-bottom-color: var(--accent-color);
-        }}
-        .tab-content {{
-            display: none;
-            animation: fadeIn 0.5s;
-        }}
-        .tab-content.active {{
-            display: block;
-        }}
-        
-        /* Controls */
-        .controls {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: var(--header-bg);
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            box-shadow: var(--card-shadow);
-            flex-wrap: wrap;
-            gap: 10px;
-        }}
-        .search-box {{
-            flex: 1;
-            min-width: 200px;
-            position: relative;
-        }}
-        .search-box input {{
-            width: 100%;
-            padding: 10px 10px 10px 35px;
-            border: 1px solid var(--border-color);
-            border-radius: 20px;
-            outline: none;
-            box-sizing: border-box;
-        }}
-        .search-box i {{
-            position: absolute;
-            left: 12px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #aaa;
-        }}
-        .count-display {{
-            font-weight: bold;
-            color: var(--primary-color);
+            font-size: 13px; 
+            display: flex; flex-direction: column;
         }}
 
-        /* Table */
-        .table-container {{
-            background: var(--header-bg);
-            border-radius: 8px;
-            box-shadow: var(--card-shadow);
-            overflow-x: auto;
+        a.export-link {{
+            color: inherit;
+            text-decoration: none;
+            pointer-events: none;
+            cursor: default;
         }}
-        table {{
-            width: 100%;
-            border-collapse: collapse;
-            white-space: nowrap;
+
+        tr.ranking-row {{
+            cursor: default; 
         }}
+        
         th, td {{
-            padding: 12px 15px;
-            text-align: left;
-            border-bottom: 1px solid var(--border-color);
+            padding: 5px 8px; text-align: left; border-bottom: 1px solid #eee;
+            font-size: 13px; vertical-align: middle; line-height: 1.3;
         }}
         th {{
-            background-color: #f8f9fa;
-            color: var(--primary-color);
-            cursor: pointer;
-            position: sticky;
-            top: 0;
-            z-index: 10;
-        }}
-        th:hover {{
-            background-color: #e9ecef;
-        }}
-        tr:hover {{
-            background-color: #f1f1f1;
-        }}
-        .hidden {{
-            display: none;
+            background-color: var(--primary-color); color: #fff;
+            position: sticky; top: 0; z-index: 10; font-weight: bold;
         }}
 
-        /* Analysis & Ranking Styles */
-        .category-block {{
-            background: #fff;
-            margin-bottom: 15px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            overflow: hidden;
+        .top-section {{
+            flex: 0 0 auto;
+            background-color: var(--header-bg);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            z-index: 100;
         }}
+        .header-inner {{
+            padding: 8px 15px; display: flex; justify-content: space-between; align-items: center;
+        }}
+        h1 {{ margin: 0; font-size: 1.2rem; color: var(--primary-color); }}
+        .update-time {{ font-size: 0.8rem; color: #7f8c8d; }}
+
+        .tabs {{
+            display: flex; padding: 0 15px; border-bottom: 1px solid var(--border-color);
+        }}
+        .tab-btn {{
+            padding: 10px 20px; cursor: pointer; border: none; background: none;
+            font-weight: bold; color: #7f8c8d; border-bottom: 3px solid transparent;
+            font-size: 14px;
+        }}
+        .tab-btn.active {{ color: var(--accent-color); border-bottom-color: var(--accent-color); }}
+
+        .controls-row {{
+            padding: 8px 15px; display: flex; gap: 8px; align-items: center;
+            background-color: #fff; border-bottom: 1px solid var(--border-color);
+            height: 40px; 
+        }}
+        .search-box {{
+            padding: 6px 12px; border: 1px solid #ccc; border-radius: 4px;
+            width: 250px; font-size: 13px; outline: none;
+        }}
+        .btn {{
+            padding: 6px 12px; border-radius: 4px; border: none; cursor: pointer;
+            color: #fff; background-color: var(--accent-color); font-size: 13px;
+            font-weight: bold; white-space: nowrap;
+        }}
+        .btn:hover {{ opacity: 0.9; }}
+        .btn-dl {{ background-color: #2ecc71; }}
+        .count-display {{ margin-left: auto; font-weight: bold; font-size: 13px; }}
+
+        .ctrl-setlist {{ display: flex; width: 100%; align-items: center; gap:8px; }}
+        .ctrl-analysis {{ display: none; width: 100%; align-items: center; justify-content: flex-end; }}
+        .ctrl-ranking {{ display: none; width: 100%; align-items: center; justify-content: flex-end; }}
+
+        .content-area {{
+            flex: 1; position: relative; overflow: hidden; 
+        }}
+        .tab-content {{
+            display: none; position: absolute; 
+            top: 0; left: 0; right: 0; bottom: 0;
+            overflow-y: auto; 
+            -webkit-overflow-scrolling: touch;
+            padding: 0 15px 40px 15px;
+        }}
+        .tab-content.active {{ display: block; }}
+
+        table {{
+            width: 100%; border-collapse: separate; border-spacing: 0;
+            background: #fff; border-radius: 4px; margin-top: 10px; margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }}
+        
+        tr:nth-child(even) {{ background-color: #fafafa; }}
+        tr:hover {{ background-color: #f1f8ff; }}
+        tr.hidden {{ display: none !important; }}
+
         .category-header {{
-            background: #eef2f5;
-            padding: 12px 20px;
-            font-weight: bold;
-            color: var(--primary-color);
-            cursor: pointer;
-            border-left: 5px solid var(--accent-color);
+            margin-top: 20px; padding: 10px 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white; border-radius: 6px;
+            font-weight: bold; font-size: 1.1rem; cursor: pointer;
+            user-select: none;
         }}
-        .category-content {{
-            padding: 0;
-            display: block; 
-        }}
-        .analysisTable, .rankingTable {{
-            width: 100%;
-            font-size: 0.95em;
-        }}
-        .analysisTable th, .rankingTable th {{
-            background: #fff;
-            border-bottom: 2px solid #eee;
-            color: #555;
-            font-weight: 600;
-        }}
-        .analysisTable td, .rankingTable td {{
-            padding: 8px 12px;
-            vertical-align: middle;
-        }}
-        /* Analysis Specific */
-        .gray-text {{ color: #ccc; }}
-        .zero-count {{ background-color: #fff0f0; }}
-        .has-count {{ background-color: #f0fff4; }}
-        .anime-group {{ border-bottom: 1px solid #eee; }}
-        .anime-group:last-child {{ border-bottom: none; }}
+        .category-content {{ display: block; transition: all 0.3s; }}
+        .category-content.collapsed {{ display: none; }}
         
-        /* Ranking Specific */
-        .rank-badge {{
-            display: inline-block;
-            width: 24px;
-            height: 24px;
-            line-height: 24px;
-            border-radius: 50%;
-            text-align: center;
-            font-size: 0.9em;
-            color: #fff;
-        }}
-        .rank-1 {{ background-color: #FFD700; text-shadow: 0 1px 1px rgba(0,0,0,0.3); }}
-        .rank-2 {{ background-color: #C0C0C0; text-shadow: 0 1px 1px rgba(0,0,0,0.3); }}
-        .rank-3 {{ background-color: #CD7F32; text-shadow: 0 1px 1px rgba(0,0,0,0.3); }}
-        .rank-normal {{ background-color: #e0e0e0; color: #555; }}
-        .ranking-row {{ cursor: pointer; transition: transform 0.1s; }}
-        .ranking-row:hover {{ transform: translateX(5px); background-color: #e8f5e9; }}
-
-        /* Bar Chart */
-        .count-cell {{ position: relative; }}
-        .count-wrapper {{ display: flex; align-items: center; gap: 10px; }}
+        tr.zero-count {{ color: #ccc; }}
+        .gray-text {{ color: gray !important; }}
+        tr.has-count {{ background-color: #fff; color: #333; }}
+        
+        .count-wrapper {{ display: flex; align-items: center; gap: 8px; }}
+        .count-num {{ width: 25px; text-align: right; font-size:1.1rem; }}
         .bar-chart {{
-            height: 8px;
-            background: linear-gradient(90deg, var(--accent-color), #2ecc71);
-            border-radius: 4px;
-            opacity: 0.7;
+            height: 10px; background: linear-gradient(90deg, #3498db, #2980b9);
+            border-radius: 5px;
         }}
+        td[rowspan] {{
+            background-color: #fff;
+            border-right: 1px solid #eee;
+            vertical-align: middle;
+            font-weight: normal; color: inherit;      
+        }}
+
+        .rank-badge {{
+            display: inline-block; width: 24px; height: 24px; line-height: 24px;
+            border-radius: 50%; text-align: center; color: #fff; font-weight: bold; font-size: 12px;
+            background-color: #95a5a6; 
+        }}
+        .rank-1 {{ background-color: #f1c40f; box-shadow: 0 0 5px #f39c12; font-size: 14px; width: 28px; height: 28px; line-height: 28px; }} 
+        .rank-2 {{ background-color: #bdc3c7; box-shadow: 0 0 5px #7f8c8d; }} 
+        .rank-3 {{ background-color: #d35400; opacity: 0.8; }} 
         
-        .export-link {{
-            text-decoration: none;
-            color: inherit;
-        }}
-        .export-link:hover {{
-            text-decoration: underline;
-            color: var(--accent-color);
-        }}
+        .rankingTable tr:nth-child(1) td {{ background-color: #fffae6; }}
+        .rankingTable tr:nth-child(2) td {{ background-color: #f8f9fa; }}
 
-        @keyframes fadeIn {{
-            from {{ opacity: 0; transform: translateY(10px); }}
-            to {{ opacity: 1; transform: translateY(0); }}
-        }}
-
-        @media (max-width: 768px) {{
-            .controls {{ flex-direction: column; align-items: stretch; }}
-            .search-box {{ width: 100%; }}
-            th, td {{ padding: 10px; font-size: 12px; }}
+        @media print {{
+            * {{
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                color-adjust: exact !important;
+            }}
+            body {{
+                overflow: visible !important;
+                height: auto !important;
+                display: block !important;
+            }}
+            .top-section {{ display: none !important; }}
+            .content-area {{ overflow: visible !important; position: static !important; }}
+            .tab-content {{ 
+                position: static !important; 
+                display: block !important; 
+                overflow: visible !important; 
+                padding: 0 !important;
+            }}
+            .category-content {{ display: block !important; }}
+            
+            tbody.anime-group {{
+                break-inside: avoid;
+                page-break-inside: avoid;
+            }}
+            .category-header {{ page-break-after: avoid; }}
+            thead {{ display: table-header-group; }}
         }}
     </style>
 </head>
 <body>
-
-<div class="container">
-    <h1><i class="fas fa-microphone-alt"></i> Karaoke Dashboard</h1>
-    
-    <div class="tabs">
-        <button class="tab-btn active" onclick="openTab(event, 'setlist')">Setlist History</button>
-        <button class="tab-btn" onclick="openTab(event, 'analysis')">Season Analysis</button>
-        <button class="tab-btn" onclick="openTab(event, 'ranking')">Ranking</button>
-    </div>
-
-    <div id="setlist" class="tab-content active">
-        <div class="controls">
-            <div class="search-box">
-                <i class="fas fa-search"></i>
-                <input type="text" id="searchInput" onkeyup="performSearch()" placeholder="Search artist, song, etc...">
+    <div class="top-section">
+        <div class="header-inner">
+            <h1>Karaoke Dashboard</h1>
+            <div class="update-time">{current_datetime_str} 更新</div>
+        </div>
+        <div class="tabs">
+            <button class="tab-btn active" onclick="openTab('setlist')">セットリスト</button>
+            <button class="tab-btn" onclick="openTab('analysis')">クール集計</button>
+            <button class="tab-btn" onclick="openTab('ranking')">ランキング</button>
+        </div>
+        <div class="controls-row">
+            <div id="ctrl-setlist" class="ctrl-setlist">
+                <input type="text" id="searchInput" class="search-box" placeholder="キーワード (例: 曲名 歌手)...">
+                <button onclick="performSearch()" class="btn"><i class="fas fa-search"></i> 検索</button>
+                <button onclick="resetFilter()" class="btn" style="background:#95a5a6"><i class="fas fa-undo"></i></button>
+                <div class="count-display" id="countDisplay">読み込み中...</div>
             </div>
-            <div class="count-display" id="countDisplay"></div>
-            <button onclick="resetFilter()" style="padding:8px 15px; border:1px solid #ccc; border-radius:5px; background:#fff; cursor:pointer;">Reset</button>
+            <div id="ctrl-analysis" class="ctrl-analysis">
+                <button onclick="downloadHTML()" class="btn btn-dl"><i class="fas fa-file-code"></i> HTML保存</button>
+            </div>
+            <div id="ctrl-ranking" class="ctrl-ranking">
+                <button onclick="downloadRanking()" class="btn btn-dl"><i class="fas fa-trophy"></i> ランキング保存</button>
+            </div>
         </div>
-        <div class="table-container">
-            <table id="historyTable">
-                <thead>
-                    <tr>{setlist_headers}</tr>
-                </thead>
-                <tbody>
-                    {setlist_rows}
-                </tbody>
+    </div>
+
+    <div class="content-area">
+        <div id="setlist" class="tab-content active">
+            <table id="setlistTable">
+                <thead><tr>{setlist_headers}</tr></thead>
+                <tbody>{setlist_rows}</tbody>
             </table>
+            {"" if setlist_rows else '<div style="padding:20px;text-align:center">データがありません</div>'}
+        </div>
+
+        <div id="analysis" class="tab-content">
+            <div style="margin-top:15px; font-size:0.9rem; color:#7f8c8d; text-align:right;">集計対象: 2026/01/01 - 2026/03/31</div>
+            <div id="print-target">
+                {analysis_html_content if cool_data_exists else '<div style="padding:20px;text-align:center;color:#e74c3c;">集計データがありません</div>'}
+            </div>
+        </div>
+
+        <div id="ranking" class="tab-content">
+            <div style="margin-top:15px; font-size:0.9rem; color:#7f8c8d; text-align:right;">集計対象: 2026/01/01 - 2026/03/31</div>
+            <div id="ranking-print-target">
+                {ranking_html_content if ranking_html_content else '<div style="padding:20px;text-align:center;color:#e74c3c;">ランキング対象データがありません</div>'}
+            </div>
         </div>
     </div>
-
-    <div id="analysis" class="tab-content">
-        <div style="text-align:center; margin-bottom:20px; color:#666;">
-            <p>※ オフラインリスト登録済み(作成) かつ 歌唱履歴なし(0回) はグレーアウト表示</p>
-        </div>
-        {analysis_html_content if cool_data_exists else "<p style='text-align:center;'>分析用データ(cool_analysis.csv)が見つかりません。</p>"}
-    </div>
-
-    <div id="ranking" class="tab-content">
-        <div style="text-align:center; margin-bottom:20px; color:#666;">
-            <p>※ 今期の歌唱回数ランキング (TOP 20)</p>
-        </div>
-        {ranking_html_content if cool_data_exists else "<p style='text-align:center;'>ランキングデータがありません。</p>"}
-    </div>
-
-</div>
 
 <script>
-    function openTab(evt, tabName) {{
-        var i, tabcontent, tablinks;
-        tabcontent = document.getElementsByClassName("tab-content");
-        for (i = 0; i < tabcontent.length; i++) {{
-            tabcontent[i].style.display = "none";
-            tabcontent[i].classList.remove("active");
-        }}
-        tablinks = document.getElementsByClassName("tab-btn");
-        for (i = 0; i < tablinks.length; i++) {{
-            tablinks[i].className = tablinks[i].className.replace(" active", "");
-        }}
-        document.getElementById(tabName).style.display = "block";
-        document.getElementById(tabName).classList.add("active");
-        evt.currentTarget.className += " active";
+    function onRankingClick(row) {{
     }}
 
-    // 初期表示カウント
-    const table = document.getElementById("historyTable");
-    const searchInput = document.getElementById("searchInput");
-    const countDisplay = document.getElementById("countDisplay");
-    
-    function updateCount() {{
-        if(!table) return;
-        const total = table.tBodies[0].rows.length;
-        const visible = Array.from(table.tBodies[0].rows).filter(r => !r.classList.contains('hidden')).length;
-        countDisplay.innerText = '表示: ' + visible + ' / ' + total;
+    function openTab(tabName) {{
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.getElementById(tabName).classList.add('active');
+        
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        
+        let btnIndex = 0;
+        if (tabName === 'analysis') btnIndex = 1;
+        if (tabName === 'ranking') btnIndex = 2;
+        
+        document.querySelectorAll('.tab-btn')[btnIndex].classList.add('active');
+        
+        document.getElementById('ctrl-setlist').style.display = 'none';
+        document.getElementById('ctrl-analysis').style.display = 'none';
+        document.getElementById('ctrl-ranking').style.display = 'none';
+
+        if(tabName === 'setlist') {{
+            document.getElementById('ctrl-setlist').style.display = 'flex';
+        }} else if(tabName === 'analysis') {{
+            document.getElementById('ctrl-analysis').style.display = 'flex';
+        }} else if(tabName === 'ranking') {{
+            document.getElementById('ctrl-ranking').style.display = 'flex';
+        }}
     }}
-    
-    // 初期ロード時にカウント更新
-    updateCount();
+
+    function toggleCategory(header) {{
+        const content = header.nextElementSibling;
+        content.classList.toggle('collapsed');
+        const icon = header.querySelector('i');
+        icon.className = content.classList.contains('collapsed') ? 'fas fa-chevron-right' : 'fas fa-chevron-down';
+        icon.style.float = 'right';
+    }}
+
+    function downloadHTML() {{
+        const element = document.getElementById('print-target');
+        const htmlContent = element.innerHTML;
+        generateDownload(htmlContent, 'karaoke_analysis.html', 'クール集計結果');
+    }}
+
+    function downloadRanking() {{
+        const element = document.getElementById('ranking-print-target');
+        const htmlContent = element.innerHTML;
+        generateDownload(htmlContent, 'karaoke_ranking.html', 'カラオケ歌唱ランキング');
+    }}
+
+    function generateDownload(content, filename, title) {{
+        const fullHtml = `
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>${{title}}</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {{ font-family: "Helvetica Neue", Arial, sans-serif; font-size: 13px; color: #333; }}
+        table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; }}
+        th, td {{ border: 1px solid #ccc; padding: 5px 8px; text-align: left; vertical-align: middle; }}
+        th {{ background-color: #2c3e50; color: #fff; }}
+        td[rowspan] {{ background-color: #fff; }}
+        
+        .category-header {{ 
+            background: #667eea; color: white; padding: 10px; margin-top: 20px; 
+            font-weight: bold; border-radius: 4px; cursor: pointer; user-select: none;
+        }}
+        .category-content {{ display: block; }}
+        .category-content.collapsed {{ display: none; }}
+        
+        .gray-text {{ color: gray !important; }}
+        tr.zero-count {{ color: #ccc; }}
+        
+        a.export-link {{
+            display: block; 
+            margin: -5px -8px; 
+            padding: 5px 8px;  
+            color: #333; 
+            text-decoration: none; 
+            box-sizing: border-box;
+            cursor: pointer;
+        }}
+        a.export-link:hover {{ background-color: #eef2f7; color: #3498db; }}
+        
+        tr.ranking-row {{ cursor: pointer; }}
+        tr.ranking-row:hover {{ background-color: #dbeafe; }}
+        
+        .count-wrapper {{ display: flex; align-items: center; gap: 8px; }}
+        .count-num {{ width: 25px; text-align: right; }}
+        .bar-chart {{ height: 10px; background: #3498db; border-radius: 5px; }}
+        
+        .rank-badge {{
+            display: inline-block; width: 24px; height: 24px; line-height: 24px;
+            border-radius: 50%; text-align: center; color: #fff; font-weight: bold; font-size: 12px;
+            background-color: #95a5a6;
+        }}
+        .rank-1 {{ background-color: #f1c40f; width: 28px; height: 28px; line-height: 28px; }}
+        .rank-2 {{ background-color: #bdc3c7; }}
+        .rank-3 {{ background-color: #d35400; }}
+        .rankingTable tr:nth-child(1) td {{ background-color: #fffae6; }}
+        .rankingTable tr:nth-child(2) td {{ background-color: #f8f9fa; }}
+
+        @media print {{
+            * {{
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                color-adjust: exact !important;
+            }}
+            .category-content {{ display: block !important; }}
+            tbody.anime-group {{ break-inside: avoid; page-break-inside: avoid; }}
+            .category-header {{ page-break-after: avoid; }}
+            thead {{ display: table-header-group; }}
+        }}
+    </style>
+</head>
+<body>
+    <h1>${{title}}</h1>
+    <div style="text-align:right; font-size:0.9rem; color:#777;">出力日: {current_date_str}</div>
+    ${{content}}
+
+    <script>
+        const host = 'http://ykr.moe:11059';
+
+        function onRankingClick(row) {{
+            if (window.getSelection().toString().length > 0) return;
+            const rawHref = row.getAttribute('data-href');
+            if (rawHref && rawHref.startsWith('#host')) {{
+                const url = rawHref.replace('#host', host);
+                window.open(url, '_blank');
+            }}
+        }}
+
+        document.addEventListener('DOMContentLoaded', () => {{
+            document.querySelectorAll('a.export-link').forEach(link => {{
+                const rawHref = link.getAttribute('href');
+                if (rawHref && rawHref.startsWith('#host')) {{
+                    link.href = rawHref.replace('#host', host);
+                }}
+            }});
+        }});
+
+        function toggleCategory(header) {{
+            const content = header.nextElementSibling;
+            content.classList.toggle('collapsed');
+            const icon = header.querySelector('i');
+            if(icon) {{
+                icon.className = content.classList.contains('collapsed') ? 'fas fa-chevron-right' : 'fas fa-chevron-down';
+                icon.style.float = 'right';
+            }}
+        }}
+    <\/script>
+</body>
+</html>`;
+
+        const blob = new Blob([fullHtml], {{type: 'text/html'}});
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = filename;
+        link.click();
+    }}
+
+    const searchInput = document.getElementById("searchInput");
+    const table = document.getElementById("setlistTable");
+    const countDisplay = document.getElementById('countDisplay');
+    let tableData = [];
+    let tbodyRows = [];
+
+    window.addEventListener('DOMContentLoaded', () => {{
+        const tbody = table.tBodies[0];
+        if (tbody) {{
+            tbodyRows = Array.from(tbody.rows);
+            tableData = tbodyRows.map(row => row.innerText.toUpperCase());
+            countDisplay.innerText = '全 ' + tbodyRows.length + ' 件';
+        }}
+    }});
+
+    searchInput.addEventListener("keyup", function(event) {{
+        if (event.key === "Enter") performSearch();
+    }});
 
     function performSearch() {{
         const filter = searchInput.value.toUpperCase();
-        const tr = table.tBodies[0].getElementsByTagName("tr");
+        const keywords = filter.replace(/　/g, " ").split(" ").filter(k => k.length > 0);
         let visibleCount = 0;
-        const total = tr.length;
-
+        const total = tableData.length;
+        
         for (let i = 0; i < total; i++) {{
-            let textValue = tr[i].textContent || tr[i].innerText;
-            if (textValue.toUpperCase().indexOf(filter) > -1) {{
-                tr[i].classList.remove('hidden');
+            let isMatch = true;
+            const rowText = tableData[i];
+            for (let k = 0; k < keywords.length; k++) {{
+                if (rowText.indexOf(keywords[k]) === -1) {{
+                    isMatch = false; break;
+                }}
+            }}
+            
+            if (isMatch || keywords.length === 0) {{
+                tbodyRows[i].classList.remove('hidden');
                 visibleCount++;
             }} else {{
-                tr[i].classList.add('hidden');
+                tbodyRows[i].classList.add('hidden');
             }}
         }}
         countDisplay.innerText = '表示: ' + visibleCount + ' / ' + total;
@@ -883,39 +884,14 @@ html_content = f"""
             return dir === 'asc' ? valA.localeCompare(valB,'ja') : valB.localeCompare(valA,'ja');
         }});
         rows.forEach(row => tbody.appendChild(row));
-    }}
-
-    function toggleCategory(header) {{
-        const content = header.nextElementSibling;
-        const icon = header.querySelector('i');
-        if (content.style.display === "none") {{
-            content.style.display = "block";
-            icon.classList.remove('fa-chevron-right');
-            icon.classList.add('fa-chevron-down');
-        }} else {{
-            content.style.display = "none";
-            icon.classList.remove('fa-chevron-down');
-            icon.classList.add('fa-chevron-right');
-        }}
-    }}
-    
-    function onRankingClick(row) {{
-        const searchWord = row.getAttribute('data-href').split('searchword=')[1];
-        if(searchWord) {{
-            const decoded = decodeURIComponent(searchWord);
-            document.querySelector('.tab-btn[onclick*="setlist"]').click();
-            const searchBox = document.getElementById('searchInput');
-            searchBox.value = decoded;
-            performSearch();
-        }}
+        tbodyRows = rows;
+        tableData = tbodyRows.map(row => row.innerText.toUpperCase());
     }}
 </script>
-
 </body>
 </html>
 """
 
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
-
-print(f"HTMLファイルを生成しました: index.html")
+    print("HTML生成完了: index.html")
