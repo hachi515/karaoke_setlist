@@ -78,7 +78,6 @@ for port, room in room_map.items():
                 "歌手名": r[2] if df.shape[1] > 2 else "",
                 "歌った人": r[3] if df.shape[1] > 3 else "",
                 "コメント": r[5] if df.shape[1] > 5 else "",
-                "ポート番号": port,
                 "取得日": current_date_str
             })
     except Exception:
@@ -895,3 +894,4 @@ html_content = f"""
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
     print("HTML生成完了: index.html")
+
