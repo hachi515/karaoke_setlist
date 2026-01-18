@@ -4,6 +4,7 @@ import datetime
 import os
 import re
 import unicodedata
+import glob
 from itertools import groupby
 
 # --- 時刻設定 ---
@@ -13,105 +14,193 @@ current_datetime_str = now.strftime("%Y/%m/%d %H:%M")
 
 # --- 設定: ポート番号と部屋主の名前の対応表 ---
 room_map = {
-    11000: "ゆーふうりん部屋", 11001: "ゆーふうりん部屋", 11002: "ゆーふうりん部屋",
-    11003: "ゆーふうりん部屋", 11004: "ゆーふうりん部屋", 11005: "ゆーふうりん部屋",
-    11006: "ゆーふうりん部屋", 11007: "ゆーふうりん部屋", 11008: "ゆーふうりん部屋",
+    11000: "ゆーふうりん部屋",
+    11001: "ゆーふうりん部屋",
+    11002: "ゆーふうりん部屋",
+    11003: "ゆーふうりん部屋",
+    11004: "ゆーふうりん部屋",
+    11005: "ゆーふうりん部屋",
+    11006: "ゆーふうりん部屋",
+    11007: "ゆーふうりん部屋",
+    11008: "ゆーふうりん部屋",
     11009: "ゆーふうりん部屋",
-    11010: "加古部屋", 11011: "加古部屋", 11012: "加古部屋",
-    11013: "加古部屋", 11014: "加古部屋", 11015: "加古部屋",
-    11021: "成田部屋", 11022: "成田部屋",
+    11010: "加古部屋",
+    11011: "加古部屋",
+    11012: "加古部屋",
+    11013: "加古部屋",
+    11014: "加古部屋",
+    11015: "加古部屋",
+    11021: "成田部屋",
+    11022: "成田部屋",
     11028: "タマ部屋",
-    11058: "すみた部屋", 11059: "つぼはち部屋",
-    11063: "なぎ部屋", 11064: "naoo部屋",
-    11066: "芝ちゃん部屋", 11067: "crom部屋",
-    11068: "けんしん部屋", 11069: "けんちぃ部屋",
-    11070: "黒河部屋", 11071: "黒河部屋",
-    11074: "tukinowa部屋", 11077: "v3部屋",
-    11078: "のんでるん部屋", 11079: "まどか部屋",
-    11084: "タカヒロ部屋", 11085: "タカヒロ部屋", 11086: "タカヒロ部屋",
-    11087: "MiO部屋", 11088: "ほっしー部屋",
-    11101: "えみち部屋", 11102: "るえ部屋", 11103: "ながし部屋",
-    11106: "冨塚部屋", 11107: "ブルーベリー部屋"
+    11058: "すみた部屋",
+    11059: "つぼはち部屋",
+    11063: "なぎ部屋",
+    11064: "naoo部屋",
+    11066: "芝ちゃん部屋",
+    11067: "crom部屋",
+    11068: "けんしん部屋",
+    11069: "けんちぃ部屋",
+    11070: "黒河部屋",
+    11071: "黒河部屋",
+    11074: "tukinowa部屋",
+    11077: "v3部屋",
+    11078: "のんでるん部屋",
+    11079: "まどか部屋",
+    11084: "タカヒロ部屋",
+    11085: "タカヒロ部屋",
+    11086: "タカヒロ部屋",
+    11087: "MiO部屋",
+    11088: "ほっしー部屋",
+    11101: "えみち部屋",
+    11102: "るえ部屋",
+    11103: "ながし部屋",
+    11106: "冨塚部屋",
+    11107: "ブルーベリー部屋"
 }
 
+# --- ファイル名設定 ---
 HISTORY_FILE = "history.csv"
 
-# =========================
-# 正規化関数（既存維持）
-# =========================
+# --- 関数定義 ---
 def normalize_text(text):
     if not isinstance(text, str): return str(text)
     text = unicodedata.normalize('NFKC', text)
     text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
     text = re.sub(r'[\[\(\{【].*?[\]\)\}】]', ' ', text)
     text = re.sub(r'(key|KEY)?\s*[\+\-]\s*[0-9]+', ' ', text)
-    text = re.sub(r'原キー|(キー)?変更[:：]?', ' ', text)
+    text = re.sub(r'原キー', ' ', text)
+    text = re.sub(r'(キー)?変更[:：]?', ' ', text)
     text = re.sub(r'[~〜～\-_=,.]', ' ', text)
-    return re.sub(r'\s+', ' ', text).strip().upper()
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text.upper()
 
-# =========================
-# 1. history.csv 読み込み
-# =========================
+def normalize_offline_text(text):
+    if not isinstance(text, str): return str(text)
+    text = unicodedata.normalize('NFKC', text)
+    text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
+    text = re.sub(r'(key|KEY)?\s*[\+\-]\s*[0-9]+', ' ', text)
+    text = re.sub(r'原キー', ' ', text)
+    text = re.sub(r'(キー)?変更[:：]?', ' ', text)
+    text = re.sub(r'[~〜～\-_=,.]', ' ', text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text.upper()
+
+# --- 1. 既存ファイル読み込み ---
 if os.path.exists(HISTORY_FILE):
-    history_df = pd.read_csv(HISTORY_FILE, encoding="utf-8-sig")
+    try:
+        print(f"既存の {HISTORY_FILE} を読み込んでいます...")
+        history_df = pd.read_csv(HISTORY_FILE, encoding='utf-8-sig')
+        # カラム名にゴミが入っている場合のクリーニング
+        clean_check_cols = ['部屋主', '曲名（ファイル名）', '作品名', '歌手名']
+        for col in clean_check_cols:
+            if col in history_df.columns:
+                history_df = history_df[history_df[col] != col]
+        history_df = history_df.fillna("")
+    except Exception as e:
+        print(f"既存ファイル読み込み警告: {e}")
+        history_df = pd.DataFrame()
 else:
+    print("既存の履歴ファイルが見つかりません。新規作成します。")
     history_df = pd.DataFrame()
 
-# =========================
-# 2. 新規データ取得
-# =========================
-new_rows = []
+# --- 2. 新しいデータ取得 ---
+target_ports = list(room_map.keys())
+new_data_frames = []
 
-for port, room in room_map.items():
+print("最新データを取得中...")
+
+for port in target_ports:
+    url = f"http://Ykr.moe:{port}/simplelist.php"
     try:
-        url = f"http://Ykr.moe:{port}/simplelist.php"
-        dfs = pd.read_html(requests.get(url, timeout=20).content)
-        df = dfs[0]
-        df.columns = range(df.shape[1])  # 列ズレ防止
+        response = requests.get(url, timeout=20)
+        response.raise_for_status()
+        response.encoding = response.apparent_encoding
+        
+        dfs = pd.read_html(response.content)
+        if dfs:
+            df = dfs[0]
+            if not df.empty:
+                # pandasのread_htmlで取得した生データの列名が0,1,2...になっている前提
+                df.columns = range(df.shape[1])
+                
+                # --- 修正箇所: 旧バージョンの挙動に合わせて必要な列だけを明示的に取得 ---
+                # 「キー」列(df[4])や「作品名」列はCSVに保存しないように除外する
+                temp_df = pd.DataFrame()
+                
+                if df.shape[1] >= 1: temp_df['順番'] = df[0]
+                if df.shape[1] >= 2: temp_df['曲名（ファイル名）'] = df[1]
+                if df.shape[1] >= 3: temp_df['歌手名'] = df[2]
+                if df.shape[1] >= 4: temp_df['歌った人'] = df[3]
+                # df[4]はキー情報なのでスキップ
+                # df[5]があればコメントとして取得
+                if df.shape[1] >= 6: 
+                    temp_df['コメント'] = df[5]
+                else:
+                    temp_df['コメント'] = ""
 
-        for _, r in df.iterrows():
-            new_rows.append({
-                "部屋主": room,
-                "順番": r[0] if df.shape[1] > 0 else "",
-                "曲名（ファイル名）": r[1] if df.shape[1] > 1 else "",
-                "作品名": "",
-                "歌手名": r[2] if df.shape[1] > 2 else "",
-                "歌った人": r[3] if df.shape[1] > 3 else "",
-                "コメント": r[5] if df.shape[1] > 5 else "",
-                "取得日": current_date_str
-            })
-    except Exception:
+                temp_df = temp_df.fillna("") 
+                temp_df['部屋主'] = room_map.get(port, f"Port {port}")
+                temp_df['取得日'] = current_date_str
+                
+                new_data_frames.append(temp_df)
+    except Exception as e:
         pass
 
-# ポート番号だけのゴミ行を除去
-if '曲名（ファイル名）' in combined_df.columns:
-    combined_df = combined_df[combined_df['曲名（ファイル名）'] != '']
+# --- 3. 結合・重複排除・保存 ---
+if new_data_frames:
+    print("データを結合して整理中...")
+    new_df = pd.concat(new_data_frames, ignore_index=True)
+    
+    # 既存データと新データを結合
+    # カラムが不一致の場合でも、pd.concatは自動調整しますが、
+    # 意図しない「キー」列などがhistory.csvに残っている場合はここで削除しておく
+    if 'キー' in history_df.columns:
+        history_df = history_df.drop(columns=['キー'])
+    if '作品名' in history_df.columns:
+        history_df = history_df.drop(columns=['作品名'])
 
-# =========================
-# 3. 結合・重複排除
-# =========================
-if new_rows:
-    new_df = pd.DataFrame(new_rows)
     combined_df = pd.concat([history_df, new_df], ignore_index=True)
+    
+    # 重複判定のカラム設定
+    subset_cols = ['部屋主', '順番', '曲名（ファイル名）', '歌った人']
+    # 実際に存在するカラムだけでチェック
+    existing_cols = [c for c in subset_cols if c in combined_df.columns]
+    
+    # 重複排除 (古いデータを残す設定 keep='first')
+    final_df = combined_df.drop_duplicates(subset=existing_cols, keep='first')
+    
+    # 欠損値埋め
+    final_df = final_df.fillna("")
 
-    dup_keys = ["順番", "曲名（ファイル名）", "作品名", "歌手名", "歌った人"]
-    combined_df = combined_df.drop_duplicates(subset=dup_keys, keep="first")
+    # 順番を整数化
+    if '順番' in final_df.columns:
+        final_df['順番'] = pd.to_numeric(final_df['順番'], errors='coerce').fillna(0).astype(int)
 
-    combined_df = combined_df.fillna("")
+    # ソート処理
+    if '取得日' in final_df.columns:
+        final_df['temp_date'] = pd.to_datetime(final_df['取得日'], errors='coerce')
+        final_df = final_df.sort_values(by=['temp_date', '順番'], ascending=[False, False])
+        final_df = final_df.drop(columns=['temp_date'])
 
-    if "順番" in combined_df.columns:
-        combined_df["順番"] = pd.to_numeric(
-            combined_df["順番"], errors="coerce"
-        ).fillna(0).astype(int)
+    # 列の並び替え（部屋主を先頭に）
+    cols = list(final_df.columns)
+    if '部屋主' in cols:
+        cols.insert(0, cols.pop(cols.index('部屋主')))
+        final_df = final_df[cols]
 
-    combined_df.to_csv(HISTORY_FILE, index=False, encoding="utf-8-sig")
-    final_df = combined_df
+    # 保存 (mode='w' で上書き保存)
+    try:
+        final_df.to_csv(HISTORY_FILE, index=False, encoding='utf-8-sig')
+        print(f" -> '{HISTORY_FILE}' を更新しました。(全 {len(final_df)} 件)")
+    except PermissionError:
+        print(f"【エラー】'{HISTORY_FILE}' が開けません。閉じてから再実行してください。")
 else:
+    print("新しいデータが取得できませんでした。履歴は更新されません。")
     final_df = history_df
+    if '順番' in final_df.columns:
+         final_df['順番'] = pd.to_numeric(final_df['順番'], errors='coerce').fillna(0).astype(int)
 
-# =====================================================
-# 以降（HTML生成・集計・ランキング）は【元コード完全維持】
-# =====================================================
 
 # ==========================================
 # ★集計・HTML生成処理
@@ -180,19 +269,20 @@ if cool_file and os.path.exists(cool_file):
                 if song_col:
                     analysis_source_df['norm_filename'] = analysis_source_df[song_col].apply(normalize_text)
                     
+                    # --- 作品名の抽出ロジック（CSVに列がなくても動くように修正） ---
                     def get_rescued_workname(row):
+                        # CSVに作品名カラムがある場合はそれを使うが、なければ曲名から抽出
                         raw_work = str(row['作品名']) if '作品名' in row and pd.notna(row['作品名']) else ""
                         raw_song = str(row[song_col]) if pd.notna(row[song_col]) else ""
+                        
                         if raw_work.strip() in ["-", "−", "", "nan"]:
                             match = re.search(r'【(.*?)】', raw_song)
                             if match:
                                 return normalize_text(match.group(1))
                         return normalize_text(raw_work)
 
-                    if '作品名' in analysis_source_df.columns:
-                        analysis_source_df['norm_workname'] = analysis_source_df.apply(get_rescued_workname, axis=1)
-                    else:
-                        analysis_source_df['norm_workname'] = ""
+                    # 作品名カラムがなくても計算できるようにapplyする
+                    analysis_source_df['norm_workname'] = analysis_source_df.apply(get_rescued_workname, axis=1)
 
                     exclude_keywords = ['test', 'テスト', 'システム', 'admin', 'System']
                     
@@ -898,5 +988,3 @@ html_content = f"""
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
     print("HTML生成完了: index.html")
-
-
