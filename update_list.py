@@ -86,6 +86,42 @@ def normalize_offline_text(text):
     text = re.sub(r'\s+', ' ', text).strip()
     return text.upper()
 
+# ★データクリーニング関数（キー削除・作品名抽出）
+def clean_and_extract_work(row):
+    song = str(row['曲名（ファイル名）'])
+    work = ""
+    
+    # 1. キー変更情報の削除 (履歴タブ同様の処理)
+    # (Key+2), [原キー], Key: -1 などのパターンを除去
+    key_patterns = [
+        r'[\(（\[【]\s*(?:key|KEY|キー)?\s*(?:[\+\-±]\d+|原キー|変更なし)\s*[\)）\]】]',
+        r'(?:key|KEY|キー)[:：]?\s*[\+\-±]\d+',
+        r'キー変更[:：]?\s*[\+\-±]?\d+'
+    ]
+    for pat in key_patterns:
+        song = re.sub(pat, '', song, flags=re.IGNORECASE)
+    
+    # 2. 作品名の抽出
+    # キー情報を削除した後、残っている括弧書きを作品名として抽出する
+    # 例: "曲名 (作品名)" -> song="曲名", work="作品名"
+    # 括弧のパターン: () または 【】
+    match = re.search(r'[\(（【](.+?)[\)）】]', song)
+    if match:
+        extracted = match.group(1).strip()
+        # 明らかに作品名でないもの（短い数字のみや拡張子など）を除外する簡易フィルタ
+        if len(extracted) > 1 and not re.match(r'^[0-9]+$', extracted):
+            work = extracted
+            # 曲名から作品名部分を削除（整形）
+            song = song.replace(match.group(0), '').strip()
+    
+    song = song.strip()
+    
+    # 歌手名、歌った人も文字列化して返す
+    singer_name = str(row['歌手名']) if pd.notna(row['歌手名']) else ""
+    sung_by = str(row['歌った人']) if pd.notna(row['歌った人']) else ""
+    
+    return pd.Series([song, work, singer_name, sung_by], index=['曲名（ファイル名）', '作品名', '歌手名', '歌った人'])
+
 # --- 1. 既存ファイル読み込み ---
 if os.path.exists(HISTORY_FILE):
     try:
@@ -123,21 +159,27 @@ for port in target_ports:
                 # カラム名をリセットして番号順でアクセス
                 df.columns = range(df.shape[1])
                 
-                # 必要なデータを抽出してリネーム（列ズレ防止のため明示的に指定）
+                # 一時データフレーム作成
                 temp_df = pd.DataFrame()
                 
-                # simplelist.php の一般的な並び順に対応
                 if df.shape[1] >= 1: temp_df['順番'] = df[0]
+                # 曲名・歌手・歌った人・コメントを仮取得
                 if df.shape[1] >= 2: temp_df['曲名（ファイル名）'] = df[1]
                 if df.shape[1] >= 3: temp_df['歌手名'] = df[2]
                 if df.shape[1] >= 4: temp_df['歌った人'] = df[3]
-                if df.shape[1] >= 5: temp_df['キー'] = df[4]
                 if df.shape[1] >= 6: temp_df['コメント'] = df[5]
-                
-                # 不足カラムの補完
-                temp_df['作品名'] = "" 
-                if 'コメント' not in temp_df.columns:
-                    temp_df['コメント'] = ""
+                else: temp_df['コメント'] = ""
+
+                # ★クリーニングと作品名抽出の適用
+                if '曲名（ファイル名）' in temp_df.columns:
+                    cleaned_data = temp_df.apply(clean_and_extract_work, axis=1)
+                    temp_df['曲名（ファイル名）'] = cleaned_data['曲名（ファイル名）']
+                    temp_df['作品名'] = cleaned_data['作品名']
+                    # 元の歌手名などが空の場合の補完
+                    if '歌手名' in cleaned_data: temp_df['歌手名'] = cleaned_data['歌手名']
+                    if '歌った人' in cleaned_data: temp_df['歌った人'] = cleaned_data['歌った人']
+                else:
+                    temp_df['作品名'] = ""
 
                 temp_df = temp_df.fillna("") 
                 temp_df['部屋主'] = room_map.get(port, f"Port {port}")
@@ -155,20 +197,21 @@ if new_data_frames:
     # 既存データと新データを結合
     combined_df = pd.concat([history_df, new_df], ignore_index=True)
     
-    # 重複判定のカラム設定
-    subset_cols = ['部屋主', '順番', '曲名（ファイル名）', '歌った人']
+    # ★重複判定のカラム設定 (ご要望通り: 順番, 曲名, 作品名, 歌手名, 歌った人 + 部屋主)
+    subset_cols = ['部屋主', '順番', '曲名（ファイル名）', '作品名', '歌手名', '歌った人']
+    
     # 実際に存在するカラムだけでチェック
     existing_cols = [c for c in subset_cols if c in combined_df.columns]
     
     # 重複排除 (古いデータを残す設定 keep='first')
+    # これにより、既に存在する履歴と同じ内容(作品名含む)であれば追加されません
     final_df = combined_df.drop_duplicates(subset=existing_cols, keep='first')
     
     # 欠損値埋め
     final_df = final_df.fillna("")
 
-    # --- ★修正箇所: 順番を整数化 ---
+    # 順番を整数化
     if '順番' in final_df.columns:
-        # 一旦数値型に変換 -> NaNを0に置換 -> 整数型(int)にキャスト
         final_df['順番'] = pd.to_numeric(final_df['順番'], errors='coerce').fillna(0).astype(int)
 
     # ソート処理
@@ -183,7 +226,7 @@ if new_data_frames:
         cols.insert(0, cols.pop(cols.index('部屋主')))
         final_df = final_df[cols]
 
-    # 保存 (mode='w' で上書き保存)
+    # 保存
     try:
         final_df.to_csv(HISTORY_FILE, index=False, encoding='utf-8-sig')
         print(f" -> '{HISTORY_FILE}' を更新しました。(全 {len(final_df)} 件)")
@@ -192,13 +235,12 @@ if new_data_frames:
 else:
     print("新しいデータが取得できませんでした。履歴は更新されません。")
     final_df = history_df
-    # 既存データの表示用整形
     if '順番' in final_df.columns:
          final_df['順番'] = pd.to_numeric(final_df['順番'], errors='coerce').fillna(0).astype(int)
 
 
 # ==========================================
-# ★集計・HTML生成処理
+# ★集計・HTML生成処理 (以下は変更なし)
 # ==========================================
 print("HTML生成用のデータを準備中...")
 
@@ -419,15 +461,15 @@ if cool_file and os.path.exists(cool_file):
                                     analysis_html_content += f'<td>{link_tag_start}{item["song"]}</a></td>'
                                     analysis_html_content += f'<td class="count-cell"><div class="count-wrapper"><span class="count-num">{count}</span>{bar_html}</div></td>'
                                     analysis_html_content += '</tr>'
-                                
                                 analysis_html_content += '</tbody>'
                             analysis_html_content += "</table></div></div>"
-
+                            
                         cool_data_exists = True
                         
+                        # --- ランキング生成 ---
                         for target_cat in ALLOWED_CATEGORIES:
-                            if target_cat not in categorized_data:
-                                continue
+                            if target_cat not in categorized_data: continue
+                            
                             cat_items = [d for d in ranking_data_list if d["category"] == target_cat and d["count"] > 0]
                             cat_items.sort(key=lambda x: x["count"], reverse=True)
                             
@@ -449,6 +491,7 @@ if cool_file and os.path.exists(cool_file):
                                     </thead>
                                     <tbody>
                             """
+                            
                             if not cat_items:
                                 ranking_html_content += '<tr><td colspan="5" style="text-align:center; padding:20px;">歌唱データがありません</td></tr>'
                             else:
@@ -457,21 +500,21 @@ if cool_file and os.path.exists(cool_file):
                                 for i, item in enumerate(cat_items):
                                     if item["count"] != previous_count:
                                         current_rank = i + 1
+                                    
                                     if current_rank > 20:
                                         break
+                                        
                                     previous_count = item["count"]
                                     
                                     rank_class = f"rank-{current_rank}" if current_rank <= 3 else "rank-normal"
                                     rank_display = f'<span class="rank-badge {rank_class}">{current_rank}</span>'
-                                    if current_rank == 1:
-                                        rank_display += ' <i class="fas fa-crown" style="color:#FFD700;"></i>'
-                                    elif current_rank == 2:
-                                        rank_display += ' <i class="fas fa-medal" style="color:#C0C0C0;"></i>'
-                                    elif current_rank == 3:
-                                        rank_display += ' <i class="fas fa-medal" style="color:#CD7F32;"></i>'
-                                        
+                                    if current_rank == 1: rank_display += ' <i class="fas fa-crown" style="color:#FFD700;"></i>'
+                                    elif current_rank == 2: rank_display += ' <i class="fas fa-medal" style="color:#C0C0C0;"></i>'
+                                    elif current_rank == 3: rank_display += ' <i class="fas fa-medal" style="color:#CD7F32;"></i>'
+                                    
                                     bar_width = min(item["count"] * 20, 150)
                                     bar_html = f'<div class="bar-chart" style="width:{bar_width}px;"></div>'
+                                    
                                     clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
                                     search_word = f"{clean_anime} {item['song']}"
                                     
@@ -479,19 +522,20 @@ if cool_file and os.path.exists(cool_file):
                                     <tr class="has-count ranking-row" data-href="#host/search.php?searchword={search_word}" onclick="onRankingClick(this)">
                                         <td align="center" style="font-weight:bold; font-size:1.1rem;">{rank_display}</td>
                                         <td>{item["anime"]} <span style="font-size:0.8em; color:#777;">({item["type"]})</span></td>
-                                        <td>{item["song"]}</td> <td>{item["artist"]}</td>
+                                        <td>{item["song"]}</td>
+                                        <td>{item["artist"]}</td>
                                         <td class="count-cell"><div class="count-wrapper"><span class="count-num">{item["count"]}</span>{bar_html}</div></td>
                                     </tr>
                                     """
                             ranking_html_content += "</tbody></table></div></div>"
+
     except Exception as e:
         print(f"集計エラー: {e}")
 
 # ==========================================
 # HTML生成
 # ==========================================
-
-columns_to_hide = ['コメント'] 
+columns_to_hide = ['コメント']
 if not final_df.empty:
     html_df = final_df.drop(columns=columns_to_hide, errors='ignore')
 else:
@@ -507,7 +551,6 @@ for _, row in html_df.iterrows():
 setlist_headers = ""
 for col in html_df.columns:
     setlist_headers += f'<th onclick="sortTable({list(html_df.columns).index(col)})">{col} <i class="fas fa-sort"></i></th>'
-
 
 html_content = f"""
 <!DOCTYPE html>
@@ -525,424 +568,316 @@ html_content = f"""
             --text-color: #333;
             --header-bg: #fff;
             --border-color: #e0e0e0;
+            --card-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }}
-        html, body {{
-            height: 100%; margin: 0; padding: 0;
-            overflow: hidden; 
-            font-family: "Helvetica Neue", Arial, sans-serif;
+        body {{
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: var(--bg-color);
             color: var(--text-color);
-            font-size: 13px; 
-            display: flex; flex-direction: column;
-        }}
-
-        a.export-link {{
-            color: inherit;
-            text-decoration: none;
-            pointer-events: none;
-            cursor: default;
-        }}
-
-        tr.ranking-row {{
-            cursor: default; 
-        }}
-        
-        th, td {{
-            padding: 5px 8px; text-align: left; border-bottom: 1px solid #eee;
-            font-size: 13px; vertical-align: middle; line-height: 1.3;
-        }}
-        th {{
-            background-color: var(--primary-color); color: #fff;
-            position: sticky; top: 0; z-index: 10; font-weight: bold;
-        }}
-
-        .top-section {{
-            flex: 0 0 auto;
-            background-color: var(--header-bg);
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            z-index: 100;
-        }}
-        .header-inner {{
-            padding: 8px 15px; display: flex; justify-content: space-between; align-items: center;
-        }}
-        h1 {{ margin: 0; font-size: 1.2rem; color: var(--primary-color); }}
-        .update-time {{ font-size: 0.8rem; color: #7f8c8d; }}
-
-        .tabs {{
-            display: flex; padding: 0 15px; border-bottom: 1px solid var(--border-color);
-        }}
-        .tab-btn {{
-            padding: 10px 20px; cursor: pointer; border: none; background: none;
-            font-weight: bold; color: #7f8c8d; border-bottom: 3px solid transparent;
+            margin: 0;
+            padding: 20px;
             font-size: 14px;
         }}
-        .tab-btn.active {{ color: var(--accent-color); border-bottom-color: var(--accent-color); }}
-
-        .controls-row {{
-            padding: 8px 15px; display: flex; gap: 8px; align-items: center;
-            background-color: #fff; border-bottom: 1px solid var(--border-color);
-            height: 40px; 
+        .container {{
+            max-width: 1200px;
+            margin: 0 auto;
         }}
-        .search-box {{
-            padding: 6px 12px; border: 1px solid #ccc; border-radius: 4px;
-            width: 250px; font-size: 13px; outline: none;
+        h1 {{
+            text-align: center;
+            color: var(--primary-color);
+            margin-bottom: 30px;
+            font-size: 1.8rem;
         }}
-        .btn {{
-            padding: 6px 12px; border-radius: 4px; border: none; cursor: pointer;
-            color: #fff; background-color: var(--accent-color); font-size: 13px;
-            font-weight: bold; white-space: nowrap;
+        
+        /* Tabs */
+        .tabs {{
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+            background: var(--header-bg);
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: var(--card-shadow);
         }}
-        .btn:hover {{ opacity: 0.9; }}
-        .btn-dl {{ background-color: #2ecc71; }}
-        .count-display {{ margin-left: auto; font-weight: bold; font-size: 13px; }}
-
-        .ctrl-setlist {{ display: flex; width: 100%; align-items: center; gap:8px; }}
-        .ctrl-analysis {{ display: none; width: 100%; align-items: center; justify-content: flex-end; }}
-        .ctrl-ranking {{ display: none; width: 100%; align-items: center; justify-content: flex-end; }}
-
-        .content-area {{
-            flex: 1; position: relative; overflow: hidden; 
+        .tab-btn {{
+            padding: 10px 20px;
+            border: none;
+            background: none;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: bold;
+            color: #777;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }}
+        .tab-btn.active {{
+            color: var(--accent-color);
+            border-bottom-color: var(--accent-color);
         }}
         .tab-content {{
-            display: none; position: absolute; 
-            top: 0; left: 0; right: 0; bottom: 0;
-            overflow-y: auto; 
-            -webkit-overflow-scrolling: touch;
-            padding: 0 15px 40px 15px;
+            display: none;
+            animation: fadeIn 0.5s;
         }}
-        .tab-content.active {{ display: block; }}
+        .tab-content.active {{
+            display: block;
+        }}
+        
+        /* Controls */
+        .controls {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--header-bg);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: var(--card-shadow);
+            flex-wrap: wrap;
+            gap: 10px;
+        }}
+        .search-box {{
+            flex: 1;
+            min-width: 200px;
+            position: relative;
+        }}
+        .search-box input {{
+            width: 100%;
+            padding: 10px 10px 10px 35px;
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            outline: none;
+            box-sizing: border-box;
+        }}
+        .search-box i {{
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #aaa;
+        }}
+        .count-display {{
+            font-weight: bold;
+            color: var(--primary-color);
+        }}
 
+        /* Table */
+        .table-container {{
+            background: var(--header-bg);
+            border-radius: 8px;
+            box-shadow: var(--card-shadow);
+            overflow-x: auto;
+        }}
         table {{
-            width: 100%; border-collapse: separate; border-spacing: 0;
-            background: #fff; border-radius: 4px; margin-top: 10px; margin-bottom: 20px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            width: 100%;
+            border-collapse: collapse;
+            white-space: nowrap;
         }}
-        
-        tr:nth-child(even) {{ background-color: #fafafa; }}
-        tr:hover {{ background-color: #f1f8ff; }}
-        tr.hidden {{ display: none !important; }}
+        th, td {{
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }}
+        th {{
+            background-color: #f8f9fa;
+            color: var(--primary-color);
+            cursor: pointer;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }}
+        th:hover {{
+            background-color: #e9ecef;
+        }}
+        tr:hover {{
+            background-color: #f1f1f1;
+        }}
+        .hidden {{
+            display: none;
+        }}
 
+        /* Analysis & Ranking Styles */
+        .category-block {{
+            background: #fff;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            overflow: hidden;
+        }}
         .category-header {{
-            margin-top: 20px; padding: 10px 15px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white; border-radius: 6px;
-            font-weight: bold; font-size: 1.1rem; cursor: pointer;
-            user-select: none;
+            background: #eef2f5;
+            padding: 12px 20px;
+            font-weight: bold;
+            color: var(--primary-color);
+            cursor: pointer;
+            border-left: 5px solid var(--accent-color);
         }}
-        .category-content {{ display: block; transition: all 0.3s; }}
-        .category-content.collapsed {{ display: none; }}
-        
-        tr.zero-count {{ color: #ccc; }}
-        .gray-text {{ color: gray !important; }}
-        tr.has-count {{ background-color: #fff; color: #333; }}
-        
-        .count-wrapper {{ display: flex; align-items: center; gap: 8px; }}
-        .count-num {{ width: 25px; text-align: right; font-size:1.1rem; }}
-        .bar-chart {{
-            height: 10px; background: linear-gradient(90deg, #3498db, #2980b9);
-            border-radius: 5px;
+        .category-content {{
+            padding: 0;
+            display: block; 
         }}
-        td[rowspan] {{
-            background-color: #fff;
-            border-right: 1px solid #eee;
+        .analysisTable, .rankingTable {{
+            width: 100%;
+            font-size: 0.95em;
+        }}
+        .analysisTable th, .rankingTable th {{
+            background: #fff;
+            border-bottom: 2px solid #eee;
+            color: #555;
+            font-weight: 600;
+        }}
+        .analysisTable td, .rankingTable td {{
+            padding: 8px 12px;
             vertical-align: middle;
-            font-weight: normal; color: inherit;      
         }}
-
-        .rank-badge {{
-            display: inline-block; width: 24px; height: 24px; line-height: 24px;
-            border-radius: 50%; text-align: center; color: #fff; font-weight: bold; font-size: 12px;
-            background-color: #95a5a6; 
-        }}
-        .rank-1 {{ background-color: #f1c40f; box-shadow: 0 0 5px #f39c12; font-size: 14px; width: 28px; height: 28px; line-height: 28px; }} 
-        .rank-2 {{ background-color: #bdc3c7; box-shadow: 0 0 5px #7f8c8d; }} 
-        .rank-3 {{ background-color: #d35400; opacity: 0.8; }} 
+        /* Analysis Specific */
+        .gray-text {{ color: #ccc; }}
+        .zero-count {{ background-color: #fff0f0; }}
+        .has-count {{ background-color: #f0fff4; }}
+        .anime-group {{ border-bottom: 1px solid #eee; }}
+        .anime-group:last-child {{ border-bottom: none; }}
         
-        .rankingTable tr:nth-child(1) td {{ background-color: #fffae6; }}
-        .rankingTable tr:nth-child(2) td {{ background-color: #f8f9fa; }}
+        /* Ranking Specific */
+        .rank-badge {{
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            line-height: 24px;
+            border-radius: 50%;
+            text-align: center;
+            font-size: 0.9em;
+            color: #fff;
+        }}
+        .rank-1 {{ background-color: #FFD700; text-shadow: 0 1px 1px rgba(0,0,0,0.3); }}
+        .rank-2 {{ background-color: #C0C0C0; text-shadow: 0 1px 1px rgba(0,0,0,0.3); }}
+        .rank-3 {{ background-color: #CD7F32; text-shadow: 0 1px 1px rgba(0,0,0,0.3); }}
+        .rank-normal {{ background-color: #e0e0e0; color: #555; }}
+        .ranking-row {{ cursor: pointer; transition: transform 0.1s; }}
+        .ranking-row:hover {{ transform: translateX(5px); background-color: #e8f5e9; }}
 
-        @media print {{
-            * {{
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-                color-adjust: exact !important;
-            }}
-            body {{
-                overflow: visible !important;
-                height: auto !important;
-                display: block !important;
-            }}
-            .top-section {{ display: none !important; }}
-            .content-area {{ overflow: visible !important; position: static !important; }}
-            .tab-content {{ 
-                position: static !important; 
-                display: block !important; 
-                overflow: visible !important; 
-                padding: 0 !important;
-            }}
-            .category-content {{ display: block !important; }}
-            
-            tbody.anime-group {{
-                break-inside: avoid;
-                page-break-inside: avoid;
-            }}
-            .category-header {{ page-break-after: avoid; }}
-            thead {{ display: table-header-group; }}
+        /* Bar Chart */
+        .count-cell {{ position: relative; }}
+        .count-wrapper {{ display: flex; align-items: center; gap: 10px; }}
+        .bar-chart {{
+            height: 8px;
+            background: linear-gradient(90deg, var(--accent-color), #2ecc71);
+            border-radius: 4px;
+            opacity: 0.7;
+        }}
+        
+        .export-link {{
+            text-decoration: none;
+            color: inherit;
+        }}
+        .export-link:hover {{
+            text-decoration: underline;
+            color: var(--accent-color);
+        }}
+
+        @keyframes fadeIn {{
+            from {{ opacity: 0; transform: translateY(10px); }}
+            to {{ opacity: 1; transform: translateY(0); }}
+        }}
+
+        @media (max-width: 768px) {{
+            .controls {{ flex-direction: column; align-items: stretch; }}
+            .search-box {{ width: 100%; }}
+            th, td {{ padding: 10px; font-size: 12px; }}
         }}
     </style>
 </head>
 <body>
-    <div class="top-section">
-        <div class="header-inner">
-            <h1>Karaoke Dashboard</h1>
-            <div class="update-time">{current_datetime_str} 更新</div>
-        </div>
-        <div class="tabs">
-            <button class="tab-btn active" onclick="openTab('setlist')">セットリスト</button>
-            <button class="tab-btn" onclick="openTab('analysis')">クール集計</button>
-            <button class="tab-btn" onclick="openTab('ranking')">ランキング</button>
-        </div>
-        <div class="controls-row">
-            <div id="ctrl-setlist" class="ctrl-setlist">
-                <input type="text" id="searchInput" class="search-box" placeholder="キーワード (例: 曲名 歌手)...">
-                <button onclick="performSearch()" class="btn"><i class="fas fa-search"></i> 検索</button>
-                <button onclick="resetFilter()" class="btn" style="background:#95a5a6"><i class="fas fa-undo"></i></button>
-                <div class="count-display" id="countDisplay">読み込み中...</div>
-            </div>
-            <div id="ctrl-analysis" class="ctrl-analysis">
-                <button onclick="downloadHTML()" class="btn btn-dl"><i class="fas fa-file-code"></i> HTML保存</button>
-            </div>
-            <div id="ctrl-ranking" class="ctrl-ranking">
-                <button onclick="downloadRanking()" class="btn btn-dl"><i class="fas fa-trophy"></i> ランキング保存</button>
-            </div>
-        </div>
+
+<div class="container">
+    <h1><i class="fas fa-microphone-alt"></i> Karaoke Dashboard</h1>
+    
+    <div class="tabs">
+        <button class="tab-btn active" onclick="openTab(event, 'setlist')">Setlist History</button>
+        <button class="tab-btn" onclick="openTab(event, 'analysis')">Season Analysis</button>
+        <button class="tab-btn" onclick="openTab(event, 'ranking')">Ranking</button>
     </div>
 
-    <div class="content-area">
-        <div id="setlist" class="tab-content active">
-            <table id="setlistTable">
-                <thead><tr>{setlist_headers}</tr></thead>
-                <tbody>{setlist_rows}</tbody>
+    <div id="setlist" class="tab-content active">
+        <div class="controls">
+            <div class="search-box">
+                <i class="fas fa-search"></i>
+                <input type="text" id="searchInput" onkeyup="performSearch()" placeholder="Search artist, song, etc...">
+            </div>
+            <div class="count-display" id="countDisplay"></div>
+            <button onclick="resetFilter()" style="padding:8px 15px; border:1px solid #ccc; border-radius:5px; background:#fff; cursor:pointer;">Reset</button>
+        </div>
+        <div class="table-container">
+            <table id="historyTable">
+                <thead>
+                    <tr>{setlist_headers}</tr>
+                </thead>
+                <tbody>
+                    {setlist_rows}
+                </tbody>
             </table>
-            {"" if setlist_rows else '<div style="padding:20px;text-align:center">データがありません</div>'}
-        </div>
-
-        <div id="analysis" class="tab-content">
-            <div style="margin-top:15px; font-size:0.9rem; color:#7f8c8d; text-align:right;">集計対象: 2026/01/01 - 2026/03/31</div>
-            <div id="print-target">
-                {analysis_html_content if cool_data_exists else '<div style="padding:20px;text-align:center;color:#e74c3c;">集計データがありません</div>'}
-            </div>
-        </div>
-
-        <div id="ranking" class="tab-content">
-            <div style="margin-top:15px; font-size:0.9rem; color:#7f8c8d; text-align:right;">集計対象: 2026/01/01 - 2026/03/31</div>
-            <div id="ranking-print-target">
-                {ranking_html_content if ranking_html_content else '<div style="padding:20px;text-align:center;color:#e74c3c;">ランキング対象データがありません</div>'}
-            </div>
         </div>
     </div>
+
+    <div id="analysis" class="tab-content">
+        <div style="text-align:center; margin-bottom:20px; color:#666;">
+            <p>※ オフラインリスト登録済み(作成) かつ 歌唱履歴なし(0回) はグレーアウト表示</p>
+        </div>
+        {analysis_html_content if cool_data_exists else "<p style='text-align:center;'>分析用データ(cool_analysis.csv)が見つかりません。</p>"}
+    </div>
+
+    <div id="ranking" class="tab-content">
+        <div style="text-align:center; margin-bottom:20px; color:#666;">
+            <p>※ 今期の歌唱回数ランキング (TOP 20)</p>
+        </div>
+        {ranking_html_content if cool_data_exists else "<p style='text-align:center;'>ランキングデータがありません。</p>"}
+    </div>
+
+</div>
 
 <script>
-    function onRankingClick(row) {{
+    function openTab(evt, tabName) {{
+        var i, tabcontent, tablinks;
+        tabcontent = document.getElementsByClassName("tab-content");
+        for (i = 0; i < tabcontent.length; i++) {{
+            tabcontent[i].style.display = "none";
+            tabcontent[i].classList.remove("active");
+        }}
+        tablinks = document.getElementsByClassName("tab-btn");
+        for (i = 0; i < tablinks.length; i++) {{
+            tablinks[i].className = tablinks[i].className.replace(" active", "");
+        }}
+        document.getElementById(tabName).style.display = "block";
+        document.getElementById(tabName).classList.add("active");
+        evt.currentTarget.className += " active";
     }}
 
-    function openTab(tabName) {{
-        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-        document.getElementById(tabName).classList.add('active');
-        
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        
-        let btnIndex = 0;
-        if (tabName === 'analysis') btnIndex = 1;
-        if (tabName === 'ranking') btnIndex = 2;
-        
-        document.querySelectorAll('.tab-btn')[btnIndex].classList.add('active');
-        
-        document.getElementById('ctrl-setlist').style.display = 'none';
-        document.getElementById('ctrl-analysis').style.display = 'none';
-        document.getElementById('ctrl-ranking').style.display = 'none';
-
-        if(tabName === 'setlist') {{
-            document.getElementById('ctrl-setlist').style.display = 'flex';
-        }} else if(tabName === 'analysis') {{
-            document.getElementById('ctrl-analysis').style.display = 'flex';
-        }} else if(tabName === 'ranking') {{
-            document.getElementById('ctrl-ranking').style.display = 'flex';
-        }}
-    }}
-
-    function toggleCategory(header) {{
-        const content = header.nextElementSibling;
-        content.classList.toggle('collapsed');
-        const icon = header.querySelector('i');
-        icon.className = content.classList.contains('collapsed') ? 'fas fa-chevron-right' : 'fas fa-chevron-down';
-        icon.style.float = 'right';
-    }}
-
-    function downloadHTML() {{
-        const element = document.getElementById('print-target');
-        const htmlContent = element.innerHTML;
-        generateDownload(htmlContent, 'karaoke_analysis.html', 'クール集計結果');
-    }}
-
-    function downloadRanking() {{
-        const element = document.getElementById('ranking-print-target');
-        const htmlContent = element.innerHTML;
-        generateDownload(htmlContent, 'karaoke_ranking.html', 'カラオケ歌唱ランキング');
-    }}
-
-    function generateDownload(content, filename, title) {{
-        const fullHtml = `
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <title>${{title}}</title>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <style>
-        body {{ font-family: "Helvetica Neue", Arial, sans-serif; font-size: 13px; color: #333; }}
-        table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; }}
-        th, td {{ border: 1px solid #ccc; padding: 5px 8px; text-align: left; vertical-align: middle; }}
-        th {{ background-color: #2c3e50; color: #fff; }}
-        td[rowspan] {{ background-color: #fff; }}
-        
-        .category-header {{ 
-            background: #667eea; color: white; padding: 10px; margin-top: 20px; 
-            font-weight: bold; border-radius: 4px; cursor: pointer; user-select: none;
-        }}
-        .category-content {{ display: block; }}
-        .category-content.collapsed {{ display: none; }}
-        
-        .gray-text {{ color: gray !important; }}
-        tr.zero-count {{ color: #ccc; }}
-        
-        a.export-link {{
-            display: block; 
-            margin: -5px -8px; 
-            padding: 5px 8px;  
-            color: #333; 
-            text-decoration: none; 
-            box-sizing: border-box;
-            cursor: pointer;
-        }}
-        a.export-link:hover {{ background-color: #eef2f7; color: #3498db; }}
-        
-        tr.ranking-row {{ cursor: pointer; }}
-        tr.ranking-row:hover {{ background-color: #dbeafe; }}
-        
-        .count-wrapper {{ display: flex; align-items: center; gap: 8px; }}
-        .count-num {{ width: 25px; text-align: right; }}
-        .bar-chart {{ height: 10px; background: #3498db; border-radius: 5px; }}
-        
-        .rank-badge {{
-            display: inline-block; width: 24px; height: 24px; line-height: 24px;
-            border-radius: 50%; text-align: center; color: #fff; font-weight: bold; font-size: 12px;
-            background-color: #95a5a6;
-        }}
-        .rank-1 {{ background-color: #f1c40f; width: 28px; height: 28px; line-height: 28px; }}
-        .rank-2 {{ background-color: #bdc3c7; }}
-        .rank-3 {{ background-color: #d35400; }}
-        .rankingTable tr:nth-child(1) td {{ background-color: #fffae6; }}
-        .rankingTable tr:nth-child(2) td {{ background-color: #f8f9fa; }}
-
-        @media print {{
-            * {{
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-                color-adjust: exact !important;
-            }}
-            .category-content {{ display: block !important; }}
-            tbody.anime-group {{ break-inside: avoid; page-break-inside: avoid; }}
-            .category-header {{ page-break-after: avoid; }}
-            thead {{ display: table-header-group; }}
-        }}
-    </style>
-</head>
-<body>
-    <h1>${{title}}</h1>
-    <div style="text-align:right; font-size:0.9rem; color:#777;">出力日: {current_date_str}</div>
-    ${{content}}
-
-    <script>
-        const host = 'http://ykr.moe:11059';
-
-        function onRankingClick(row) {{
-            if (window.getSelection().toString().length > 0) return;
-            const rawHref = row.getAttribute('data-href');
-            if (rawHref && rawHref.startsWith('#host')) {{
-                const url = rawHref.replace('#host', host);
-                window.open(url, '_blank');
-            }}
-        }}
-
-        document.addEventListener('DOMContentLoaded', () => {{
-            document.querySelectorAll('a.export-link').forEach(link => {{
-                const rawHref = link.getAttribute('href');
-                if (rawHref && rawHref.startsWith('#host')) {{
-                    link.href = rawHref.replace('#host', host);
-                }}
-            }});
-        }});
-
-        function toggleCategory(header) {{
-            const content = header.nextElementSibling;
-            content.classList.toggle('collapsed');
-            const icon = header.querySelector('i');
-            if(icon) {{
-                icon.className = content.classList.contains('collapsed') ? 'fas fa-chevron-right' : 'fas fa-chevron-down';
-                icon.style.float = 'right';
-            }}
-        }}
-    <\/script>
-</body>
-</html>`;
-
-        const blob = new Blob([fullHtml], {{type: 'text/html'}});
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = filename;
-        link.click();
-    }}
-
+    // 初期表示カウント
+    const table = document.getElementById("historyTable");
     const searchInput = document.getElementById("searchInput");
-    const table = document.getElementById("setlistTable");
-    const countDisplay = document.getElementById('countDisplay');
-    let tableData = [];
-    let tbodyRows = [];
-
-    window.addEventListener('DOMContentLoaded', () => {{
-        const tbody = table.tBodies[0];
-        if (tbody) {{
-            tbodyRows = Array.from(tbody.rows);
-            tableData = tbodyRows.map(row => row.innerText.toUpperCase());
-            countDisplay.innerText = '全 ' + tbodyRows.length + ' 件';
-        }}
-    }});
-
-    searchInput.addEventListener("keyup", function(event) {{
-        if (event.key === "Enter") performSearch();
-    }});
+    const countDisplay = document.getElementById("countDisplay");
+    
+    function updateCount() {{
+        if(!table) return;
+        const total = table.tBodies[0].rows.length;
+        const visible = Array.from(table.tBodies[0].rows).filter(r => !r.classList.contains('hidden')).length;
+        countDisplay.innerText = '表示: ' + visible + ' / ' + total;
+    }}
+    
+    // 初期ロード時にカウント更新
+    updateCount();
 
     function performSearch() {{
         const filter = searchInput.value.toUpperCase();
-        const keywords = filter.replace(/　/g, " ").split(" ").filter(k => k.length > 0);
+        const tr = table.tBodies[0].getElementsByTagName("tr");
         let visibleCount = 0;
-        const total = tableData.length;
-        
+        const total = tr.length;
+
         for (let i = 0; i < total; i++) {{
-            let isMatch = true;
-            const rowText = tableData[i];
-            for (let k = 0; k < keywords.length; k++) {{
-                if (rowText.indexOf(keywords[k]) === -1) {{
-                    isMatch = false; break;
-                }}
-            }}
-            
-            if (isMatch || keywords.length === 0) {{
-                tbodyRows[i].classList.remove('hidden');
+            let textValue = tr[i].textContent || tr[i].innerText;
+            if (textValue.toUpperCase().indexOf(filter) > -1) {{
+                tr[i].classList.remove('hidden');
                 visibleCount++;
             }} else {{
-                tbodyRows[i].classList.add('hidden');
+                tr[i].classList.add('hidden');
             }}
         }}
         countDisplay.innerText = '表示: ' + visibleCount + ' / ' + total;
@@ -971,14 +906,41 @@ html_content = f"""
             return dir === 'asc' ? valA.localeCompare(valB,'ja') : valB.localeCompare(valA,'ja');
         }});
         rows.forEach(row => tbody.appendChild(row));
-        tbodyRows = rows;
-        tableData = tbodyRows.map(row => row.innerText.toUpperCase());
+    }}
+
+    function toggleCategory(header) {{
+        const content = header.nextElementSibling;
+        const icon = header.querySelector('i');
+        if (content.style.display === "none") {{
+            content.style.display = "block";
+            icon.classList.remove('fa-chevron-right');
+            icon.classList.add('fa-chevron-down');
+        }} else {{
+            content.style.display = "none";
+            icon.classList.remove('fa-chevron-down');
+            icon.classList.add('fa-chevron-right');
+        }}
+    }}
+    
+    function onRankingClick(row) {{
+        // クリックで検索フィルタを発動させる機能
+        // ただし現在のタブがランキングなので、セットリストタブへ移動してから検索する
+        const searchWord = row.getAttribute('data-href').split('searchword=')[1];
+        if(searchWord) {{
+            const decoded = decodeURIComponent(searchWord);
+            document.querySelector('.tab-btn[onclick*="setlist"]').click();
+            const searchBox = document.getElementById('searchInput');
+            searchBox.value = decoded;
+            performSearch();
+        }}
     }}
 </script>
+
 </body>
 </html>
 """
 
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
-    print("HTML生成完了: index.html")
+
+print(f"HTMLファイルを生成しました: index.html")
