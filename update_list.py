@@ -4,7 +4,6 @@ import datetime
 import os
 import re
 import unicodedata
-import glob
 from itertools import groupby
 
 # --- 時刻設定 ---
@@ -14,98 +13,114 @@ current_datetime_str = now.strftime("%Y/%m/%d %H:%M")
 
 # --- 設定: ポート番号と部屋主の名前の対応表 ---
 room_map = {
-    11000: "ゆーふうりん部屋",
-    11001: "ゆーふうりん部屋",
-    11002: "ゆーふうりん部屋",
-    11003: "ゆーふうりん部屋",
-    11004: "ゆーふうりん部屋",
-    11005: "ゆーふうりん部屋",
-    11006: "ゆーふうりん部屋",
-    11007: "ゆーふうりん部屋",
-    11008: "ゆーふうりん部屋",
-    11009: "ゆーふうりん部屋",
-    11021: "成田部屋",
-    11022: "成田部屋",
-    11028: "タマ部屋",
-    11058: "すみた部屋",
-    11059: "つぼはち部屋",
-    11063: "なぎ部屋",
-    11064: "naoo部屋",
-    11066: "芝ちゃん部屋",
-    11067: "crom部屋",
-    11068: "けんしん部屋",
-    11069: "けんちぃ部屋",
-    11070: "黒河部屋",
-    11071: "黒河部屋",
-    11074: "tukinowa部屋",
-    11077: "v3部屋",
-    11078: "のんでるん部屋",
-    11079: "まどか部屋",
-    11084: "タカヒロ部屋",
-    11085: "タカヒロ部屋",
-    11086: "タカヒロ部屋",
-    11087: "MiO部屋",
-    11088: "ほっしー部屋",
-    11101: "えみち部屋",
-    11102: "るえ部屋",
-    11103: "ながし部屋",
-    11106: "冨塚部屋"
+11000: "ゆーふうりん部屋",
+11001: "ゆーふうりん部屋",
+11002: "ゆーふうりん部屋",
+11003: "ゆーふうりん部屋",
+11004: "ゆーふうりん部屋",
+11005: "ゆーふうりん部屋",
+11006: "ゆーふうりん部屋",
+11007: "ゆーふうりん部屋",
+11008: "ゆーふうりん部屋",
+11009: "ゆーふうりん部屋",
+11010: "加古部屋",
+11011: "加古部屋",
+11012: "加古部屋",
+11013: "加古部屋",
+11014: "加古部屋",
+11015: "加古部屋",
+11021: "成田部屋",
+11022: "成田部屋",
+11028: "タマ部屋",
+11058: "すみた部屋",
+11059: "つぼはち部屋",
+11063: "なぎ部屋",
+11064: "naoo部屋",
+11066: "芝ちゃん部屋",
+11067: "crom部屋",
+11068: "けんしん部屋",
+11069: "けんちぃ部屋",
+11070: "黒河部屋",
+11071: "黒河部屋",
+11074: "tukinowa部屋",
+11077: "v3部屋",
+11078: "のんでるん部屋",
+11079: "まどか部屋",
+11084: "タカヒロ部屋",
+11085: "タカヒロ部屋",
+11086: "タカヒロ部屋",
+11087: "MiO部屋",
+11088: "ほっしー部屋",
+11101: "えみち部屋",
+11102: "るえ部屋",
+11103: "ながし部屋",
+11106: "冨塚部屋",
+11107: "ブルーベリー部屋"
 }
 
 # --- 関数: テキスト正規化 (検索キー用・履歴データ用) ---
+# ※こちらは従来どおり括弧の中身を削除して「純粋な曲名/作品名」にする
 def normalize_text(text):
     if not isinstance(text, str):
         return str(text)
+    
+    # 1. NFKC正規化
     text = unicodedata.normalize('NFKC', text)
+    
+    # 2. 拡張子の削除
     text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
-    text = re.sub(r'[\[\(\{【].*?[\]\)\}】]', ' ', text) # 括弧除去
+    
+    # 3. 括弧と中身を除去 (検索ノイズ除去のため)
+    text = re.sub(r'[\[\(\{【].*?[\]\)\}】]', ' ', text)
+    
+    # 4. キー変更情報を削除
     text = re.sub(r'(key|KEY)?\s*[\+\-]\s*[0-9]+', ' ', text)
     text = re.sub(r'原キー', ' ', text)
     text = re.sub(r'(キー)?変更[:：]?', ' ', text)
+    
+    # 5. 記号をスペースに置換
     text = re.sub(r'[~〜～\-_=,.]', ' ', text)
+    
+    # 6. スペース正規化
     text = re.sub(r'\s+', ' ', text).strip()
+    
     return text.upper()
 
 # --- 関数: オフラインリスト用正規化 (括弧の中身を保持する) ---
+# ※ファイル名には作品名などが括弧内に含まれているため、削除せずに保持する
 def normalize_offline_text(text):
     if not isinstance(text, str):
         return str(text)
+    
+    # 1. NFKC正規化
     text = unicodedata.normalize('NFKC', text)
+    
+    # 2. 拡張子の削除
     text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
+    
+    # 3. キー変更情報を削除
     text = re.sub(r'(key|KEY)?\s*[\+\-]\s*[0-9]+', ' ', text)
     text = re.sub(r'原キー', ' ', text)
     text = re.sub(r'(キー)?変更[:：]?', ' ', text)
+    
+    # 4. 記号をスペースに置換 (ただし括弧類は削除しない！)
     text = re.sub(r'[~〜～\-_=,.]', ' ', text)
+    
+    # 5. スペース正規化
     text = re.sub(r'\s+', ' ', text).strip()
+    
     return text.upper()
 
-# --- 関数: 数値を序数表記(1st, 2nd...)に変換 ---
-def get_ordinal_str(n):
-    if 11 <= (n % 100) <= 13:
-        suffix = 'th'
-    else:
-        suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
-    return f"{n}{suffix}"
 
-# --- 1. 過去データ読み込み (複数ファイル対応) ---
-# history.csv, history_1st.csv, history_2nd.csv... 全て読み込む
-history_files = glob.glob("history*.csv")
-history_dfs = []
-
-if history_files:
-    print(f"過去ログファイルを検出しました: {history_files}")
-    for f in history_files:
-        try:
-            df = pd.read_csv(f, encoding='utf-8-sig')
-            df = df.fillna("")
-            history_dfs.append(df)
-        except Exception as e:
-            print(f"ファイル読み込みエラー({f}): {e}")
-else:
-    print("過去ログファイルが見つかりません。新規作成します。")
-
-if history_dfs:
-    history_df = pd.concat(history_dfs, ignore_index=True)
+# --- 1. 過去データ読み込み ---
+history_file = "history.csv"
+if os.path.exists(history_file):
+    try:
+        history_df = pd.read_csv(history_file, encoding='utf-8-sig')
+        history_df = history_df.fillna("")
+    except Exception as e:
+        print(f"履歴ファイルの読み込みエラー: {e}")
+        history_df = pd.DataFrame()
 else:
     history_df = pd.DataFrame()
 
@@ -127,23 +142,19 @@ for port in target_ports:
             df['部屋主'] = room_map[port]
             df['取得日'] = current_date_str
             new_data_frames.append(df)
+            
     except Exception as e:
         pass 
-
-# --- 3. データの結合・整理 ---
-final_df = history_df # デフォルト
 
 if new_data_frames:
     new_df = pd.concat(new_data_frames, ignore_index=True)
     combined_df = pd.concat([history_df, new_df], ignore_index=True)
 
-    # クリーニング: ヘッダー行の誤混入などを削除
     clean_check_cols = ['部屋主', '曲名（ファイル名）', '作品名', '歌手名']
     for col in clean_check_cols:
         if col in combined_df.columns:
             combined_df = combined_df[combined_df[col] != col]
 
-    # 重複削除
     subset_cols = ['部屋主', '順番', '曲名（ファイル名）', '歌った人']
     existing_cols = [c for c in subset_cols if c in combined_df.columns]
     final_df = combined_df.drop_duplicates(subset=existing_cols, keep='first')
@@ -152,56 +163,25 @@ if new_data_frames:
     if '順番' in final_df.columns:
         final_df['順番'] = pd.to_numeric(final_df['順番'], errors='coerce')
         
-    # 最新順にソート (HTML表示用)
     final_df['temp_date'] = pd.to_datetime(final_df['取得日'], errors='coerce')
     final_df = final_df.sort_values(by=['temp_date', '順番'], ascending=[False, False])
     final_df = final_df.drop(columns=['temp_date'])
     
-    # カラム並び替え
     cols = list(final_df.columns)
     if '部屋主' in cols:
         cols.insert(0, cols.pop(cols.index('部屋主')))
         final_df = final_df[cols]
 
-    # --- 4. 保存処理 (分割保存) ---
-    print("履歴ファイルを保存中...")
-    
-    # 保存用に「古い順」に並べ替える (積み上げ保存のため)
-    save_df = final_df.copy()
-    save_df['temp_date_sort'] = pd.to_datetime(save_df['取得日'], errors='coerce')
-    # 日付昇順、順番昇順 (古いものが上)
-    save_df = save_df.sort_values(by=['temp_date_sort', '順番'], ascending=[True, True])
-    save_df = save_df.drop(columns=['temp_date_sort'])
-    
-    # 4000行ごとに分割して保存
-    chunk_size = 4000
-    total_rows = len(save_df)
-    
-    # 既存の history.csv があれば削除するか、ユーザーに任せる（今回は上書き防止のため分割ファイルのみ生成）
-    # ※運用上 history.csv が残っていると次回も読み込まれるが、drop_duplicatesで弾かれるので問題なし
-    
-    for i in range(0, total_rows, chunk_size):
-        chunk = save_df.iloc[i : i + chunk_size]
-        
-        # ファイル番号 (1, 2, 3...)
-        file_num = (i // chunk_size) + 1
-        suffix = get_ordinal_str(file_num)
-        filename = f"history_{suffix}.csv"
-        
-        chunk.to_csv(filename, index=False, encoding='utf-8-sig')
-        print(f" -> {filename} を保存しました ({len(chunk)}行)")
-
-    print("履歴ファイルの更新完了。")
-
+    final_df.to_csv(history_file, index=False, encoding='utf-8-sig')
+    print("履歴ファイルを更新しました。")
 else:
+    final_df = history_df
     print("新しいデータなし。過去データを使用。")
 
 
 # ==========================================
 # ★集計処理 (クール集計 + ランキング用データ収集)
 # ==========================================
-# (以下、HTML生成等のロジックは final_df を使うので変更なし)
-
 analysis_html_content = "" 
 ranking_html_content = "" 
 cool_data_exists = False
@@ -209,7 +189,7 @@ ranking_data_list = []
 
 cool_file = "cool_analysis.csv" 
 
-# オフラインリスト (複数ファイル対応)
+# --- ★修正: 複数ファイルからのオフラインリスト読み込み ---
 offline_files = [
     "offline_list_2026_1st.csv",
     "offline_list_2025_1st.csv",
@@ -220,19 +200,22 @@ offline_targets = []
 for file_path in offline_files:
     if os.path.exists(file_path):
         try:
+            # csv読み込み
             offline_df = pd.read_csv(file_path)
             offline_df = offline_df.fillna("")
+            
+            # 曲名列をリスト化して追加
             if '曲名' in offline_df.columns:
                 targets = [normalize_offline_text(str(x)) for x in offline_df['曲名'].tolist()]
                 offline_targets.extend(targets)
                 print(f"オフラインリスト({file_path})を読み込みました。追加件数: {len(targets)}")
             else:
                 print(f"オフラインリスト({file_path})に'曲名'カラムが見つかりません。")
+                
         except Exception as e:
             print(f"オフラインリスト({file_path})読み込みエラー: {e}")
     else:
-        # print(f"オフラインリスト({file_path})が見つかりません。") # 存在しない場合のエラーログ抑制
-        pass
+        print(f"オフラインリスト({file_path})が見つかりません。")
 
 print(f"オフラインリスト合計件数: {len(offline_targets)}")
 
@@ -255,6 +238,8 @@ if cool_file and os.path.exists(cool_file):
         
         if raw_df is not None:
             raw_df = raw_df.fillna("")
+            
+            # --- 重複削除ロジック (後勝ち) ---
             print("CSV内の重複行を削除中...")
             raw_df = raw_df.drop_duplicates(keep='last')
             
@@ -264,6 +249,7 @@ if cool_file and os.path.exists(cool_file):
             analysis_source_df = final_df.copy()
             analysis_source_df['dt_obj'] = pd.to_datetime(analysis_source_df['取得日'], errors='coerce')
             
+            # --- 正規化と救済ロジック ---
             analysis_source_df['norm_filename'] = analysis_source_df['曲名（ファイル名）'].apply(normalize_text)
             
             def get_rescued_workname(row):
@@ -297,11 +283,13 @@ if cool_file and os.path.exists(cool_file):
                 col0 = str(row[0]).strip()
 
                 is_category_line = any(cat in col0 for cat in ALLOWED_CATEGORIES) and "作品名" not in col0
+
                 if is_category_line:
                     current_category = col0
                     if current_category not in categorized_data:
                         categorized_data[current_category] = []
                     continue
+                
                 if "作品名" in col0: continue
                 if current_category is None: continue
 
@@ -309,6 +297,7 @@ if cool_file and os.path.exists(cool_file):
                 type_ = str(row[1]).strip() if len(row) > 1 else ""
                 artist = str(row[2]).strip() if len(row) > 2 else ""
                 song = str(row[3]).strip() if len(row) > 3 else ""
+                
                 if not anime and not song: continue
 
                 categorized_data[current_category].append({
@@ -325,6 +314,7 @@ if cool_file and os.path.exists(cool_file):
                 else:
                     return source_series.str.contains(safe_target, case=False, na=False)
 
+            # --- クール集計HTML生成 & ランキングデータ収集 ---
             for category, items in categorized_data.items():
                 analysis_html_content += f"""
                 <div class="category-block">
@@ -350,12 +340,14 @@ if cool_file and os.path.exists(cool_file):
                 for anime_name, group_iter in groupby(items, key=get_anime_key):
                     group_items = list(group_iter)
                     rowspan = len(group_items)
+                    
                     analysis_html_content += '<tbody class="anime-group">'
                     
                     for i, item in enumerate(group_items):
                         target_song_norm = normalize_text(item["song"])
                         target_anime_norm = normalize_text(item["anime"])
                         
+                        # --- 歌唱数集計 (履歴データとの照合) ---
                         song_match_mask = check_match(target_song_norm, target_history['norm_filename'])
                         anime_match_mask = (
                             target_history['norm_filename'].str.contains(re.escape(target_anime_norm), case=False, na=False) |
@@ -373,14 +365,21 @@ if cool_file and os.path.exists(cool_file):
 
                         count = len(target_history[final_mask])
                         
+                        # --- ★作成数(オフラインリスト)集計 修正 ---
+                        # ロジック: 曲名の一致 + 作品名(アニメ名)の部分一致を確認
+                        # ※オフラインリスト側は normalize_offline_text (括弧保持) を適用済み
                         creation_count = 0
+                        
                         if target_song_norm:
                             for offline_str in offline_targets:
+                                # 1. 曲名が含まれているか
                                 if target_song_norm in offline_str:
+                                    # 2. 作品名(アニメ名)が含まれているか
                                     if target_anime_norm:
                                         if target_anime_norm in offline_str:
                                             creation_count += 1
                                     else:
+                                        # 作品名指定がない場合は曲名一致だけでカウント
                                         creation_count += 1
 
                         ranking_data_list.append({
@@ -392,6 +391,7 @@ if cool_file and os.path.exists(cool_file):
                             "count": count
                         })
 
+                        # 行スタイル判定
                         row_class = ""
                         if creation_count == 0:
                             row_class = "gray-text"
@@ -405,29 +405,39 @@ if cool_file and os.path.exists(cool_file):
                         
                         clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
                         search_word = f"{clean_anime} {item['song']}"
+                        
                         link_tag_start = f'<a href="#host/search.php?searchword={search_word}" class="export-link" target="_blank">'
                         
                         analysis_html_content += f'<tr class="{row_class}">'
                         if i == 0:
                             analysis_html_content += f'<td rowspan="{rowspan}">{item["anime"]}</td>'
                         
+                        # 作成数カラム
                         analysis_html_content += f'<td align="center">{creation_count}</td>'
+
                         analysis_html_content += f'<td align="center">{link_tag_start}{item["type"]}</a></td>'
                         analysis_html_content += f'<td>{link_tag_start}{item["artist"]}</a></td>'
                         analysis_html_content += f'<td>{link_tag_start}{item["song"]}</a></td>'
+                        
                         analysis_html_content += f'<td class="count-cell"><div class="count-wrapper"><span class="count-num">{count}</span>{bar_html}</div></td>'
                         analysis_html_content += '</tr>'
                     
                     analysis_html_content += '</tbody>'
+                
                 analysis_html_content += "</table></div></div>"
 
             cool_data_exists = True
             print("クール集計処理完了。")
             
+            # ==========================================
+            # ★ランキングHTML生成処理
+            # ==========================================
             print("ランキング生成処理開始...")
+            
             for target_cat in ALLOWED_CATEGORIES:
                 if target_cat not in categorized_data:
                     continue
+                    
                 cat_items = [d for d in ranking_data_list if d["category"] == target_cat and d["count"] > 0]
                 cat_items.sort(key=lambda x: x["count"], reverse=True)
                 
@@ -449,20 +459,27 @@ if cool_file and os.path.exists(cool_file):
                         </thead>
                         <tbody>
                 """
+                
                 if not cat_items:
                     ranking_html_content += '<tr><td colspan="5" style="text-align:center; padding:20px;">歌唱データがありません</td></tr>'
                 else:
                     previous_count = None
                     current_rank = 0
+                    
                     for i, item in enumerate(cat_items):
                         if item["count"] != previous_count:
                             current_rank = i + 1
+                        
+                        # 20位以内、または20位と同率の場合は表示し続ける
                         if current_rank > 20:
                             break
+                        
                         previous_count = item["count"]
                         
                         rank_class = f"rank-{current_rank}" if current_rank <= 3 else "rank-normal"
+                        
                         rank_display = f'<span class="rank-badge {rank_class}">{current_rank}</span>'
+                        
                         if current_rank == 1:
                             rank_display += ' <i class="fas fa-crown" style="color:#FFD700;"></i>'
                         elif current_rank == 2:
@@ -472,6 +489,7 @@ if cool_file and os.path.exists(cool_file):
                             
                         bar_width = min(item["count"] * 20, 150)
                         bar_html = f'<div class="bar-chart" style="width:{bar_width}px;"></div>'
+
                         clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
                         search_word = f"{clean_anime} {item['song']}"
                         
@@ -483,14 +501,18 @@ if cool_file and os.path.exists(cool_file):
                             <td class="count-cell"><div class="count-wrapper"><span class="count-num">{item["count"]}</span>{bar_html}</div></td>
                         </tr>
                         """
+                        
                 ranking_html_content += "</tbody></table></div></div>"
             print("ランキング生成完了。")
+
         else:
             print("CSV読み込み失敗")
+
     except Exception as e:
         print(f"集計エラー: {e}")
         import traceback
         traceback.print_exc()
+
 
 # ==========================================
 # HTML生成 (HTML出力・印刷設定)
