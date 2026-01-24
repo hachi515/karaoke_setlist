@@ -253,7 +253,8 @@ def generate_category_html_block(category_name, item_list):
         for i, item in enumerate(group_items):
             clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
             search_word = f"{clean_anime} {item['song']}"
-            link_tag_start = f'<a href="#host/search.php?searchword={search_word}" class="export-link" target="_blank">'
+            # 変更: target="_blank" を削除
+            link_tag_start = f'<a href="#host/search.php?searchword={search_word}" class="export-link">'
             
             html += '<tr>'
             if i == 0:
@@ -445,8 +446,7 @@ if cool_file and os.path.exists(cool_file):
                             "count": count
                         })
 
-                        # ★変更: 行スタイル判定（基本全部黒字にするためグレーアウト処理を撤廃）
-                        # 作成数や歌唱数に関わらず通常のスタイルを適用
+                        # 行スタイル判定 (全て黒字)
                         row_class = "has-count"
                         
                         bar_width = min(count * 20, 150)
@@ -455,7 +455,8 @@ if cool_file and os.path.exists(cool_file):
                         clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
                         search_word = f"{clean_anime} {item['song']}"
                         
-                        link_tag_start = f'<a href="#host/search.php?searchword={search_word}" class="export-link" target="_blank">'
+                        # 変更: target="_blank" を削除
+                        link_tag_start = f'<a href="#host/search.php?searchword={search_word}" class="export-link">'
                         
                         analysis_html_content += f'<tr class="{row_class}">'
                         if i == 0:
