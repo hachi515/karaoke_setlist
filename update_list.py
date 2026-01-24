@@ -183,8 +183,9 @@ ranking_html_content = ""
 cool_data_exists = False
 ranking_data_list = [] 
 
-all_created_list = []
-all_uncreated_list = []
+# ★変更: HTML文字列として保持する
+created_lists_html = ""
+uncreated_lists_html = ""
 
 cool_file = "cool_analysis.csv" 
 
@@ -215,6 +216,59 @@ for file_path in offline_files:
         print(f"オフラインリスト({file_path})が見つかりません。")
 
 print(f"オフラインリスト合計件数: {len(offline_targets)}")
+
+
+# --- ★関数: カテゴリ別リストHTML生成 (メイン集計と同様のレイアウト) ---
+def generate_category_html_block(category_name, item_list):
+    if not item_list:
+        return ""
+    
+    # アニメ名でソート
+    item_list.sort(key=lambda x: x['anime'])
+    
+    html = f"""
+    <div class="category-block">
+        <div class="category-header" onclick="toggleCategory(this)">
+            {category_name} <i class="fas fa-chevron-down" style="float:right;"></i>
+        </div>
+        <div class="category-content">
+        <table class="analysisTable">
+            <thead>
+                <tr>
+                    <th style="width:30%; min-width:180px;">作品名</th>
+                    <th style="width:10%; min-width:60px;">OP/ED</th>
+                    <th style="width:25%; min-width:150px;">歌手</th>
+                    <th style="width:35%; min-width:180px;">曲名</th>
+                </tr>
+            </thead>
+    """
+    
+    def get_anime_key(x): return x['anime']
+    
+    for anime_name, group_iter in groupby(item_list, key=get_anime_key):
+        group_items = list(group_iter)
+        rowspan = len(group_items)
+        
+        html += '<tbody class="anime-group">'
+        
+        for i, item in enumerate(group_items):
+            clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
+            search_word = f"{clean_anime} {item['song']}"
+            link_tag_start = f'<a href="#host/search.php?searchword={search_word}" class="export-link" target="_blank">'
+            
+            html += '<tr>'
+            if i == 0:
+                html += f'<td rowspan="{rowspan}">{item["anime"]}</td>'
+            
+            html += f'<td align="center">{link_tag_start}{item["type"]}</a></td>'
+            html += f'<td>{link_tag_start}{item["artist"]}</a></td>'
+            html += f'<td>{link_tag_start}{item["song"]}</a></td>'
+            html += '</tr>'
+        
+        html += '</tbody>'
+    
+    html += "</table></div></div>"
+    return html
 
 
 if not os.path.exists(cool_file):
@@ -309,8 +363,14 @@ if cool_file and os.path.exists(cool_file):
                 else:
                     return source_series.str.contains(safe_target, case=False, na=False)
 
-            # --- クール集計HTML生成 ---
+            # --- クール集計HTML生成 & リスト生成 ---
             for category, items in categorized_data.items():
+                
+                # リスト分割用の一時リスト
+                cat_created_items = []
+                cat_uncreated_items = []
+
+                # メイン集計用HTMLヘッダー
                 analysis_html_content += f"""
                 <div class="category-block">
                     <div class="category-header" onclick="toggleCategory(this)">
@@ -371,14 +431,11 @@ if cool_file and os.path.exists(cool_file):
                                     else:
                                         creation_count += 1
 
-                        # --- リストへの振り分け ---
-                        list_item = item.copy()
-                        list_item['category'] = category 
-                        
+                        # --- ★変更: リストへの振り分け ---
                         if creation_count >= 1:
-                            all_created_list.append(list_item)
+                            cat_created_items.append(item)
                         else:
-                            all_uncreated_list.append(list_item)
+                            cat_uncreated_items.append(item)
 
                         # ランキング用データ追加
                         ranking_data_list.append({
@@ -424,6 +481,10 @@ if cool_file and os.path.exists(cool_file):
                     analysis_html_content += '</tbody>'
                 
                 analysis_html_content += "</table></div></div>"
+
+                # --- ★追加: カテゴリごとのリストHTMLを生成して蓄積 ---
+                created_lists_html += generate_category_html_block(category, cat_created_items)
+                uncreated_lists_html += generate_category_html_block(category, cat_uncreated_items)
 
             cool_data_exists = True
             print("クール集計処理完了。")
@@ -510,43 +571,6 @@ if cool_file and os.path.exists(cool_file):
         print(f"集計エラー: {e}")
         import traceback
         traceback.print_exc()
-
-# --- ★変更: リストHTML生成関数 (リンク追加 + レイアウト統一) ---
-def generate_simple_list_html(item_list):
-    if not item_list:
-        return '<div style="padding:20px; text-align:center;">該当データなし</div>'
-    
-    # 区分 → 作品名 でソート
-    item_list.sort(key=lambda x: (x['category'], x['anime']))
-
-    html = '<table class="analysisTable" style="width:100%;">'
-    html += '<thead><tr>'
-    html += '<th style="width:15%;">区分</th>'
-    html += '<th style="width:25%;">作品名</th>'
-    html += '<th style="width:10%;">Type</th>'
-    html += '<th style="width:25%;">曲名</th>'
-    html += '<th style="width:25%;">歌手</th>'
-    html += '</tr></thead><tbody>'
-
-    for item in item_list:
-        clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
-        search_word = f"{clean_anime} {item['song']}"
-        link_start = f'<a href="#host/search.php?searchword={search_word}" class="export-link" target="_blank">'
-        link_end = '</a>'
-        
-        html += '<tr>'
-        html += f'<td>{item["category"]}</td>'
-        html += f'<td>{item["anime"]}</td>'
-        html += f'<td>{link_start}{item["type"]}{link_end}</td>'
-        html += f'<td>{link_start}{item["song"]}{link_end}</td>'
-        html += f'<td>{link_start}{item["artist"]}{link_end}</td>'
-        html += '</tr>'
-    html += '</tbody></table>'
-    return html
-
-# HTML生成 (まとめたリストを使用)
-html_list_created_all = generate_simple_list_html(all_created_list)
-html_list_uncreated_all = generate_simple_list_html(all_uncreated_list)
 
 
 # ==========================================
@@ -731,8 +755,25 @@ html_content = f"""
                 print-color-adjust: exact !important;
                 color-adjust: exact !important;
             }}
+            body {{
+                overflow: visible !important;
+                height: auto !important;
+                display: block !important;
+            }}
+            .top-section {{ display: none !important; }}
+            .content-area {{ overflow: visible !important; position: static !important; }}
+            .tab-content {{ 
+                position: static !important; 
+                display: block !important; 
+                overflow: visible !important; 
+                padding: 0 !important;
+            }}
             .category-content {{ display: block !important; }}
-            tbody.anime-group {{ break-inside: avoid; page-break-inside: avoid; }}
+            
+            tbody.anime-group {{
+                break-inside: avoid;
+                page-break-inside: avoid;
+            }}
             .category-header {{ page-break-after: avoid; }}
             thead {{ display: table-header-group; }}
         }}
@@ -757,8 +798,8 @@ html_content = f"""
                 <div class="count-display" id="countDisplay">読み込み中...</div>
             </div>
             <div id="ctrl-analysis" class="ctrl-analysis">
-                <button onclick="downloadList('list-created-all', 'created_list_all.html', '全作成済みリスト')" class="btn btn-list">作成済リスト保存</button>
-                <button onclick="downloadList('list-uncreated-all', 'uncreated_list_all.html', '全未作成リスト')" class="btn btn-list" style="background-color:#e74c3c;">未作成リスト保存</button>
+                <button onclick="downloadList('list-created-content', 'created_list.html', '作成済みリスト')" class="btn btn-list">作成リスト保存</button>
+                <button onclick="downloadList('list-uncreated-content', 'uncreated_list.html', '未作成リスト')" class="btn btn-list" style="background-color:#e74c3c;">未作成リスト保存</button>
                 <button onclick="downloadHTML()" class="btn btn-dl" style="margin-left:10px;"><i class="fas fa-file-code"></i> HTML保存</button>
             </div>
             <div id="ctrl-ranking" class="ctrl-ranking">
@@ -791,8 +832,8 @@ html_content = f"""
         </div>
     </div>
 
-    <div id="list-created-all" style="display:none;">{html_list_created_all}</div>
-    <div id="list-uncreated-all" style="display:none;">{html_list_uncreated_all}</div>
+    <div id="list-created-content" style="display:none;">{created_lists_html}</div>
+    <div id="list-uncreated-content" style="display:none;">{uncreated_lists_html}</div>
 
 <script>
     function onRankingClick(row) {{
