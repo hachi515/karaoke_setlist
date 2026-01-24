@@ -71,7 +71,8 @@ def normalize_text(text):
     text = re.sub(r'[\[\(\{【].*?[\]\)\}】]', ' ', text)
     
     # 4. キー変更情報を削除
-    text = re.sub(r'(key|KEY)?\s*[\+\-]\s*[0-9]+', ' ', text)
+    # ★修正: 0から始まる数字(01など)はキー変更ではなく曲番とみなして削除しない
+    text = re.sub(r'(key|KEY)?\s*[\+\-]\s*(?!0[0-9])[0-9]+', ' ', text)
     text = re.sub(r'原キー', ' ', text)
     text = re.sub(r'(キー)?変更[:：]?', ' ', text)
     
@@ -95,7 +96,8 @@ def normalize_offline_text(text):
     text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
     
     # 3. キー変更情報を削除
-    text = re.sub(r'(key|KEY)?\s*[\+\-]\s*[0-9]+', ' ', text)
+    # ★修正: 0から始まる数字(01など)はキー変更ではなく曲番とみなして削除しない
+    text = re.sub(r'(key|KEY)?\s*[\+\-]\s*(?!0[0-9])[0-9]+', ' ', text)
     text = re.sub(r'原キー', ' ', text)
     text = re.sub(r'(キー)?変更[:：]?', ' ', text)
     
@@ -1073,3 +1075,4 @@ html_content = f"""
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
     print("HTML生成完了: index.html")
+
