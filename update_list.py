@@ -58,54 +58,32 @@ room_map = {
 }
 
 # --- 関数: テキスト正規化 (検索キー用・履歴データ用) ---
-# ※こちらは従来どおり括弧の中身を削除して「純粋な曲名/作品名」にする
 def normalize_text(text):
     if not isinstance(text, str):
         return str(text)
     
-    # 1. NFKC正規化
     text = unicodedata.normalize('NFKC', text)
-    
-    # 2. 拡張子の削除
     text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
-    
-    # 3. 括弧と中身を除去 (検索ノイズ除去のため)
     text = re.sub(r'[\[\(\{【].*?[\]\)\}】]', ' ', text)
-    
-    # 4. キー変更情報を削除
     text = re.sub(r'(key|KEY)?\s*[\+\-]\s*[0-9]+', ' ', text)
     text = re.sub(r'原キー', ' ', text)
     text = re.sub(r'(キー)?変更[:：]?', ' ', text)
-    
-    # 5. 記号をスペースに置換
     text = re.sub(r'[~〜～\-_=,.]', ' ', text)
-    
-    # 6. スペース正規化
     text = re.sub(r'\s+', ' ', text).strip()
     
     return text.upper()
 
 # --- 関数: オフラインリスト用正規化 (括弧の中身を保持する) ---
-# ※ファイル名には作品名などが括弧内に含まれているため、削除せずに保持する
 def normalize_offline_text(text):
     if not isinstance(text, str):
         return str(text)
     
-    # 1. NFKC正規化
     text = unicodedata.normalize('NFKC', text)
-    
-    # 2. 拡張子の削除
     text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
-    
-    # 3. キー変更情報を削除
     text = re.sub(r'(key|KEY)?\s*[\+\-]\s*[0-9]+', ' ', text)
     text = re.sub(r'原キー', ' ', text)
     text = re.sub(r'(キー)?変更[:：]?', ' ', text)
-    
-    # 4. 記号をスペースに置換 (ただし括弧類は削除しない！)
     text = re.sub(r'[~〜～\-_=,.]', ' ', text)
-    
-    # 5. スペース正規化
     text = re.sub(r'\s+', ' ', text).strip()
     
     return text.upper()
@@ -256,7 +234,6 @@ def generate_category_html_block(category_name, item_list):
         for i, item in enumerate(group_items):
             clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
             search_word = f"{clean_anime} {item['song']}"
-            # 変更: target="_blank" を削除
             link_tag_start = f'<a href="#host/search.php?searchword={search_word}" class="export-link">'
             
             html += '<tr>'
@@ -372,7 +349,7 @@ if cool_file and os.path.exists(cool_file):
                 cat_created_items = []
                 cat_uncreated_items = []
 
-                # メイン集計用HTMLヘッダー
+                # メイン集計用HTMLヘッダー (人数カラムを追加)
                 analysis_html_content += f"""
                 <div class="category-block">
                     <div class="category-header" onclick="toggleCategory(this)">
@@ -386,6 +363,7 @@ if cool_file and os.path.exists(cool_file):
                                 <th style="width:5%; min-width:40px;">作成</th> <th style="width:10%; min-width:60px;">OP/ED</th>
                                 <th style="width:20%; min-width:150px;">歌手</th>
                                 <th style="width:25%; min-width:180px;">曲名</th>
+                                <th style="width:8%; min-width:40px;">人数</th>
                                 <th style="width:15%; min-width:60px;">歌唱数</th>
                             </tr>
                         </thead>
@@ -420,7 +398,10 @@ if cool_file and os.path.exists(cool_file):
                         else:
                             final_mask = pd.Series([False] * len(target_history))
 
-                        count = len(target_history[final_mask])
+                        matched_data = target_history[final_mask]
+                        count = len(matched_data)
+                        # ★人数（ユニーク）カウント
+                        user_count = matched_data['歌った人'].nunique() if count > 0 else 0
                         
                         # --- 作成数集計 ---
                         creation_count = 0
@@ -446,7 +427,8 @@ if cool_file and os.path.exists(cool_file):
                             "song": item["song"],
                             "artist": item["artist"],
                             "type": item["type"],
-                            "count": count
+                            "count": count,
+                            "user_count": user_count # 人数を追加
                         })
 
                         # 行スタイル判定 (全て黒字)
@@ -458,7 +440,6 @@ if cool_file and os.path.exists(cool_file):
                         clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
                         search_word = f"{clean_anime} {item['song']}"
                         
-                        # 変更: target="_blank" を削除
                         link_tag_start = f'<a href="#host/search.php?searchword={search_word}" class="export-link">'
                         
                         analysis_html_content += f'<tr class="{row_class}">'
@@ -472,6 +453,9 @@ if cool_file and os.path.exists(cool_file):
                         analysis_html_content += f'<td>{link_tag_start}{item["artist"]}</a></td>'
                         analysis_html_content += f'<td>{link_tag_start}{item["song"]}</a></td>'
                         
+                        # ★人数カラム
+                        analysis_html_content += f'<td align="center" style="font-weight:bold; color:#7f8c8d;">{user_count}</td>'
+
                         analysis_html_content += f'<td class="count-cell"><div class="count-wrapper"><span class="count-num">{count}</span>{bar_html}</div></td>'
                         analysis_html_content += '</tr>'
                     
@@ -510,15 +494,16 @@ if cool_file and os.path.exists(cool_file):
                                 <th style="width:10%; min-width:60px;">順位</th>
                                 <th style="width:25%; min-width:180px;">作品名</th>
                                 <th style="width:25%; min-width:180px;">曲名</th>
-                                <th style="width:20%; min-width:150px;">歌手</th>
-                                <th style="width:20%; min-width:60px;">歌唱数</th>
+                                <th style="width:15%; min-width:150px;">歌手</th>
+                                <th style="width:10%; min-width:40px;">人数</th>
+                                <th style="width:15%; min-width:60px;">歌唱数</th>
                             </tr>
                         </thead>
                         <tbody>
                 """
                 
                 if not cat_items:
-                    ranking_html_content += '<tr><td colspan="5" style="text-align:center; padding:20px;">歌唱データがありません</td></tr>'
+                    ranking_html_content += '<tr><td colspan="6" style="text-align:center; padding:20px;">歌唱データがありません</td></tr>'
                 else:
                     previous_count = None
                     current_rank = 0
@@ -554,6 +539,7 @@ if cool_file and os.path.exists(cool_file):
                             <td align="center" style="font-weight:bold; font-size:1.1rem;">{rank_display}</td>
                             <td>{item["anime"]} <span style="font-size:0.8em; color:#777;">({item["type"]})</span></td>
                             <td>{item["song"]}</td> <td>{item["artist"]}</td>
+                            <td align="center" style="font-weight:bold; color:#7f8c8d;">{item["user_count"]}</td>
                             <td class="count-cell"><div class="count-wrapper"><span class="count-num">{item["count"]}</span>{bar_html}</div></td>
                         </tr>
                         """
@@ -718,7 +704,6 @@ html_content = f"""
         .category-content {{ display: block; transition: all 0.3s; }}
         .category-content.collapsed {{ display: none; }}
         
-        /* 変更: グレーアウト用CSSを削除し、全て基本色で表示 */
         tr.has-count {{ background-color: #fff; color: #333; }}
         
         .count-wrapper {{ display: flex; align-items: center; gap: 8px; }}
@@ -1076,5 +1061,3 @@ html_content = f"""
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
     print("HTML生成完了: index.html")
-
-
