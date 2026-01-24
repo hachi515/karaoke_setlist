@@ -160,7 +160,9 @@ else:
 # ★集計処理
 # ==========================================
 analysis_html_content = "" 
-ranking_html_content = "" 
+ranking_count_html_content = "" # 変更: 歌唱数ランキング用
+ranking_user_html_content = ""  # 変更: 歌唱人数ランキング用
+
 cool_data_exists = False
 ranking_data_list = [] 
 
@@ -400,7 +402,7 @@ if cool_file and os.path.exists(cool_file):
 
                         matched_data = target_history[final_mask]
                         count = len(matched_data)
-                        # ★人数（ユニーク）カウント
+                        # ★追加: 人数（ユニーク）カウント
                         user_count = matched_data['歌った人'].nunique() if count > 0 else 0
                         
                         # --- 作成数集計 ---
@@ -437,7 +439,7 @@ if cool_file and os.path.exists(cool_file):
                         bar_width = min(count * 20, 150)
                         bar_html = f'<div class="bar-chart" style="width:{bar_width}px;"></div>' if count > 0 else ""
                         
-                        # ★人数グラフ (最大100px)
+                        # ★追加: ユーザー数グラフ
                         user_bar_width = min(user_count * 20, 100)
                         user_bar_html = f'<div class="bar-chart-user" style="width:{user_bar_width}px;"></div>' if user_count > 0 else ""
 
@@ -457,7 +459,7 @@ if cool_file and os.path.exists(cool_file):
                         analysis_html_content += f'<td>{link_tag_start}{item["artist"]}</a></td>'
                         analysis_html_content += f'<td>{link_tag_start}{item["song"]}</a></td>'
                         
-                        # ★人数カラム (グラフ付き・フォント統一)
+                        # ★追加: 人数カラム (グラフ付き・フォント統一)
                         analysis_html_content += f'<td class="count-cell"><div class="count-wrapper"><span class="count-num">{user_count}</span>{user_bar_html}</div></td>'
 
                         analysis_html_content += f'<td class="count-cell"><div class="count-wrapper"><span class="count-num">{count}</span>{bar_html}</div></td>'
@@ -475,87 +477,108 @@ if cool_file and os.path.exists(cool_file):
             print("クール集計処理完了。")
             
             # ==========================================
-            # ★ランキングHTML生成処理
+            # ★ランキング生成 (歌唱数 & 歌唱人数 の2パターン)
             # ==========================================
             print("ランキング生成処理開始...")
             
-            for target_cat in ALLOWED_CATEGORIES:
-                if target_cat not in categorized_data:
-                    continue
+            def generate_ranking_html(mode="count"):
+                html_out = ""
+                for target_cat in ALLOWED_CATEGORIES:
+                    if target_cat not in categorized_data:
+                        continue
+                        
+                    cat_items = [d for d in ranking_data_list if d["category"] == target_cat and d["count"] > 0]
                     
-                cat_items = [d for d in ranking_data_list if d["category"] == target_cat and d["count"] > 0]
-                cat_items.sort(key=lambda x: x["count"], reverse=True)
-                
-                ranking_html_content += f"""
-                <div class="category-block">
-                    <div class="category-header" onclick="toggleCategory(this)">
-                        {target_cat} ランキング (TOP 20) <i class="fas fa-chevron-down" style="float:right;"></i>
-                    </div>
-                    <div class="category-content">
-                    <table class="rankingTable">
-                        <thead>
-                            <tr>
-                                <th style="width:10%; min-width:60px;">順位</th>
-                                <th style="width:25%; min-width:180px;">作品名</th>
-                                <th style="width:25%; min-width:180px;">曲名</th>
-                                <th style="width:15%; min-width:150px;">歌手</th>
-                                <th style="width:10%; min-width:60px;">人数</th>
-                                <th style="width:15%; min-width:60px;">歌唱数</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                """
-                
-                if not cat_items:
-                    ranking_html_content += '<tr><td colspan="6" style="text-align:center; padding:20px;">歌唱データがありません</td></tr>'
-                else:
-                    previous_count = None
-                    current_rank = 0
-                    
-                    for i, item in enumerate(cat_items):
-                        if item["count"] != previous_count:
-                            current_rank = i + 1
-                        
-                        if current_rank > 20:
-                            break
-                        
-                        previous_count = item["count"]
-                        
-                        rank_class = f"rank-{current_rank}" if current_rank <= 3 else "rank-normal"
-                        
-                        # ★ランキング行の色付け
-                        row_rank_class = f"rank-row-{current_rank}" if current_rank <= 3 else ""
+                    # ソートロジック
+                    if mode == "count":
+                        # 歌唱数順
+                        cat_items.sort(key=lambda x: x["count"], reverse=True)
+                        rank_title = f"{target_cat} 歌唱数ランキング (TOP 20)"
+                        val_key = "count"
+                    else: # user
+                        # 人数順、同数の場合は歌唱数順
+                        cat_items.sort(key=lambda x: (x["user_count"], x["count"]), reverse=True)
+                        rank_title = f"{target_cat} 歌唱人数ランキング (TOP 20)"
+                        val_key = "user_count"
 
-                        rank_display = f'<span class="rank-badge {rank_class}">{current_rank}</span>'
+                    html_out += f"""
+                    <div class="category-block">
+                        <div class="category-header" onclick="toggleCategory(this)">
+                            {rank_title} <i class="fas fa-chevron-down" style="float:right;"></i>
+                        </div>
+                        <div class="category-content">
+                        <table class="rankingTable">
+                            <thead>
+                                <tr>
+                                    <th style="width:10%; min-width:60px;">順位</th>
+                                    <th style="width:25%; min-width:180px;">作品名</th>
+                                    <th style="width:25%; min-width:180px;">曲名</th>
+                                    <th style="width:15%; min-width:150px;">歌手</th>
+                                    <th style="width:10%; min-width:60px;">人数</th>
+                                    <th style="width:15%; min-width:60px;">歌唱数</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                    """
+                    
+                    if not cat_items:
+                        html_out += '<tr><td colspan="6" style="text-align:center; padding:20px;">歌唱データがありません</td></tr>'
+                    else:
+                        previous_val = None
+                        current_rank = 0
                         
-                        if current_rank == 1:
-                            rank_display += ' <i class="fas fa-crown" style="color:#FFD700;"></i>'
-                        elif current_rank == 2:
-                            rank_display += ' <i class="fas fa-medal" style="color:#C0C0C0;"></i>'
-                        elif current_rank == 3:
-                            rank_display += ' <i class="fas fa-medal" style="color:#CD7F32;"></i>'
+                        for i, item in enumerate(cat_items):
+                            current_val = item[val_key] # 比較対象の値
                             
-                        bar_width = min(item["count"] * 20, 150)
-                        bar_html = f'<div class="bar-chart" style="width:{bar_width}px;"></div>'
+                            if current_val != previous_val:
+                                current_rank = i + 1
+                            
+                            if current_rank > 20:
+                                break
+                            
+                            previous_val = current_val
+                            
+                            rank_class = f"rank-{current_rank}" if current_rank <= 3 else "rank-normal"
+                            
+                            # ★ランキング行の色付け
+                            row_rank_class = f"rank-row-{current_rank}" if current_rank <= 3 else ""
 
-                        # ★人数グラフ
-                        user_bar_width = min(item["user_count"] * 20, 100)
-                        user_bar_html = f'<div class="bar-chart-user" style="width:{user_bar_width}px;"></div>' if item["user_count"] > 0 else ""
+                            rank_display = f'<span class="rank-badge {rank_class}">{current_rank}</span>'
+                            
+                            if current_rank == 1:
+                                rank_display += ' <i class="fas fa-crown" style="color:#FFD700;"></i>'
+                            elif current_rank == 2:
+                                rank_display += ' <i class="fas fa-medal" style="color:#C0C0C0;"></i>'
+                            elif current_rank == 3:
+                                rank_display += ' <i class="fas fa-medal" style="color:#CD7F32;"></i>'
+                                
+                            bar_width = min(item["count"] * 20, 150)
+                            bar_html = f'<div class="bar-chart" style="width:{bar_width}px;"></div>'
 
-                        clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
-                        search_word = f"{clean_anime} {item['song']}"
-                        
-                        ranking_html_content += f"""
-                        <tr class="has-count ranking-row {row_rank_class}" data-href="#host/search.php?searchword={search_word}" onclick="onRankingClick(this)">
-                            <td align="center" style="font-weight:bold; font-size:1.1rem;">{rank_display}</td>
-                            <td>{item["anime"]} <span style="font-size:0.8em; color:#777;">({item["type"]})</span></td>
-                            <td>{item["song"]}</td> <td>{item["artist"]}</td>
-                            <td class="count-cell"><div class="count-wrapper"><span class="count-num">{item["user_count"]}</span>{user_bar_html}</div></td>
-                            <td class="count-cell"><div class="count-wrapper"><span class="count-num">{item["count"]}</span>{bar_html}</div></td>
-                        </tr>
-                        """
-                        
-                ranking_html_content += "</tbody></table></div></div>"
+                            # ★人数グラフ
+                            user_bar_width = min(item["user_count"] * 20, 100)
+                            user_bar_html = f'<div class="bar-chart-user" style="width:{user_bar_width}px;"></div>' if item["user_count"] > 0 else ""
+
+                            clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
+                            search_word = f"{clean_anime} {item['song']}"
+                            
+                            html_out += f"""
+                            <tr class="has-count ranking-row {row_rank_class}" data-href="#host/search.php?searchword={search_word}" onclick="onRankingClick(this)">
+                                <td align="center" style="font-weight:bold; font-size:1.1rem;">{rank_display}</td>
+                                <td>{item["anime"]} <span style="font-size:0.8em; color:#777;">({item["type"]})</span></td>
+                                <td>{item["song"]}</td> <td>{item["artist"]}</td>
+                                <td class="count-cell"><div class="count-wrapper"><span class="count-num">{item["user_count"]}</span>{user_bar_html}</div></td>
+                                <td class="count-cell"><div class="count-wrapper"><span class="count-num">{item["count"]}</span>{bar_html}</div></td>
+                            </tr>
+                            """
+                            
+                    html_out += "</tbody></table></div></div>"
+                return html_out
+
+            # ★2種類のランキングを生成
+            ranking_count_html_content = generate_ranking_html("count")
+            ranking_user_html_content = generate_ranking_html("user")
+            
             print("ランキング生成完了。")
 
         else:
@@ -724,7 +747,7 @@ html_content = f"""
             border-radius: 5px;
         }}
 
-        /* ★ユーザー数グラフ用CSS */
+        /* ★追加: ユーザー数グラフ用CSS */
         .bar-chart-user {{
             height: 10px; background: linear-gradient(90deg, #2ecc71, #27ae60);
             border-radius: 5px;
@@ -745,10 +768,8 @@ html_content = f"""
         .rank-1 {{ background-color: #f1c40f; width: 28px; height: 28px; line-height: 28px; }}
         .rank-2 {{ background-color: #bdc3c7; }}
         .rank-3 {{ background-color: #d35400; }}
-        .rankingTable tr:nth-child(1) td {{ background-color: #fffae6; }}
-        .rankingTable tr:nth-child(2) td {{ background-color: #f8f9fa; }}
-
-        /* ★ランキング上位の行背景色 */
+        
+        /* ★追加: ランキング上位の行背景色 */
         tr.rank-row-1 td {{ background-color: #fff8e1 !important; }} /* 淡いゴールド */
         tr.rank-row-2 td {{ background-color: #f5f5f5 !important; }} /* 淡いシルバー */
         tr.rank-row-3 td {{ background-color: #fff0e6 !important; }} /* 淡いブロンズ */
@@ -795,7 +816,8 @@ html_content = f"""
         <div class="tabs">
             <button class="tab-btn active" onclick="openTab('setlist')">セットリスト</button>
             <button class="tab-btn" onclick="openTab('analysis')">クール集計</button>
-            <button class="tab-btn" onclick="openTab('ranking')">ランキング</button>
+            <button class="tab-btn" onclick="openTab('ranking_count')">歌唱数ランキング</button>
+            <button class="tab-btn" onclick="openTab('ranking_user')">歌唱人数ランキング</button>
         </div>
         <div class="controls-row">
             <div id="ctrl-setlist" class="ctrl-setlist">
@@ -809,8 +831,11 @@ html_content = f"""
                 <button onclick="downloadList('list-uncreated-content', 'uncreated_list.html', '未作成リスト')" class="btn btn-list" style="background-color:#e74c3c;">未作成リスト保存</button>
                 <button onclick="downloadHTML()" class="btn btn-dl" style="margin-left:10px;"><i class="fas fa-file-code"></i> HTML保存</button>
             </div>
-            <div id="ctrl-ranking" class="ctrl-ranking">
-                <button onclick="downloadRanking()" class="btn btn-dl"><i class="fas fa-trophy"></i> ランキング保存</button>
+            <div id="ctrl-ranking-count" class="ctrl-ranking">
+                <button onclick="downloadRanking('count')" class="btn btn-dl"><i class="fas fa-trophy"></i> 歌唱数ランキング保存</button>
+            </div>
+            <div id="ctrl-ranking-user" class="ctrl-ranking">
+                <button onclick="downloadRanking('user')" class="btn btn-dl"><i class="fas fa-users"></i> 歌唱人数ランキング保存</button>
             </div>
         </div>
     </div>
@@ -831,10 +856,17 @@ html_content = f"""
             </div>
         </div>
 
-        <div id="ranking" class="tab-content">
+        <div id="ranking_count" class="tab-content">
             <div style="margin-top:15px; font-size:0.9rem; color:#7f8c8d; text-align:right;">集計対象: 2026/01/01 - 2026/03/31</div>
-            <div id="ranking-print-target">
-                {ranking_html_content if ranking_html_content else '<div style="padding:20px;text-align:center;color:#e74c3c;">ランキング対象データがありません</div>'}
+            <div id="ranking-count-print-target">
+                {ranking_count_html_content if ranking_count_html_content else '<div style="padding:20px;text-align:center;color:#e74c3c;">ランキング対象データがありません</div>'}
+            </div>
+        </div>
+        
+        <div id="ranking_user" class="tab-content">
+            <div style="margin-top:15px; font-size:0.9rem; color:#7f8c8d; text-align:right;">集計対象: 2026/01/01 - 2026/03/31</div>
+            <div id="ranking-user-print-target">
+                {ranking_user_html_content if ranking_user_html_content else '<div style="padding:20px;text-align:center;color:#e74c3c;">ランキング対象データがありません</div>'}
             </div>
         </div>
     </div>
@@ -854,20 +886,24 @@ html_content = f"""
         
         let btnIndex = 0;
         if (tabName === 'analysis') btnIndex = 1;
-        if (tabName === 'ranking') btnIndex = 2;
+        if (tabName === 'ranking_count') btnIndex = 2;
+        if (tabName === 'ranking_user') btnIndex = 3;
         
         document.querySelectorAll('.tab-btn')[btnIndex].classList.add('active');
         
         document.getElementById('ctrl-setlist').style.display = 'none';
         document.getElementById('ctrl-analysis').style.display = 'none';
-        document.getElementById('ctrl-ranking').style.display = 'none';
+        document.getElementById('ctrl-ranking-count').style.display = 'none';
+        document.getElementById('ctrl-ranking-user').style.display = 'none';
 
         if(tabName === 'setlist') {{
             document.getElementById('ctrl-setlist').style.display = 'flex';
         }} else if(tabName === 'analysis') {{
             document.getElementById('ctrl-analysis').style.display = 'flex';
-        }} else if(tabName === 'ranking') {{
-            document.getElementById('ctrl-ranking').style.display = 'flex';
+        }} else if(tabName === 'ranking_count') {{
+            document.getElementById('ctrl-ranking-count').style.display = 'flex';
+        }} else if(tabName === 'ranking_user') {{
+            document.getElementById('ctrl-ranking-user').style.display = 'flex';
         }}
     }}
 
@@ -885,10 +921,20 @@ html_content = f"""
         generateDownload(htmlContent, 'karaoke_analysis.html', 'クール集計結果');
     }}
 
-    function downloadRanking() {{
-        const element = document.getElementById('ranking-print-target');
+    function downloadRanking(mode) {{
+        let elementId = 'ranking-count-print-target';
+        let filename = 'karaoke_ranking_count.html';
+        let title = 'カラオケ歌唱数ランキング';
+        
+        if (mode === 'user') {{
+            elementId = 'ranking-user-print-target';
+            filename = 'karaoke_ranking_user.html';
+            title = 'カラオケ歌唱人数ランキング';
+        }}
+        
+        const element = document.getElementById(elementId);
         const htmlContent = element.innerHTML;
-        generateDownload(htmlContent, 'karaoke_ranking.html', 'カラオケ歌唱ランキング');
+        generateDownload(htmlContent, filename, title);
     }}
 
     function downloadList(elementId, filename, title) {{
