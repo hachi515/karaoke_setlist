@@ -67,11 +67,14 @@ def normalize_text(text):
     # 2. 拡張子の削除
     text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
     
-    # 3. 括弧と中身を除去 (検索ノイズ除去のため)
-    text = re.sub(r'[\[\(\{【].*?[\]\)\}】]', ' ', text)
+    # 3. ★修正: 括弧の中身は削除せず、括弧記号のみをスペースに置換する
+    # これにより【アンデッドアンラック】などが「アンデッドアンラック」として残る
+    text = re.sub(r'[\[\(\{【\]\)\}】]', ' ', text)
     
-    # 4. キー変更情報を削除
-    text = re.sub(r'(key|KEY)?\s*[\+\-]\s*[0-9]+', ' ', text)
+    # 4. ★修正: キー変更情報を削除（ただし0から始まる数字はトラック番号とみなして残す）
+    # (?!0) は「次が0ではない」場合のみマッチする -> -01, +02 などは消えない
+    text = re.sub(r'(key|KEY)?\s*[\+\-]\s*(?!0)[0-9]+', ' ', text)
+    
     text = re.sub(r'原キー', ' ', text)
     text = re.sub(r'(キー)?変更[:：]?', ' ', text)
     
@@ -94,8 +97,9 @@ def normalize_offline_text(text):
     # 2. 拡張子の削除
     text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
     
-    # 3. キー変更情報を削除
-    text = re.sub(r'(key|KEY)?\s*[\+\-]\s*[0-9]+', ' ', text)
+    # 3. ★修正: キー変更情報を削除（0から始まる数字は残す）
+    text = re.sub(r'(key|KEY)?\s*[\+\-]\s*(?!0)[0-9]+', ' ', text)
+    
     text = re.sub(r'原キー', ' ', text)
     text = re.sub(r'(キー)?変更[:：]?', ' ', text)
     
@@ -253,7 +257,6 @@ def generate_category_html_block(category_name, item_list):
         for i, item in enumerate(group_items):
             clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
             search_word = f"{clean_anime} {item['song']}"
-            # 変更: target="_blank" を削除
             link_tag_start = f'<a href="#host/search.php?searchword={search_word}" class="export-link">'
             
             html += '<tr>'
@@ -455,7 +458,6 @@ if cool_file and os.path.exists(cool_file):
                         clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
                         search_word = f"{clean_anime} {item['song']}"
                         
-                        # 変更: target="_blank" を削除
                         link_tag_start = f'<a href="#host/search.php?searchword={search_word}" class="export-link">'
                         
                         analysis_html_content += f'<tr class="{row_class}">'
@@ -830,6 +832,13 @@ html_content = f"""
 
 <script>
     function onRankingClick(row) {{
+        if (window.getSelection().toString().length > 0) return;
+        const rawHref = row.getAttribute('data-href');
+        if (rawHref && rawHref.startsWith('#host')) {{
+            const url = rawHref.replace('#host', host);
+            // 変更: 同じタブで遷移するように変更
+            window.location.href = url;
+        }}
     }}
 
     function openTab(tabName) {{
@@ -962,7 +971,8 @@ html_content = f"""
             const rawHref = row.getAttribute('data-href');
             if (rawHref && rawHref.startsWith('#host')) {{
                 const url = rawHref.replace('#host', host);
-                window.open(url, '_blank');
+                // 変更: 同じタブで遷移
+                window.location.href = url;
             }}
         }}
 
