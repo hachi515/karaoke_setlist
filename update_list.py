@@ -58,6 +58,7 @@ room_map = {
 }
 
 # --- 関数: テキスト正規化 (検索キー用・履歴データ用) ---
+# ※こちらは従来どおり括弧の中身を削除して「純粋な曲名/作品名」にする
 def normalize_text(text):
     if not isinstance(text, str):
         return str(text)
@@ -85,6 +86,7 @@ def normalize_text(text):
     return text.upper()
 
 # --- 関数: オフラインリスト用正規化 (括弧の中身を保持する) ---
+# ※ファイル名には作品名などが括弧内に含まれているため、削除せずに保持する
 def normalize_offline_text(text):
     if not isinstance(text, str):
         return str(text)
@@ -1074,4 +1076,5 @@ html_content = f"""
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
     print("HTML生成完了: index.html")
+
 
