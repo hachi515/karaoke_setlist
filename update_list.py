@@ -57,7 +57,6 @@ room_map = {
 }
 
 # --- 関数: テキスト正規化 (検索キー用・履歴データ用) ---
-# ※こちらは従来どおり括弧の中身を削除して「純粋な曲名/作品名」にする
 def normalize_text(text):
     if not isinstance(text, str):
         return str(text)
@@ -85,7 +84,6 @@ def normalize_text(text):
     return text.upper()
 
 # --- 関数: オフラインリスト用正規化 (括弧の中身を保持する) ---
-# ※ファイル名には作品名などが括弧内に含まれているため、削除せずに保持する
 def normalize_offline_text(text):
     if not isinstance(text, str):
         return str(text)
@@ -178,16 +176,20 @@ else:
 
 
 # ==========================================
-# ★集計処理 (クール集計 + ランキング用データ収集)
+# ★集計処理
 # ==========================================
 analysis_html_content = "" 
 ranking_html_content = "" 
 cool_data_exists = False
 ranking_data_list = [] 
 
+# ★変更: 全クール分の作成済み・未作成リスト格納用リスト
+all_created_list = []
+all_uncreated_list = []
+
 cool_file = "cool_analysis.csv" 
 
-# --- ★修正: 複数ファイルからのオフラインリスト読み込み ---
+# --- オフラインリスト読み込み ---
 offline_files = [
     "offline_list_2026_1st.csv",
     "offline_list_2025_1st.csv",
@@ -198,11 +200,9 @@ offline_targets = []
 for file_path in offline_files:
     if os.path.exists(file_path):
         try:
-            # csv読み込み
             offline_df = pd.read_csv(file_path)
             offline_df = offline_df.fillna("")
             
-            # 曲名列をリスト化して追加
             if '曲名' in offline_df.columns:
                 targets = [normalize_offline_text(str(x)) for x in offline_df['曲名'].tolist()]
                 offline_targets.extend(targets)
@@ -237,7 +237,6 @@ if cool_file and os.path.exists(cool_file):
         if raw_df is not None:
             raw_df = raw_df.fillna("")
             
-            # --- 重複削除ロジック (後勝ち) ---
             print("CSV内の重複行を削除中...")
             raw_df = raw_df.drop_duplicates(keep='last')
             
@@ -247,7 +246,6 @@ if cool_file and os.path.exists(cool_file):
             analysis_source_df = final_df.copy()
             analysis_source_df['dt_obj'] = pd.to_datetime(analysis_source_df['取得日'], errors='coerce')
             
-            # --- 正規化と救済ロジック ---
             analysis_source_df['norm_filename'] = analysis_source_df['曲名（ファイル名）'].apply(normalize_text)
             
             def get_rescued_workname(row):
@@ -312,7 +310,7 @@ if cool_file and os.path.exists(cool_file):
                 else:
                     return source_series.str.contains(safe_target, case=False, na=False)
 
-            # --- クール集計HTML生成 & ランキングデータ収集 ---
+            # --- クール集計HTML生成 ---
             for category, items in categorized_data.items():
                 analysis_html_content += f"""
                 <div class="category-block">
@@ -345,7 +343,7 @@ if cool_file and os.path.exists(cool_file):
                         target_song_norm = normalize_text(item["song"])
                         target_anime_norm = normalize_text(item["anime"])
                         
-                        # --- 歌唱数集計 (履歴データとの照合) ---
+                        # --- 歌唱数集計 ---
                         song_match_mask = check_match(target_song_norm, target_history['norm_filename'])
                         anime_match_mask = (
                             target_history['norm_filename'].str.contains(re.escape(target_anime_norm), case=False, na=False) |
@@ -363,23 +361,27 @@ if cool_file and os.path.exists(cool_file):
 
                         count = len(target_history[final_mask])
                         
-                        # --- ★作成数(オフラインリスト)集計 修正 ---
-                        # ロジック: 曲名の一致 + 作品名(アニメ名)の部分一致を確認
-                        # ※オフラインリスト側は normalize_offline_text (括弧保持) を適用済み
+                        # --- 作成数集計 ---
                         creation_count = 0
-                        
                         if target_song_norm:
                             for offline_str in offline_targets:
-                                # 1. 曲名が含まれているか
                                 if target_song_norm in offline_str:
-                                    # 2. 作品名(アニメ名)が含まれているか
                                     if target_anime_norm:
                                         if target_anime_norm in offline_str:
                                             creation_count += 1
                                     else:
-                                        # 作品名指定がない場合は曲名一致だけでカウント
                                         creation_count += 1
 
+                        # --- ★変更: リストへの振り分け (まとめて追加) ---
+                        list_item = item.copy()
+                        list_item['category'] = category # 区分カラム用にカテゴリを追加
+                        
+                        if creation_count >= 1:
+                            all_created_list.append(list_item)
+                        else:
+                            all_uncreated_list.append(list_item)
+
+                        # ランキング用データ追加
                         ranking_data_list.append({
                             "category": category,
                             "anime": item["anime"],
@@ -468,7 +470,6 @@ if cool_file and os.path.exists(cool_file):
                         if item["count"] != previous_count:
                             current_rank = i + 1
                         
-                        # 20位以内、または20位と同率の場合は表示し続ける
                         if current_rank > 20:
                             break
                         
@@ -510,6 +511,21 @@ if cool_file and os.path.exists(cool_file):
         print(f"集計エラー: {e}")
         import traceback
         traceback.print_exc()
+
+# --- ★変更: リストHTML生成関数 (区分カラム追加) ---
+def generate_simple_list_html(item_list):
+    if not item_list:
+        return '<div>該当データなし</div>'
+    
+    html = '<table class="analysisTable"><thead><tr><th>区分</th><th>作品名</th><th>Type</th><th>曲名</th><th>歌手</th></tr></thead><tbody>'
+    for item in item_list:
+        html += f'<tr><td>{item["category"]}</td><td>{item["anime"]}</td><td>{item["type"]}</td><td>{item["song"]}</td><td>{item["artist"]}</td></tr>'
+    html += '</tbody></table>'
+    return html
+
+# HTML生成 (まとめたリストを使用)
+html_list_created_all = generate_simple_list_html(all_created_list)
+html_list_uncreated_all = generate_simple_list_html(all_uncreated_list)
 
 
 # ==========================================
@@ -607,6 +623,8 @@ html_content = f"""
             padding: 8px 15px; display: flex; gap: 8px; align-items: center;
             background-color: #fff; border-bottom: 1px solid var(--border-color);
             height: 40px; 
+            flex-wrap: nowrap;
+            overflow-x: auto;
         }}
         .search-box {{
             padding: 6px 12px; border: 1px solid #ccc; border-radius: 4px;
@@ -619,10 +637,11 @@ html_content = f"""
         }}
         .btn:hover {{ opacity: 0.9; }}
         .btn-dl {{ background-color: #2ecc71; }}
+        .btn-list {{ background-color: #9b59b6; font-size: 12px; }}
         .count-display {{ margin-left: auto; font-weight: bold; font-size: 13px; }}
 
         .ctrl-setlist {{ display: flex; width: 100%; align-items: center; gap:8px; }}
-        .ctrl-analysis {{ display: none; width: 100%; align-items: center; justify-content: flex-end; }}
+        .ctrl-analysis {{ display: none; width: 100%; align-items: center; justify-content: flex-end; gap:5px; }}
         .ctrl-ranking {{ display: none; width: 100%; align-items: center; justify-content: flex-end; }}
 
         .content-area {{
@@ -677,7 +696,7 @@ html_content = f"""
         .rank-badge {{
             display: inline-block; width: 24px; height: 24px; line-height: 24px;
             border-radius: 50%; text-align: center; color: #fff; font-weight: bold; font-size: 12px;
-            background-color: #95a5a6; 
+            background-color: #95a5a6;
         }}
         .rank-1 {{ background-color: #f1c40f; box-shadow: 0 0 5px #f39c12; font-size: 14px; width: 28px; height: 28px; line-height: 28px; }} 
         .rank-2 {{ background-color: #bdc3c7; box-shadow: 0 0 5px #7f8c8d; }} 
@@ -735,7 +754,9 @@ html_content = f"""
                 <div class="count-display" id="countDisplay">読み込み中...</div>
             </div>
             <div id="ctrl-analysis" class="ctrl-analysis">
-                <button onclick="downloadHTML()" class="btn btn-dl"><i class="fas fa-file-code"></i> HTML保存</button>
+                <button onclick="downloadList('list-created-all', 'created_list_all.html', '全作成済みリスト')" class="btn btn-list">作成済リスト保存</button>
+                <button onclick="downloadList('list-uncreated-all', 'uncreated_list_all.html', '全未作成リスト')" class="btn btn-list" style="background-color:#e74c3c;">未作成リスト保存</button>
+                <button onclick="downloadHTML()" class="btn btn-dl" style="margin-left:10px;"><i class="fas fa-file-code"></i> HTML保存</button>
             </div>
             <div id="ctrl-ranking" class="ctrl-ranking">
                 <button onclick="downloadRanking()" class="btn btn-dl"><i class="fas fa-trophy"></i> ランキング保存</button>
@@ -766,6 +787,9 @@ html_content = f"""
             </div>
         </div>
     </div>
+
+    <div id="list-created-all" style="display:none;">{html_list_created_all}</div>
+    <div id="list-uncreated-all" style="display:none;">{html_list_uncreated_all}</div>
 
 <script>
     function onRankingClick(row) {{
@@ -814,6 +838,14 @@ html_content = f"""
         const element = document.getElementById('ranking-print-target');
         const htmlContent = element.innerHTML;
         generateDownload(htmlContent, 'karaoke_ranking.html', 'カラオケ歌唱ランキング');
+    }}
+
+    function downloadList(elementId, filename, title) {{
+        const element = document.getElementById(elementId);
+        if(element) {{
+            const htmlContent = element.innerHTML;
+            generateDownload(htmlContent, filename, title);
+        }}
     }}
 
     function generateDownload(content, filename, title) {{
@@ -1007,4 +1039,3 @@ html_content = f"""
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
     print("HTML生成完了: index.html")
-
