@@ -68,11 +68,11 @@ def normalize_text(text):
     text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
     
     # 3. ★修正: 括弧の中身は削除せず、括弧記号のみをスペースに置換する
-    # これにより【アンデッドアンラック】などが「アンデッドアンラック」として残る
+    # これにより【アンデッドアンラック】などが「アンデッドアンラック」として残り、マッチング可能になります。
     text = re.sub(r'[\[\(\{【\]\)\}】]', ' ', text)
     
     # 4. ★修正: キー変更情報を削除（ただし0から始まる数字はトラック番号とみなして残す）
-    # (?!0) は「次が0ではない」場合のみマッチする -> -01, +02 などは消えない
+    # (?!0) は「次が0ではない」場合のみマッチする -> -01, +02 などは消えずに残ります。
     text = re.sub(r'(key|KEY)?\s*[\+\-]\s*(?!0)[0-9]+', ' ', text)
     
     text = re.sub(r'原キー', ' ', text)
@@ -221,7 +221,7 @@ for file_path in offline_files:
 print(f"オフラインリスト合計件数: {len(offline_targets)}")
 
 
-# --- ★関数: カテゴリ別リストHTML生成 ---
+# --- ★関数: カテゴリ別リストHTML生成 (メイン集計と同じレイアウト) ---
 def generate_category_html_block(category_name, item_list):
     if not item_list:
         return ""
@@ -257,6 +257,7 @@ def generate_category_html_block(category_name, item_list):
         for i, item in enumerate(group_items):
             clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
             search_word = f"{clean_anime} {item['song']}"
+            # 変更: target="_blank" を削除 (同じタブで開く)
             link_tag_start = f'<a href="#host/search.php?searchword={search_word}" class="export-link">'
             
             html += '<tr>'
@@ -458,6 +459,7 @@ if cool_file and os.path.exists(cool_file):
                         clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
                         search_word = f"{clean_anime} {item['song']}"
                         
+                        # 変更: target="_blank" を削除 (同じタブ)
                         link_tag_start = f'<a href="#host/search.php?searchword={search_word}" class="export-link">'
                         
                         analysis_html_content += f'<tr class="{row_class}">'
@@ -916,6 +918,9 @@ html_content = f"""
         .category-content {{ display: block; }}
         .category-content.collapsed {{ display: none; }}
         
+        /* 変更: 保存ファイル内でもグレーアウト廃止 */
+        tr.has-count {{ background-color: #fff; color: #333; }}
+        
         a.export-link {{
             display: block; 
             margin: -5px -8px; 
@@ -1078,8 +1083,3 @@ html_content = f"""
 </script>
 </body>
 </html>
-"""
-
-with open("index.html", "w", encoding="utf-8") as f:
-    f.write(html_content)
-    print("HTML生成完了: index.html")
