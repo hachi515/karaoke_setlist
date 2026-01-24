@@ -67,8 +67,13 @@ def normalize_text(text):
     # 2. 拡張子の削除
     text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
     
-    # 3. 括弧と中身を除去 (検索ノイズ除去のため)
-    text = re.sub(r'[\[\(\{【].*?[\]\)\}】]', ' ', text)
+    # 3. 括弧の中身は削除せず、括弧記号のみをスペースに置換
+    text = re.sub(r'[\[\(\{【\]\)\}】]', ' ', text)
+    
+    # 4. 【削除】キー変更情報の削除処理を撤廃 (01などが消えるのを防ぐため)
+    # text = re.sub(r'(key|KEY)?\s*[\+\-]\s*(?!0)[0-9]+', ' ', text)
+    # text = re.sub(r'原キー', ' ', text)
+    # text = re.sub(r'(キー)?変更[:：]?', ' ', text)
     
     # 5. 記号をスペースに置換
     text = re.sub(r'[~〜～\-_=,.]', ' ', text)
@@ -88,6 +93,11 @@ def normalize_offline_text(text):
     
     # 2. 拡張子の削除
     text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
+    
+    # 3. 【削除】キー変更情報の削除処理を撤廃
+    # text = re.sub(r'(key|KEY)?\s*[\+\-]\s*(?!0)[0-9]+', ' ', text)
+    # text = re.sub(r'原キー', ' ', text)
+    # text = re.sub(r'(キー)?変更[:：]?', ' ', text)
     
     # 4. 記号をスペースに置換 (ただし括弧類は削除しない！)
     text = re.sub(r'[~〜～\-_=,.]', ' ', text)
@@ -189,7 +199,8 @@ offline_targets = []
 for file_path in offline_files:
     if os.path.exists(file_path):
         try:
-            offline_df = pd.read_csv(file_path)
+            # ★変更: dtype=str を追加して「01」が「1」になるのを防ぐ
+            offline_df = pd.read_csv(file_path, dtype=str)
             offline_df = offline_df.fillna("")
             
             if '曲名' in offline_df.columns:
@@ -243,7 +254,7 @@ def generate_category_html_block(category_name, item_list):
         for i, item in enumerate(group_items):
             clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
             search_word = f"{clean_anime} {item['song']}"
-            # 変更: target="_blank" を削除
+            # 同じタブで開く
             link_tag_start = f'<a href="#host/search.php?searchword={search_word}" class="export-link">'
             
             html += '<tr>'
@@ -705,197 +716,8 @@ html_content = f"""
         .category-content {{ display: block; transition: all 0.3s; }}
         .category-content.collapsed {{ display: none; }}
         
-        /* 変更: グレーアウト用CSSを削除し、全て基本色で表示 */
+        /* 変更: 保存ファイル内でもグレーアウト廃止 */
         tr.has-count {{ background-color: #fff; color: #333; }}
-        
-        .count-wrapper {{ display: flex; align-items: center; gap: 8px; }}
-        .count-num {{ width: 25px; text-align: right; font-size:1.1rem; }}
-        .bar-chart {{
-            height: 10px; background: linear-gradient(90deg, #3498db, #2980b9);
-            border-radius: 5px;
-        }}
-        td[rowspan] {{
-            background-color: #fff;
-            border-right: 1px solid #eee;
-            vertical-align: middle;
-            font-weight: normal; color: inherit;      
-        }}
-
-        .rank-badge {{
-            display: inline-block; width: 24px; height: 24px; line-height: 24px;
-            border-radius: 50%; text-align: center; color: #fff; font-weight: bold; font-size: 12px;
-            background-color: #95a5a6;
-        }}
-        .rank-1 {{ background-color: #f1c40f; width: 28px; height: 28px; line-height: 28px; }}
-        .rank-2 {{ background-color: #bdc3c7; }}
-        .rank-3 {{ background-color: #d35400; }}
-        .rankingTable tr:nth-child(1) td {{ background-color: #fffae6; }}
-        .rankingTable tr:nth-child(2) td {{ background-color: #f8f9fa; }}
-
-        @media print {{
-            * {{
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-                color-adjust: exact !important;
-            }}
-            body {{
-                overflow: visible !important;
-                height: auto !important;
-                display: block !important;
-            }}
-            .top-section {{ display: none !important; }}
-            .content-area {{ overflow: visible !important; position: static !important; }}
-            .tab-content {{ 
-                position: static !important; 
-                display: block !important; 
-                overflow: visible !important; 
-                padding: 0 !important;
-            }}
-            .category-content {{ display: block !important; }}
-            
-            tbody.anime-group {{
-                break-inside: avoid;
-                page-break-inside: avoid;
-            }}
-            .category-header {{ page-break-after: avoid; }}
-            thead {{ display: table-header-group; }}
-        }}
-    </style>
-</head>
-<body>
-    <div class="top-section">
-        <div class="header-inner">
-            <h1>Karaoke Dashboard</h1>
-            <div class="update-time">{current_datetime_str} 更新</div>
-        </div>
-        <div class="tabs">
-            <button class="tab-btn active" onclick="openTab('setlist')">セットリスト</button>
-            <button class="tab-btn" onclick="openTab('analysis')">クール集計</button>
-            <button class="tab-btn" onclick="openTab('ranking')">ランキング</button>
-        </div>
-        <div class="controls-row">
-            <div id="ctrl-setlist" class="ctrl-setlist">
-                <input type="text" id="searchInput" class="search-box" placeholder="キーワード (例: 曲名 歌手)...">
-                <button onclick="performSearch()" class="btn"><i class="fas fa-search"></i> 検索</button>
-                <button onclick="resetFilter()" class="btn" style="background:#95a5a6"><i class="fas fa-undo"></i></button>
-                <div class="count-display" id="countDisplay">読み込み中...</div>
-            </div>
-            <div id="ctrl-analysis" class="ctrl-analysis">
-                <button onclick="downloadList('list-created-content', 'created_list.html', '作成済みリスト')" class="btn btn-list">作成リスト保存</button>
-                <button onclick="downloadList('list-uncreated-content', 'uncreated_list.html', '未作成リスト')" class="btn btn-list" style="background-color:#e74c3c;">未作成リスト保存</button>
-                <button onclick="downloadHTML()" class="btn btn-dl" style="margin-left:10px;"><i class="fas fa-file-code"></i> HTML保存</button>
-            </div>
-            <div id="ctrl-ranking" class="ctrl-ranking">
-                <button onclick="downloadRanking()" class="btn btn-dl"><i class="fas fa-trophy"></i> ランキング保存</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="content-area">
-        <div id="setlist" class="tab-content active">
-            <table id="setlistTable">
-                <thead><tr>{setlist_headers}</tr></thead>
-                <tbody>{setlist_rows}</tbody>
-            </table>
-            {"" if setlist_rows else '<div style="padding:20px;text-align:center">データがありません</div>'}
-        </div>
-
-        <div id="analysis" class="tab-content">
-            <div style="margin-top:15px; font-size:0.9rem; color:#7f8c8d; text-align:right;">集計対象: 2026/01/01 - 2026/03/31</div>
-            <div id="print-target">
-                {analysis_html_content if cool_data_exists else '<div style="padding:20px;text-align:center;color:#e74c3c;">集計データがありません</div>'}
-            </div>
-        </div>
-
-        <div id="ranking" class="tab-content">
-            <div style="margin-top:15px; font-size:0.9rem; color:#7f8c8d; text-align:right;">集計対象: 2026/01/01 - 2026/03/31</div>
-            <div id="ranking-print-target">
-                {ranking_html_content if ranking_html_content else '<div style="padding:20px;text-align:center;color:#e74c3c;">ランキング対象データがありません</div>'}
-            </div>
-        </div>
-    </div>
-
-    <div id="list-created-content" style="display:none;">{created_lists_html}</div>
-    <div id="list-uncreated-content" style="display:none;">{uncreated_lists_html}</div>
-
-<script>
-    function onRankingClick(row) {{
-    }}
-
-    function openTab(tabName) {{
-        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-        document.getElementById(tabName).classList.add('active');
-        
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        
-        let btnIndex = 0;
-        if (tabName === 'analysis') btnIndex = 1;
-        if (tabName === 'ranking') btnIndex = 2;
-        
-        document.querySelectorAll('.tab-btn')[btnIndex].classList.add('active');
-        
-        document.getElementById('ctrl-setlist').style.display = 'none';
-        document.getElementById('ctrl-analysis').style.display = 'none';
-        document.getElementById('ctrl-ranking').style.display = 'none';
-
-        if(tabName === 'setlist') {{
-            document.getElementById('ctrl-setlist').style.display = 'flex';
-        }} else if(tabName === 'analysis') {{
-            document.getElementById('ctrl-analysis').style.display = 'flex';
-        }} else if(tabName === 'ranking') {{
-            document.getElementById('ctrl-ranking').style.display = 'flex';
-        }}
-    }}
-
-    function toggleCategory(header) {{
-        const content = header.nextElementSibling;
-        content.classList.toggle('collapsed');
-        const icon = header.querySelector('i');
-        icon.className = content.classList.contains('collapsed') ? 'fas fa-chevron-right' : 'fas fa-chevron-down';
-        icon.style.float = 'right';
-    }}
-
-    function downloadHTML() {{
-        const element = document.getElementById('print-target');
-        const htmlContent = element.innerHTML;
-        generateDownload(htmlContent, 'karaoke_analysis.html', 'クール集計結果');
-    }}
-
-    function downloadRanking() {{
-        const element = document.getElementById('ranking-print-target');
-        const htmlContent = element.innerHTML;
-        generateDownload(htmlContent, 'karaoke_ranking.html', 'カラオケ歌唱ランキング');
-    }}
-
-    function downloadList(elementId, filename, title) {{
-        const element = document.getElementById(elementId);
-        if(element) {{
-            const htmlContent = element.innerHTML;
-            generateDownload(htmlContent, filename, title);
-        }}
-    }}
-
-    function generateDownload(content, filename, title) {{
-        const fullHtml = `
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <title>${{title}}</title>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <style>
-        body {{ font-family: "Helvetica Neue", Arial, sans-serif; font-size: 13px; color: #333; }}
-        table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; }}
-        th, td {{ border: 1px solid #ccc; padding: 5px 8px; text-align: left; vertical-align: middle; }}
-        th {{ background-color: #2c3e50; color: #fff; }}
-        td[rowspan] {{ background-color: #fff; }}
-        
-        .category-header {{ 
-            background: #667eea; color: white; padding: 10px; margin-top: 20px; 
-            font-weight: bold; border-radius: 4px; cursor: pointer; user-select: none;
-        }}
-        .category-content {{ display: block; }}
-        .category-content.collapsed {{ display: none; }}
         
         a.export-link {{
             display: block; 
@@ -952,7 +774,8 @@ html_content = f"""
             const rawHref = row.getAttribute('data-href');
             if (rawHref && rawHref.startsWith('#host')) {{
                 const url = rawHref.replace('#host', host);
-                window.open(url, '_blank');
+                // 変更: 同じタブで遷移
+                window.location.href = url;
             }}
         }}
 
@@ -1058,8 +881,3 @@ html_content = f"""
 </script>
 </body>
 </html>
-"""
-
-with open("index.html", "w", encoding="utf-8") as f:
-    f.write(html_content)
-    print("HTML生成完了: index.html")
