@@ -183,7 +183,6 @@ ranking_html_content = ""
 cool_data_exists = False
 ranking_data_list = [] 
 
-# ★変更: 全クール分の作成済み・未作成リスト格納用リスト
 all_created_list = []
 all_uncreated_list = []
 
@@ -372,9 +371,9 @@ if cool_file and os.path.exists(cool_file):
                                     else:
                                         creation_count += 1
 
-                        # --- ★変更: リストへの振り分け (まとめて追加) ---
+                        # --- リストへの振り分け ---
                         list_item = item.copy()
-                        list_item['category'] = category # 区分カラム用にカテゴリを追加
+                        list_item['category'] = category 
                         
                         if creation_count >= 1:
                             all_created_list.append(list_item)
@@ -512,14 +511,36 @@ if cool_file and os.path.exists(cool_file):
         import traceback
         traceback.print_exc()
 
-# --- ★変更: リストHTML生成関数 (区分カラム追加) ---
+# --- ★変更: リストHTML生成関数 (リンク追加 + レイアウト統一) ---
 def generate_simple_list_html(item_list):
     if not item_list:
-        return '<div>該当データなし</div>'
+        return '<div style="padding:20px; text-align:center;">該当データなし</div>'
     
-    html = '<table class="analysisTable"><thead><tr><th>区分</th><th>作品名</th><th>Type</th><th>曲名</th><th>歌手</th></tr></thead><tbody>'
+    # 区分 → 作品名 でソート
+    item_list.sort(key=lambda x: (x['category'], x['anime']))
+
+    html = '<table class="analysisTable" style="width:100%;">'
+    html += '<thead><tr>'
+    html += '<th style="width:15%;">区分</th>'
+    html += '<th style="width:25%;">作品名</th>'
+    html += '<th style="width:10%;">Type</th>'
+    html += '<th style="width:25%;">曲名</th>'
+    html += '<th style="width:25%;">歌手</th>'
+    html += '</tr></thead><tbody>'
+
     for item in item_list:
-        html += f'<tr><td>{item["category"]}</td><td>{item["anime"]}</td><td>{item["type"]}</td><td>{item["song"]}</td><td>{item["artist"]}</td></tr>'
+        clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
+        search_word = f"{clean_anime} {item['song']}"
+        link_start = f'<a href="#host/search.php?searchword={search_word}" class="export-link" target="_blank">'
+        link_end = '</a>'
+        
+        html += '<tr>'
+        html += f'<td>{item["category"]}</td>'
+        html += f'<td>{item["anime"]}</td>'
+        html += f'<td>{link_start}{item["type"]}{link_end}</td>'
+        html += f'<td>{link_start}{item["song"]}{link_end}</td>'
+        html += f'<td>{link_start}{item["artist"]}{link_end}</td>'
+        html += '</tr>'
     html += '</tbody></table>'
     return html
 
@@ -698,10 +719,9 @@ html_content = f"""
             border-radius: 50%; text-align: center; color: #fff; font-weight: bold; font-size: 12px;
             background-color: #95a5a6;
         }}
-        .rank-1 {{ background-color: #f1c40f; box-shadow: 0 0 5px #f39c12; font-size: 14px; width: 28px; height: 28px; line-height: 28px; }} 
-        .rank-2 {{ background-color: #bdc3c7; box-shadow: 0 0 5px #7f8c8d; }} 
-        .rank-3 {{ background-color: #d35400; opacity: 0.8; }} 
-        
+        .rank-1 {{ background-color: #f1c40f; width: 28px; height: 28px; line-height: 28px; }}
+        .rank-2 {{ background-color: #bdc3c7; }}
+        .rank-3 {{ background-color: #d35400; }}
         .rankingTable tr:nth-child(1) td {{ background-color: #fffae6; }}
         .rankingTable tr:nth-child(2) td {{ background-color: #f8f9fa; }}
 
@@ -711,25 +731,8 @@ html_content = f"""
                 print-color-adjust: exact !important;
                 color-adjust: exact !important;
             }}
-            body {{
-                overflow: visible !important;
-                height: auto !important;
-                display: block !important;
-            }}
-            .top-section {{ display: none !important; }}
-            .content-area {{ overflow: visible !important; position: static !important; }}
-            .tab-content {{ 
-                position: static !important; 
-                display: block !important; 
-                overflow: visible !important; 
-                padding: 0 !important;
-            }}
             .category-content {{ display: block !important; }}
-            
-            tbody.anime-group {{
-                break-inside: avoid;
-                page-break-inside: avoid;
-            }}
+            tbody.anime-group {{ break-inside: avoid; page-break-inside: avoid; }}
             .category-header {{ page-break-after: avoid; }}
             thead {{ display: table-header-group; }}
         }}
