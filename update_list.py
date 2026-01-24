@@ -363,7 +363,7 @@ if cool_file and os.path.exists(cool_file):
                                 <th style="width:5%; min-width:40px;">作成</th> <th style="width:10%; min-width:60px;">OP/ED</th>
                                 <th style="width:20%; min-width:150px;">歌手</th>
                                 <th style="width:25%; min-width:180px;">曲名</th>
-                                <th style="width:8%; min-width:40px;">人数</th>
+                                <th style="width:8%; min-width:60px;">人数</th>
                                 <th style="width:15%; min-width:60px;">歌唱数</th>
                             </tr>
                         </thead>
@@ -437,6 +437,10 @@ if cool_file and os.path.exists(cool_file):
                         bar_width = min(count * 20, 150)
                         bar_html = f'<div class="bar-chart" style="width:{bar_width}px;"></div>' if count > 0 else ""
                         
+                        # ★人数グラフ (最大100px)
+                        user_bar_width = min(user_count * 20, 100)
+                        user_bar_html = f'<div class="bar-chart-user" style="width:{user_bar_width}px;"></div>' if user_count > 0 else ""
+
                         clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
                         search_word = f"{clean_anime} {item['song']}"
                         
@@ -453,8 +457,8 @@ if cool_file and os.path.exists(cool_file):
                         analysis_html_content += f'<td>{link_tag_start}{item["artist"]}</a></td>'
                         analysis_html_content += f'<td>{link_tag_start}{item["song"]}</a></td>'
                         
-                        # ★人数カラム
-                        analysis_html_content += f'<td align="center" style="font-weight:bold; color:#7f8c8d;">{user_count}</td>'
+                        # ★人数カラム (グラフ付き・フォント統一)
+                        analysis_html_content += f'<td class="count-cell"><div class="count-wrapper"><span class="count-num">{user_count}</span>{user_bar_html}</div></td>'
 
                         analysis_html_content += f'<td class="count-cell"><div class="count-wrapper"><span class="count-num">{count}</span>{bar_html}</div></td>'
                         analysis_html_content += '</tr>'
@@ -495,7 +499,7 @@ if cool_file and os.path.exists(cool_file):
                                 <th style="width:25%; min-width:180px;">作品名</th>
                                 <th style="width:25%; min-width:180px;">曲名</th>
                                 <th style="width:15%; min-width:150px;">歌手</th>
-                                <th style="width:10%; min-width:40px;">人数</th>
+                                <th style="width:10%; min-width:60px;">人数</th>
                                 <th style="width:15%; min-width:60px;">歌唱数</th>
                             </tr>
                         </thead>
@@ -519,6 +523,9 @@ if cool_file and os.path.exists(cool_file):
                         
                         rank_class = f"rank-{current_rank}" if current_rank <= 3 else "rank-normal"
                         
+                        # ★ランキング行の色付け
+                        row_rank_class = f"rank-row-{current_rank}" if current_rank <= 3 else ""
+
                         rank_display = f'<span class="rank-badge {rank_class}">{current_rank}</span>'
                         
                         if current_rank == 1:
@@ -531,15 +538,19 @@ if cool_file and os.path.exists(cool_file):
                         bar_width = min(item["count"] * 20, 150)
                         bar_html = f'<div class="bar-chart" style="width:{bar_width}px;"></div>'
 
+                        # ★人数グラフ
+                        user_bar_width = min(item["user_count"] * 20, 100)
+                        user_bar_html = f'<div class="bar-chart-user" style="width:{user_bar_width}px;"></div>' if item["user_count"] > 0 else ""
+
                         clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
                         search_word = f"{clean_anime} {item['song']}"
                         
                         ranking_html_content += f"""
-                        <tr class="has-count ranking-row" data-href="#host/search.php?searchword={search_word}" onclick="onRankingClick(this)">
+                        <tr class="has-count ranking-row {row_rank_class}" data-href="#host/search.php?searchword={search_word}" onclick="onRankingClick(this)">
                             <td align="center" style="font-weight:bold; font-size:1.1rem;">{rank_display}</td>
                             <td>{item["anime"]} <span style="font-size:0.8em; color:#777;">({item["type"]})</span></td>
                             <td>{item["song"]}</td> <td>{item["artist"]}</td>
-                            <td align="center" style="font-weight:bold; color:#7f8c8d;">{item["user_count"]}</td>
+                            <td class="count-cell"><div class="count-wrapper"><span class="count-num">{item["user_count"]}</span>{user_bar_html}</div></td>
                             <td class="count-cell"><div class="count-wrapper"><span class="count-num">{item["count"]}</span>{bar_html}</div></td>
                         </tr>
                         """
@@ -712,6 +723,13 @@ html_content = f"""
             height: 10px; background: linear-gradient(90deg, #3498db, #2980b9);
             border-radius: 5px;
         }}
+
+        /* ★ユーザー数グラフ用CSS */
+        .bar-chart-user {{
+            height: 10px; background: linear-gradient(90deg, #2ecc71, #27ae60);
+            border-radius: 5px;
+        }}
+
         td[rowspan] {{
             background-color: #fff;
             border-right: 1px solid #eee;
@@ -729,6 +747,14 @@ html_content = f"""
         .rank-3 {{ background-color: #d35400; }}
         .rankingTable tr:nth-child(1) td {{ background-color: #fffae6; }}
         .rankingTable tr:nth-child(2) td {{ background-color: #f8f9fa; }}
+
+        /* ★ランキング上位の行背景色 */
+        tr.rank-row-1 td {{ background-color: #fff8e1 !important; }} /* 淡いゴールド */
+        tr.rank-row-2 td {{ background-color: #f5f5f5 !important; }} /* 淡いシルバー */
+        tr.rank-row-3 td {{ background-color: #fff0e6 !important; }} /* 淡いブロンズ */
+
+        /* ヘッダー色と衝突しないように調整 */
+        .rankingTable tr:nth-child(1) th {{ background-color: var(--primary-color) !important; color: #fff !important; }}
 
         @media print {{
             * {{
@@ -912,6 +938,7 @@ html_content = f"""
         .count-wrapper {{ display: flex; align-items: center; gap: 8px; }}
         .count-num {{ width: 25px; text-align: right; }}
         .bar-chart {{ height: 10px; background: #3498db; border-radius: 5px; }}
+        .bar-chart-user {{ height: 10px; background: #2ecc71; border-radius: 5px; }}
         
         .rank-badge {{
             display: inline-block; width: 24px; height: 24px; line-height: 24px;
@@ -921,8 +948,10 @@ html_content = f"""
         .rank-1 {{ background-color: #f1c40f; width: 28px; height: 28px; line-height: 28px; }}
         .rank-2 {{ background-color: #bdc3c7; }}
         .rank-3 {{ background-color: #d35400; }}
-        .rankingTable tr:nth-child(1) td {{ background-color: #fffae6; }}
-        .rankingTable tr:nth-child(2) td {{ background-color: #f8f9fa; }}
+        
+        tr.rank-row-1 td {{ background-color: #fff8e1 !important; }}
+        tr.rank-row-2 td {{ background-color: #f5f5f5 !important; }}
+        tr.rank-row-3 td {{ background-color: #fff0e6 !important; }}
 
         @media print {{
             * {{
