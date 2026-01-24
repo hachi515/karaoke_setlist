@@ -183,7 +183,6 @@ ranking_html_content = ""
 cool_data_exists = False
 ranking_data_list = [] 
 
-# ★変更: HTML文字列として保持する
 created_lists_html = ""
 uncreated_lists_html = ""
 
@@ -218,7 +217,7 @@ for file_path in offline_files:
 print(f"オフラインリスト合計件数: {len(offline_targets)}")
 
 
-# --- ★関数: カテゴリ別リストHTML生成 (メイン集計と同様のレイアウト) ---
+# --- ★関数: カテゴリ別リストHTML生成 ---
 def generate_category_html_block(category_name, item_list):
     if not item_list:
         return ""
@@ -366,7 +365,6 @@ if cool_file and os.path.exists(cool_file):
             # --- クール集計HTML生成 & リスト生成 ---
             for category, items in categorized_data.items():
                 
-                # リスト分割用の一時リスト
                 cat_created_items = []
                 cat_uncreated_items = []
 
@@ -431,7 +429,7 @@ if cool_file and os.path.exists(cool_file):
                                     else:
                                         creation_count += 1
 
-                        # --- ★変更: リストへの振り分け ---
+                        # --- リストへの振り分け ---
                         if creation_count >= 1:
                             cat_created_items.append(item)
                         else:
@@ -447,14 +445,9 @@ if cool_file and os.path.exists(cool_file):
                             "count": count
                         })
 
-                        # 行スタイル判定
-                        row_class = ""
-                        if creation_count == 0:
-                            row_class = "gray-text"
-                        elif count == 0:
-                            row_class = "zero-count"
-                        else:
-                            row_class = "has-count"
+                        # ★変更: 行スタイル判定（基本全部黒字にするためグレーアウト処理を撤廃）
+                        # 作成数や歌唱数に関わらず通常のスタイルを適用
+                        row_class = "has-count"
                         
                         bar_width = min(count * 20, 150)
                         bar_html = f'<div class="bar-chart" style="width:{bar_width}px;"></div>' if count > 0 else ""
@@ -482,7 +475,7 @@ if cool_file and os.path.exists(cool_file):
                 
                 analysis_html_content += "</table></div></div>"
 
-                # --- ★追加: カテゴリごとのリストHTMLを生成して蓄積 ---
+                # --- カテゴリごとのリストHTMLを生成して蓄積 ---
                 created_lists_html += generate_category_html_block(category, cat_created_items)
                 uncreated_lists_html += generate_category_html_block(category, cat_uncreated_items)
 
@@ -721,8 +714,7 @@ html_content = f"""
         .category-content {{ display: block; transition: all 0.3s; }}
         .category-content.collapsed {{ display: none; }}
         
-        tr.zero-count {{ color: #ccc; }}
-        .gray-text {{ color: gray !important; }}
+        /* 変更: グレーアウト用CSSを削除し、全て基本色で表示 */
         tr.has-count {{ background-color: #fff; color: #333; }}
         
         .count-wrapper {{ display: flex; align-items: center; gap: 8px; }}
@@ -913,9 +905,6 @@ html_content = f"""
         }}
         .category-content {{ display: block; }}
         .category-content.collapsed {{ display: none; }}
-        
-        .gray-text {{ color: gray !important; }}
-        tr.zero-count {{ color: #ccc; }}
         
         a.export-link {{
             display: block; 
