@@ -418,9 +418,16 @@ if cool_file and os.path.exists(cool_file):
                         
                         # --- 作成数集計 ---
                         creation_count = 0
+                        
+                        # ★追加: カッコの中身を温存した検索用文字列を作る
+                        # (normalize_offline_textはカッコを消さない関数です)
+                        target_song_raw_norm = normalize_offline_text(item["song"])
+
                         if target_song_norm:
                             for offline_str in offline_targets:
-                                if target_song_norm in offline_str:
+                                # ★変更: 「カッコ削除版」または「カッコ温存版」のどちらかが含まれていればOKにする
+                                if (target_song_norm in offline_str) or (target_song_raw_norm in offline_str):
+                                    
                                     if target_anime_norm:
                                         if target_anime_norm in offline_str:
                                             creation_count += 1
@@ -1147,5 +1154,6 @@ html_content = f"""
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
     print("HTML生成完了: index.html")
+
 
 
