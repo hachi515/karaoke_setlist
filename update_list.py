@@ -109,7 +109,7 @@ print("データを取得中...")
 for port in target_ports:
     url = f"http://Ykr.moe:{port}/simplelist.php"
     try:
-        response = requests.get(url, timeout=5)
+        response = requests.get(url, timeout=30)
         response.raise_for_status()
         
         dfs = pd.read_html(response.content)
@@ -1136,3 +1136,4 @@ html_content = f"""
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
     print("HTML生成完了: index.html")
+
