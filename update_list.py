@@ -491,12 +491,12 @@ if cool_file and os.path.exists(cool_file):
                     
                     # ソートロジック
                     if mode == "count":
-                        # 歌唱数順
-                        cat_items.sort(key=lambda x: x["count"], reverse=True)
+                        # 歌唱数順 (歌唱数 -> 人数)
+                        cat_items.sort(key=lambda x: (x["count"], x["user_count"]), reverse=True)
                         rank_title = f"{target_cat} 歌唱数ランキング (TOP 20)"
                         val_key = "count"
                     else: # user
-                        # 人数順、同数の場合は歌唱数順
+                        # 人数順 (人数 -> 歌唱数)
                         cat_items.sort(key=lambda x: (x["user_count"], x["count"]), reverse=True)
                         rank_title = f"{target_cat} 歌唱人数ランキング (TOP 20)"
                         val_key = "user_count"
