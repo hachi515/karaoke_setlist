@@ -73,17 +73,28 @@ def normalize_text(text):
     
     return text.upper()
 
-# --- 関数: オフラインリスト用正規化 (括弧の中身を保持する) ---
+# --- 関数: オフラインリスト用正規化 ---
 def normalize_offline_text(text):
     if not isinstance(text, str):
         return str(text)
     
+    # ★追加: 特定の記号トラブルを回避するため、カンマ等を先にスペース化してから正規化する手もありますが、
+    # 基本はNFKC後に処理します。
     text = unicodedata.normalize('NFKC', text)
+    
+    # 拡張子削除
     text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
+
+    # ★ここを確認: カンマ処理
+    # 1, 2, Play -> 1 2 Play になります。
     text = re.sub(r'(key|KEY)?\s*[\+\-]\s*[0-9]+', ' ', text)
     text = re.sub(r'原キー', ' ', text)
     text = re.sub(r'(キー)?変更[:：]?', ' ', text)
+    
+    # 記号をスペースに変換
     text = re.sub(r'[~〜～\-_=,.]', ' ', text)
+    
+    # 空白整理
     text = re.sub(r'\s+', ' ', text).strip()
     
     return text.upper()
@@ -1136,4 +1147,5 @@ html_content = f"""
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
     print("HTML生成完了: index.html")
+
 
