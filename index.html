@@ -147,7 +147,7 @@
             background-color: #fff;
             border-right: 1px solid #eee;
             vertical-align: middle;
-            font-weight: normal; color: inherit;      
+            font-weight: normal; color: inherit;       
         }
 
         .rank-badge {
@@ -177,9 +177,12 @@
             flex-direction: column;
         }
         /* 詳細情報固定表示エリア */
+        /* 修正: 折り返しと高さ自動調整 */
         .chart-info {
-            height: 35px;
-            line-height: 35px;
+            min-height: 35px;
+            height: auto;
+            line-height: 1.4;
+            padding: 5px;
             text-align: center;
             font-weight: bold;
             color: #2c3e50;
@@ -188,9 +191,9 @@
             margin-bottom: 5px;
             border-radius: 4px;
             font-size: 14px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            white-space: normal;
+            overflow: visible;
+            word-break: break-all;
         }
         .canvas-container {
             flex: 1;
@@ -233,7 +236,7 @@
     <div class="top-section">
         <div class="header-inner">
             <h1>Karaoke Dashboard</h1>
-            <div class="update-time">2026/01/28 00:47 更新</div>
+            <div class="update-time">2026/01/28 01:04 更新</div>
         </div>
         <div class="tabs">
             <button class="tab-btn active" onclick="openTab('setlist')">セットリスト</button>
@@ -339,7 +342,7 @@
                             </thead>
                             <tbody>
                     
-                            <tr class="has-count ranking-row rank-row-1" data-href="#host/search.php?searchword=花ざかりの君たちへ アドレナ" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row rank-row-1" data-href="#host/search.php?searchword=花ざかりの君たちへ アドレナ">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-1">1</span> <i class="fas fa-crown" style="color:#FFD700;"></i></td>
                                 <td>花ざかりの君たちへ <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>アドレナ</td> <td>YOASOBI</td>
@@ -347,7 +350,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">16</span><div class="bar-chart" style="width:150px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row rank-row-2" data-href="#host/search.php?searchword=魔術師クノンは見えている ラケナリアの夢" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row rank-row-2" data-href="#host/search.php?searchword=魔術師クノンは見えている ラケナリアの夢">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-2">2</span> <i class="fas fa-medal" style="color:#C0C0C0;"></i></td>
                                 <td>魔術師クノンは見えている <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>ラケナリアの夢</td> <td>ヰ世界情緒</td>
@@ -355,7 +358,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">14</span><div class="bar-chart" style="width:150px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row rank-row-3" data-href="#host/search.php?searchword=ダーウィン事変 Make Me Wonder" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row rank-row-3" data-href="#host/search.php?searchword=ダーウィン事変 Make Me Wonder">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-3">3</span> <i class="fas fa-medal" style="color:#CD7F32;"></i></td>
                                 <td>ダーウィン事変 <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>Make Me Wonder</td> <td>Official髭男dism</td>
@@ -363,7 +366,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">12</span><div class="bar-chart" style="width:150px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row rank-row-3" data-href="#host/search.php?searchword=綺麗にしてもらえますか。 若葉のころ" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row rank-row-3" data-href="#host/search.php?searchword=綺麗にしてもらえますか。 若葉のころ">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-3">3</span> <i class="fas fa-medal" style="color:#CD7F32;"></i></td>
                                 <td>綺麗にしてもらえますか。 <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>若葉のころ</td> <td>清浦夏実</td>
@@ -371,7 +374,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">12</span><div class="bar-chart" style="width:150px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=かぐや様は告らせたい 大人への階段 アブナイキオク" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=かぐや様は告らせたい 大人への階段 アブナイキオク">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">5</span></td>
                                 <td>かぐや様は告らせたい 大人への階段 <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>アブナイキオク</td> <td>鈴木雅之 feat.古賀葵</td>
@@ -379,7 +382,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">10</span><div class="bar-chart" style="width:150px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=【推しの子】 Bのリベンジ" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=【推しの子】 Bのリベンジ">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">5</span></td>
                                 <td>【推しの子】(第3期) <span style="font-size:0.8em; color:#777;">(IN)</span></td>
                                 <td>Bのリベンジ</td> <td>B小町</td>
@@ -387,7 +390,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">10</span><div class="bar-chart" style="width:150px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=勇者パーティーにかわいい子がいたので、告白してみた。 Lavish!!" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=勇者パーティーにかわいい子がいたので、告白してみた。 Lavish!!">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">7</span></td>
                                 <td>勇者パーティーにかわいい子がいたので、告白してみた。 <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>Lavish!!</td> <td>吉乃</td>
@@ -395,7 +398,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">9</span><div class="bar-chart" style="width:150px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=悪役令嬢は隣国の王太子に溺愛される 愛のファンファーレ" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=悪役令嬢は隣国の王太子に溺愛される 愛のファンファーレ">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">7</span></td>
                                 <td>悪役令嬢は隣国の王太子に溺愛される <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>愛のファンファーレ</td> <td>高垣彩陽feat.城田優</td>
@@ -403,7 +406,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">9</span><div class="bar-chart" style="width:150px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=綺麗にしてもらえますか。 綺麗。" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=綺麗にしてもらえますか。 綺麗。">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">7</span></td>
                                 <td>綺麗にしてもらえますか。 <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>綺麗。</td> <td>ゆう。</td>
@@ -411,7 +414,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">9</span><div class="bar-chart" style="width:150px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=シャンピニオンの魔女 魔法使いの日記" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=シャンピニオンの魔女 魔法使いの日記">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">7</span></td>
                                 <td>シャンピニオンの魔女 <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>魔法使いの日記</td> <td>ロス</td>
@@ -419,7 +422,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">9</span><div class="bar-chart" style="width:150px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=29歳独身中堅冒険者の日常 君が灯してくれた光を今" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=29歳独身中堅冒険者の日常 君が灯してくれた光を今">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">11</span></td>
                                 <td>29歳独身中堅冒険者の日常 <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>君が灯してくれた光を今</td> <td>HoneyWorks feat.Hanon</td>
@@ -427,7 +430,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">8</span><div class="bar-chart" style="width:150px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=幼馴染とはラブコメにならない あまのじゃく" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=幼馴染とはラブコメにならない あまのじゃく">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">11</span></td>
                                 <td>幼馴染とはラブコメにならない <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>あまのじゃく</td> <td>小玉ひかり</td>
@@ -435,7 +438,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">8</span><div class="bar-chart" style="width:150px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=真夜中ハートチューン 月に向かって撃て" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=真夜中ハートチューン 月に向かって撃て">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">11</span></td>
                                 <td>真夜中ハートチューン <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>月に向かって撃て</td> <td>星街すいせい</td>
@@ -443,7 +446,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">8</span><div class="bar-chart" style="width:150px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=うるわしの宵の月 うるわし" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=うるわしの宵の月 うるわし">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">14</span></td>
                                 <td>うるわしの宵の月 <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>うるわし</td> <td>UNISON SQUARE GARDEN</td>
@@ -451,7 +454,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">7</span><div class="bar-chart" style="width:140px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=葬送のフリーレン The Story of Us" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=葬送のフリーレン The Story of Us">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">14</span></td>
                                 <td>葬送のフリーレン(第2期) <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>The Story of Us</td> <td>milet</td>
@@ -459,7 +462,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">7</span><div class="bar-chart" style="width:140px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=幼馴染とはラブコメにならない あいらびゅ♡" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=幼馴染とはラブコメにならない あいらびゅ♡">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">14</span></td>
                                 <td>幼馴染とはラブコメにならない <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>あいらびゅ♡</td> <td>HoneyWorks meets(水萌汐・火威灯・月見るな・日向春)</td>
@@ -467,7 +470,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">7</span><div class="bar-chart" style="width:140px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=違国日記 言伝" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=違国日記 言伝">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">14</span></td>
                                 <td>違国日記 <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>言伝</td> <td>Bialystocks</td>
@@ -475,7 +478,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">7</span><div class="bar-chart" style="width:140px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=地獄楽 かすかなはな" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=地獄楽 かすかなはな">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">18</span></td>
                                 <td>地獄楽(第二期) <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>かすかなはな</td> <td>キタニタツヤ feat. BABYMETAL</td>
@@ -483,7 +486,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">6</span><div class="bar-chart" style="width:120px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=不滅のあなたへ ふめつのあなた" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=不滅のあなたへ ふめつのあなた">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">18</span></td>
                                 <td>不滅のあなたへ(Season3) <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>ふめつのあなた</td> <td>Perfume</td>
@@ -491,7 +494,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">6</span><div class="bar-chart" style="width:120px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=勇者パーティを追い出された器用貧乏 シルベ" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=勇者パーティを追い出された器用貧乏 シルベ">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">18</span></td>
                                 <td>勇者パーティを追い出された器用貧乏 <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>シルベ</td> <td>常闇トワ</td>
@@ -517,7 +520,7 @@
                             </thead>
                             <tbody>
                     
-                            <tr class="has-count ranking-row rank-row-1" data-href="#host/search.php?searchword=最後にひとつだけお願いしてもよろしいでしょうか 戦場の華" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row rank-row-1" data-href="#host/search.php?searchword=最後にひとつだけお願いしてもよろしいでしょうか 戦場の華">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-1">1</span> <i class="fas fa-crown" style="color:#FFD700;"></i></td>
                                 <td>最後にひとつだけお願いしてもよろしいでしょうか <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>戦場の華</td> <td>CHiCO with HoneyWorks</td>
@@ -525,7 +528,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">11</span><div class="bar-chart" style="width:150px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row rank-row-2" data-href="#host/search.php?searchword=僕のヒーローアカデミア I" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row rank-row-2" data-href="#host/search.php?searchword=僕のヒーローアカデミア I">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-2">2</span> <i class="fas fa-medal" style="color:#C0C0C0;"></i></td>
                                 <td>僕のヒーローアカデミア(FINAL SEASON) <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>I</td> <td>BUMP OF CHICKEN</td>
@@ -533,7 +536,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">8</span><div class="bar-chart" style="width:150px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row rank-row-2" data-href="#host/search.php?searchword=かくりよの宿飯 涙のレシピ" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row rank-row-2" data-href="#host/search.php?searchword=かくりよの宿飯 涙のレシピ">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-2">2</span> <i class="fas fa-medal" style="color:#C0C0C0;"></i></td>
                                 <td>かくりよの宿飯(弐) <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>涙のレシピ</td> <td>東山奈央</td>
@@ -541,7 +544,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">8</span><div class="bar-chart" style="width:150px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row rank-row-2" data-href="#host/search.php?searchword=かくりよの宿飯 涙のレシピ×ひと匙の光" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row rank-row-2" data-href="#host/search.php?searchword=かくりよの宿飯 涙のレシピ×ひと匙の光">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-2">2</span> <i class="fas fa-medal" style="color:#C0C0C0;"></i></td>
                                 <td>かくりよの宿飯(弐) <span style="font-size:0.8em; color:#777;">(ED2)</span></td>
                                 <td>涙のレシピ×ひと匙の光</td> <td>津場木葵(CV.東山奈央)大旦那(CV.小西克幸)</td>
@@ -549,7 +552,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">8</span><div class="bar-chart" style="width:150px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=私を喰べたい、ひとでなし 贄-nie-" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=私を喰べたい、ひとでなし 贄-nie-">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">5</span></td>
                                 <td>私を喰べたい、ひとでなし <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>贄-nie-</td> <td>吉乃</td>
@@ -557,7 +560,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">6</span><div class="bar-chart" style="width:120px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=異世界かるてっと３ 君色、僕色" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=異世界かるてっと３ 君色、僕色">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">5</span></td>
                                 <td>異世界かるてっと３ <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>君色、僕色</td> <td>鈴木このみ 伊東歌詞太郎</td>
@@ -565,7 +568,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">6</span><div class="bar-chart" style="width:120px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=グノーシア FLOOR KILLER" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=グノーシア FLOOR KILLER">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">5</span></td>
                                 <td>グノーシア <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>FLOOR KILLER</td> <td>梅田サイファー</td>
@@ -573,7 +576,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">6</span><div class="bar-chart" style="width:120px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=グノーシア 化けの皮" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=グノーシア 化けの皮">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">8</span></td>
                                 <td>グノーシア <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>化けの皮</td> <td>MAISONdes</td>
@@ -581,7 +584,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">5</span><div class="bar-chart" style="width:100px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=僕のヒーローアカデミア THE REVO" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=僕のヒーローアカデミア THE REVO">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">8</span></td>
                                 <td>僕のヒーローアカデミア(FINAL SEASON) <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>THE REVO</td> <td>ポルノグラフィティ</td>
@@ -589,7 +592,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">5</span><div class="bar-chart" style="width:100px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=暗殺者である俺のステータスが勇者よりも明らかに強いのだが 一閃" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=暗殺者である俺のステータスが勇者よりも明らかに強いのだが 一閃">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">8</span></td>
                                 <td>暗殺者である俺のステータスが勇者よりも明らかに強いのだが <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>一閃</td> <td>VESPERBELL</td>
@@ -597,7 +600,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">5</span><div class="bar-chart" style="width:100px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=機械じかけのマリー Cross heart～偽りのない気持ち" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=機械じかけのマリー Cross heart～偽りのない気持ち">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">8</span></td>
                                 <td>機械じかけのマリー <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>Cross heart～偽りのない気持ち</td> <td>マリー(東山奈央)</td>
@@ -605,7 +608,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">5</span><div class="bar-chart" style="width:100px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=機械じかけのマリー Cross heart～偽りのない気持ち" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=機械じかけのマリー Cross heart～偽りのない気持ち">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">8</span></td>
                                 <td>機械じかけのマリー <span style="font-size:0.8em; color:#777;">(ED2)</span></td>
                                 <td>Cross heart～偽りのない気持ち</td> <td>マリー(東山奈央)&マリー2(小清水亜美)</td>
@@ -613,7 +616,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">5</span><div class="bar-chart" style="width:100px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=ワンダンス Wondrous" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=ワンダンス Wondrous">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">8</span></td>
                                 <td>ワンダンス <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>Wondrous</td> <td>ELSEE</td>
@@ -621,7 +624,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">5</span><div class="bar-chart" style="width:100px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=かくりよの宿飯 とおりゃんせ" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=かくりよの宿飯 とおりゃんせ">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">14</span></td>
                                 <td>かくりよの宿飯(弐) <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>とおりゃんせ</td> <td>東山奈央</td>
@@ -629,7 +632,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">4</span><div class="bar-chart" style="width:80px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=ウマ娘 シンデレラグレイ ふたり" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=ウマ娘 シンデレラグレイ ふたり">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">14</span></td>
                                 <td>ウマ娘 シンデレラグレイ(第2クール) <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>ふたり</td> <td>オグリキャップ、タマモクロス</td>
@@ -637,7 +640,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">4</span><div class="bar-chart" style="width:80px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=笑顔のたえない職場です。 Thankful" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=笑顔のたえない職場です。 Thankful">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">14</span></td>
                                 <td>笑顔のたえない職場です。 <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>Thankful</td> <td>Sizuk</td>
@@ -645,7 +648,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">4</span><div class="bar-chart" style="width:80px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=終末ツーリング グライド" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=終末ツーリング グライド">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">14</span></td>
                                 <td>終末ツーリング <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>グライド</td> <td>Myuk</td>
@@ -653,7 +656,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">4</span><div class="bar-chart" style="width:80px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=SI-VIS 幻想曲(アラベスク)を君に" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=SI-VIS 幻想曲(アラベスク)を君に">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">14</span></td>
                                 <td>SI-VIS <span style="font-size:0.8em; color:#777;">(IN)</span></td>
                                 <td>幻想曲(アラベスク)を君に</td> <td>SI-VIS</td>
@@ -661,7 +664,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">4</span><div class="bar-chart" style="width:80px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=顔に出ない柏田さんと顔に出る太田君 百面相" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=顔に出ない柏田さんと顔に出る太田君 百面相">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">14</span></td>
                                 <td>顔に出ない柏田さんと顔に出る太田君 <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>百面相</td> <td>はしメロ</td>
@@ -669,7 +672,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">4</span><div class="bar-chart" style="width:80px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=3年Z組銀八先生 桜風" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=3年Z組銀八先生 桜風">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">20</span></td>
                                 <td>3年Z組銀八先生 <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>桜風</td> <td>ぼっちぼろまる</td>
@@ -677,7 +680,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">3</span><div class="bar-chart" style="width:60px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=SI-VIS MELODEA" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=SI-VIS MELODEA">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">20</span></td>
                                 <td>SI-VIS <span style="font-size:0.8em; color:#777;">(IN)</span></td>
                                 <td>MELODEA</td> <td>SI-VIS</td>
@@ -685,7 +688,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">3</span><div class="bar-chart" style="width:60px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=SI-VIS FRIENDS ＆ SMILE" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=SI-VIS FRIENDS ＆ SMILE">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">20</span></td>
                                 <td>SI-VIS <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>FRIENDS ＆ SMILE</td> <td>SI-VIS</td>
@@ -693,7 +696,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">3</span><div class="bar-chart" style="width:60px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=元祖！バンドリちゃん 元祖！バンドリちゃんのテーマ" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=元祖！バンドリちゃん 元祖！バンドリちゃんのテーマ">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">20</span></td>
                                 <td>元祖！バンドリちゃん <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>元祖！バンドリちゃんのテーマ</td> <td>香澄×蘭×彩×友希那×こころ×ましろ×レイヤ×燈×ドロリス×あられ</td>
@@ -701,7 +704,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">3</span><div class="bar-chart" style="width:60px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=太陽よりも眩しい星 最新話" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=太陽よりも眩しい星 最新話">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">20</span></td>
                                 <td>太陽よりも眩しい星 <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>最新話</td> <td>和ぬか</td>
@@ -709,7 +712,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">3</span><div class="bar-chart" style="width:60px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=東島丹三郎は仮面ライダーになりたい Wanna be" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=東島丹三郎は仮面ライダーになりたい Wanna be">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">20</span></td>
                                 <td>東島丹三郎は仮面ライダーになりたい <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>Wanna be</td> <td>TeddyLoid feat. Shigeru Matsuzaki & TOPHAMHAT-KYO</td>
@@ -717,7 +720,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">3</span><div class="bar-chart" style="width:60px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=永久のユウグレ プラットフォーム" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=永久のユウグレ プラットフォーム">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">20</span></td>
                                 <td>永久のユウグレ <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>プラットフォーム</td> <td>Uru</td>
@@ -725,7 +728,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">3</span><div class="bar-chart" style="width:60px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=異世界かるてっと３ 異世界こんちぇると" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=異世界かるてっと３ 異世界こんちぇると">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">20</span></td>
                                 <td>異世界かるてっと３ <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>異世界こんちぇると</td> <td>アインズ、カズマ、スバル、ターニャ</td>
@@ -733,7 +736,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">3</span><div class="bar-chart" style="width:60px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=私を喰べたい、ひとでなし リリィ" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=私を喰べたい、ひとでなし リリィ">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">20</span></td>
                                 <td>私を喰べたい、ひとでなし <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>リリィ</td> <td>八百歳比名子（CV：上田麗奈）</td>
@@ -741,7 +744,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">3</span><div class="bar-chart" style="width:60px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=野生のラスボスが現れた！ レベルを上げて物理で殴る" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=野生のラスボスが現れた！ レベルを上げて物理で殴る">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">20</span></td>
                                 <td>野生のラスボスが現れた！ <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>レベルを上げて物理で殴る</td> <td>岸田教団＆THE明星ロケッツ</td>
@@ -749,7 +752,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">3</span><div class="bar-chart" style="width:60px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=ちゃんと吸えない吸血鬼ちゃん 線香花火" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=ちゃんと吸えない吸血鬼ちゃん 線香花火">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">20</span></td>
                                 <td>ちゃんと吸えない吸血鬼ちゃん <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>線香花火</td> <td>H△G, 石川月菜（CV.田中美海）</td>
@@ -757,7 +760,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">3</span><div class="bar-chart" style="width:60px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=ワンダンス Stare In Wonder" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=ワンダンス Stare In Wonder">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">20</span></td>
                                 <td>ワンダンス <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>Stare In Wonder</td> <td>BE:FIRST</td>
@@ -765,7 +768,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">3</span><div class="bar-chart" style="width:60px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=無職の英雄 ～別にスキルなんか要らなかったんだが～ 奇跡なんかいらない" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=無職の英雄 ～別にスキルなんか要らなかったんだが～ 奇跡なんかいらない">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">20</span></td>
                                 <td>無職の英雄 ～別にスキルなんか要らなかったんだが～ <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>奇跡なんかいらない</td> <td>ウタヒメドリームオールスターズ</td>
@@ -773,7 +776,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">3</span><div class="bar-chart" style="width:60px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=素材採取家の異世界旅行記 Prologue" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=素材採取家の異世界旅行記 Prologue">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">20</span></td>
                                 <td>素材採取家の異世界旅行記 <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>Prologue</td> <td>Nornis</td>
@@ -781,7 +784,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">3</span><div class="bar-chart" style="width:60px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=羅小黒戦記 Pastoral" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=羅小黒戦記 Pastoral">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">20</span></td>
                                 <td>羅小黒戦記 <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>Pastoral</td> <td>Aimer</td>
@@ -814,7 +817,7 @@
                             </thead>
                             <tbody>
                     
-                            <tr class="has-count ranking-row rank-row-1" data-href="#host/search.php?searchword=花ざかりの君たちへ アドレナ" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row rank-row-1" data-href="#host/search.php?searchword=花ざかりの君たちへ アドレナ">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-1">1</span> <i class="fas fa-crown" style="color:#FFD700;"></i></td>
                                 <td>花ざかりの君たちへ <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>アドレナ</td> <td>YOASOBI</td>
@@ -822,7 +825,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">16</span><div class="bar-chart" style="width:150px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row rank-row-2" data-href="#host/search.php?searchword=魔術師クノンは見えている ラケナリアの夢" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row rank-row-2" data-href="#host/search.php?searchword=魔術師クノンは見えている ラケナリアの夢">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-2">2</span> <i class="fas fa-medal" style="color:#C0C0C0;"></i></td>
                                 <td>魔術師クノンは見えている <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>ラケナリアの夢</td> <td>ヰ世界情緒</td>
@@ -830,7 +833,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">14</span><div class="bar-chart" style="width:150px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row rank-row-2" data-href="#host/search.php?searchword=かぐや様は告らせたい 大人への階段 アブナイキオク" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row rank-row-2" data-href="#host/search.php?searchword=かぐや様は告らせたい 大人への階段 アブナイキオク">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-2">2</span> <i class="fas fa-medal" style="color:#C0C0C0;"></i></td>
                                 <td>かぐや様は告らせたい 大人への階段 <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>アブナイキオク</td> <td>鈴木雅之 feat.古賀葵</td>
@@ -838,7 +841,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">10</span><div class="bar-chart" style="width:150px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=ダーウィン事変 Make Me Wonder" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=ダーウィン事変 Make Me Wonder">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">4</span></td>
                                 <td>ダーウィン事変 <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>Make Me Wonder</td> <td>Official髭男dism</td>
@@ -846,7 +849,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">12</span><div class="bar-chart" style="width:150px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=綺麗にしてもらえますか。 若葉のころ" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=綺麗にしてもらえますか。 若葉のころ">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">4</span></td>
                                 <td>綺麗にしてもらえますか。 <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>若葉のころ</td> <td>清浦夏実</td>
@@ -854,7 +857,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">12</span><div class="bar-chart" style="width:150px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=【推しの子】 Bのリベンジ" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=【推しの子】 Bのリベンジ">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">4</span></td>
                                 <td>【推しの子】(第3期) <span style="font-size:0.8em; color:#777;">(IN)</span></td>
                                 <td>Bのリベンジ</td> <td>B小町</td>
@@ -862,7 +865,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">10</span><div class="bar-chart" style="width:150px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=勇者パーティーにかわいい子がいたので、告白してみた。 Lavish!!" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=勇者パーティーにかわいい子がいたので、告白してみた。 Lavish!!">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">4</span></td>
                                 <td>勇者パーティーにかわいい子がいたので、告白してみた。 <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>Lavish!!</td> <td>吉乃</td>
@@ -870,7 +873,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">9</span><div class="bar-chart" style="width:150px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=悪役令嬢は隣国の王太子に溺愛される 愛のファンファーレ" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=悪役令嬢は隣国の王太子に溺愛される 愛のファンファーレ">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">4</span></td>
                                 <td>悪役令嬢は隣国の王太子に溺愛される <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>愛のファンファーレ</td> <td>高垣彩陽feat.城田優</td>
@@ -878,7 +881,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">9</span><div class="bar-chart" style="width:150px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=29歳独身中堅冒険者の日常 君が灯してくれた光を今" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=29歳独身中堅冒険者の日常 君が灯してくれた光を今">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">4</span></td>
                                 <td>29歳独身中堅冒険者の日常 <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>君が灯してくれた光を今</td> <td>HoneyWorks feat.Hanon</td>
@@ -886,7 +889,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">8</span><div class="bar-chart" style="width:150px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=地獄楽 かすかなはな" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=地獄楽 かすかなはな">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">10</span></td>
                                 <td>地獄楽(第二期) <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>かすかなはな</td> <td>キタニタツヤ feat. BABYMETAL</td>
@@ -894,7 +897,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">6</span><div class="bar-chart" style="width:120px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=綺麗にしてもらえますか。 綺麗。" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=綺麗にしてもらえますか。 綺麗。">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">11</span></td>
                                 <td>綺麗にしてもらえますか。 <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>綺麗。</td> <td>ゆう。</td>
@@ -902,7 +905,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">9</span><div class="bar-chart" style="width:150px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=幼馴染とはラブコメにならない あまのじゃく" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=幼馴染とはラブコメにならない あまのじゃく">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">11</span></td>
                                 <td>幼馴染とはラブコメにならない <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>あまのじゃく</td> <td>小玉ひかり</td>
@@ -910,7 +913,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">8</span><div class="bar-chart" style="width:150px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=真夜中ハートチューン 月に向かって撃て" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=真夜中ハートチューン 月に向かって撃て">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">11</span></td>
                                 <td>真夜中ハートチューン <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>月に向かって撃て</td> <td>星街すいせい</td>
@@ -918,7 +921,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">8</span><div class="bar-chart" style="width:150px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=うるわしの宵の月 うるわし" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=うるわしの宵の月 うるわし">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">11</span></td>
                                 <td>うるわしの宵の月 <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>うるわし</td> <td>UNISON SQUARE GARDEN</td>
@@ -926,7 +929,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">7</span><div class="bar-chart" style="width:140px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=葬送のフリーレン The Story of Us" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=葬送のフリーレン The Story of Us">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">11</span></td>
                                 <td>葬送のフリーレン(第2期) <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>The Story of Us</td> <td>milet</td>
@@ -934,7 +937,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">7</span><div class="bar-chart" style="width:140px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=エリスの聖杯 Happy Ever After feat. 由薫" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=エリスの聖杯 Happy Ever After feat. 由薫">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">11</span></td>
                                 <td>エリスの聖杯 <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>Happy Ever After feat. 由薫</td> <td>鷲尾伶菜</td>
@@ -942,7 +945,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">5</span><div class="bar-chart" style="width:100px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=シャンピニオンの魔女 魔法使いの日記" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=シャンピニオンの魔女 魔法使いの日記">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">17</span></td>
                                 <td>シャンピニオンの魔女 <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>魔法使いの日記</td> <td>ロス</td>
@@ -950,7 +953,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">9</span><div class="bar-chart" style="width:150px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=幼馴染とはラブコメにならない あいらびゅ♡" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=幼馴染とはラブコメにならない あいらびゅ♡">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">17</span></td>
                                 <td>幼馴染とはラブコメにならない <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>あいらびゅ♡</td> <td>HoneyWorks meets(水萌汐・火威灯・月見るな・日向春)</td>
@@ -958,7 +961,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">7</span><div class="bar-chart" style="width:140px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=不滅のあなたへ ふめつのあなた" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=不滅のあなたへ ふめつのあなた">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">17</span></td>
                                 <td>不滅のあなたへ(Season3) <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>ふめつのあなた</td> <td>Perfume</td>
@@ -966,7 +969,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">6</span><div class="bar-chart" style="width:120px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=アルネの事件簿 人形の街" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=アルネの事件簿 人形の街">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">17</span></td>
                                 <td>アルネの事件簿 <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>人形の街</td> <td>小林私</td>
@@ -974,7 +977,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">5</span><div class="bar-chart" style="width:100px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=カヤちゃんはコワくない " onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=カヤちゃんはコワくない ">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">17</span></td>
                                 <td>カヤちゃんはコワくない <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td></td> <td>ヰ世界情緒</td>
@@ -982,7 +985,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">5</span><div class="bar-chart" style="width:100px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=人外教室の人間嫌い教師 ニンゲン" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=人外教室の人間嫌い教師 ニンゲン">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">17</span></td>
                                 <td>人外教室の人間嫌い教師 <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>ニンゲン</td> <td>オーイシマサヨシ</td>
@@ -990,7 +993,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">5</span><div class="bar-chart" style="width:100px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=呪術廻戦 AIZO" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=呪術廻戦 AIZO">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">17</span></td>
                                 <td>呪術廻戦(死滅回游 前編) <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>AIZO</td> <td>King Gnu</td>
@@ -998,7 +1001,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">5</span><div class="bar-chart" style="width:100px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=エリスの聖杯 カメリア" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=エリスの聖杯 カメリア">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">17</span></td>
                                 <td>エリスの聖杯 <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>カメリア</td> <td>田村ゆかり</td>
@@ -1006,7 +1009,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">4</span><div class="bar-chart" style="width:80px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=正反対な君と僕 メガネを外して" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=正反対な君と僕 メガネを外して">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">17</span></td>
                                 <td>正反対な君と僕 <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>メガネを外して</td> <td>乃紫</td>
@@ -1014,7 +1017,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">4</span><div class="bar-chart" style="width:80px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=正反対な君と僕 " onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=正反対な君と僕 ">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">17</span></td>
                                 <td>正反対な君と僕 <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td></td> <td>ピュア feat. 橋本絵莉子</td>
@@ -1022,7 +1025,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">4</span><div class="bar-chart" style="width:80px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=透明男と人間女～そのうち夫婦になるふたり～ 星眼鏡" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=透明男と人間女～そのうち夫婦になるふたり～ 星眼鏡">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">17</span></td>
                                 <td>透明男と人間女～そのうち夫婦になるふたり～ <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>星眼鏡</td> <td>石原夏織</td>
@@ -1030,7 +1033,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">4</span><div class="bar-chart" style="width:80px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=魔王の娘は優しすぎる!! We Can Do!!" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=魔王の娘は優しすぎる!! We Can Do!!">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">17</span></td>
                                 <td>魔王の娘は優しすぎる!! <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>We Can Do!!</td> <td>石原夏織</td>
@@ -1056,7 +1059,7 @@
                             </thead>
                             <tbody>
                     
-                            <tr class="has-count ranking-row rank-row-1" data-href="#host/search.php?searchword=最後にひとつだけお願いしてもよろしいでしょうか 戦場の華" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row rank-row-1" data-href="#host/search.php?searchword=最後にひとつだけお願いしてもよろしいでしょうか 戦場の華">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-1">1</span> <i class="fas fa-crown" style="color:#FFD700;"></i></td>
                                 <td>最後にひとつだけお願いしてもよろしいでしょうか <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>戦場の華</td> <td>CHiCO with HoneyWorks</td>
@@ -1064,7 +1067,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">11</span><div class="bar-chart" style="width:150px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row rank-row-2" data-href="#host/search.php?searchword=私を喰べたい、ひとでなし 贄-nie-" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row rank-row-2" data-href="#host/search.php?searchword=私を喰べたい、ひとでなし 贄-nie-">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-2">2</span> <i class="fas fa-medal" style="color:#C0C0C0;"></i></td>
                                 <td>私を喰べたい、ひとでなし <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>贄-nie-</td> <td>吉乃</td>
@@ -1072,7 +1075,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">6</span><div class="bar-chart" style="width:120px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row rank-row-3" data-href="#host/search.php?searchword=僕のヒーローアカデミア I" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row rank-row-3" data-href="#host/search.php?searchword=僕のヒーローアカデミア I">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-3">3</span> <i class="fas fa-medal" style="color:#CD7F32;"></i></td>
                                 <td>僕のヒーローアカデミア(FINAL SEASON) <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>I</td> <td>BUMP OF CHICKEN</td>
@@ -1080,7 +1083,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">8</span><div class="bar-chart" style="width:150px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row rank-row-3" data-href="#host/search.php?searchword=異世界かるてっと３ 君色、僕色" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row rank-row-3" data-href="#host/search.php?searchword=異世界かるてっと３ 君色、僕色">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-3">3</span> <i class="fas fa-medal" style="color:#CD7F32;"></i></td>
                                 <td>異世界かるてっと３ <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>君色、僕色</td> <td>鈴木このみ 伊東歌詞太郎</td>
@@ -1088,7 +1091,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">6</span><div class="bar-chart" style="width:120px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=かくりよの宿飯 涙のレシピ" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=かくりよの宿飯 涙のレシピ">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">5</span></td>
                                 <td>かくりよの宿飯(弐) <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>涙のレシピ</td> <td>東山奈央</td>
@@ -1096,7 +1099,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">8</span><div class="bar-chart" style="width:150px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=かくりよの宿飯 涙のレシピ×ひと匙の光" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=かくりよの宿飯 涙のレシピ×ひと匙の光">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">5</span></td>
                                 <td>かくりよの宿飯(弐) <span style="font-size:0.8em; color:#777;">(ED2)</span></td>
                                 <td>涙のレシピ×ひと匙の光</td> <td>津場木葵(CV.東山奈央)大旦那(CV.小西克幸)</td>
@@ -1104,7 +1107,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">8</span><div class="bar-chart" style="width:150px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=グノーシア 化けの皮" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=グノーシア 化けの皮">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">5</span></td>
                                 <td>グノーシア <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>化けの皮</td> <td>MAISONdes</td>
@@ -1112,7 +1115,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">5</span><div class="bar-chart" style="width:100px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=僕のヒーローアカデミア THE REVO" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=僕のヒーローアカデミア THE REVO">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">5</span></td>
                                 <td>僕のヒーローアカデミア(FINAL SEASON) <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>THE REVO</td> <td>ポルノグラフィティ</td>
@@ -1120,7 +1123,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">5</span><div class="bar-chart" style="width:100px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=暗殺者である俺のステータスが勇者よりも明らかに強いのだが 一閃" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=暗殺者である俺のステータスが勇者よりも明らかに強いのだが 一閃">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">5</span></td>
                                 <td>暗殺者である俺のステータスが勇者よりも明らかに強いのだが <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>一閃</td> <td>VESPERBELL</td>
@@ -1128,7 +1131,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">5</span><div class="bar-chart" style="width:100px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=機械じかけのマリー Cross heart～偽りのない気持ち" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=機械じかけのマリー Cross heart～偽りのない気持ち">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">5</span></td>
                                 <td>機械じかけのマリー <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>Cross heart～偽りのない気持ち</td> <td>マリー(東山奈央)</td>
@@ -1136,7 +1139,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">5</span><div class="bar-chart" style="width:100px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=機械じかけのマリー Cross heart～偽りのない気持ち" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=機械じかけのマリー Cross heart～偽りのない気持ち">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">5</span></td>
                                 <td>機械じかけのマリー <span style="font-size:0.8em; color:#777;">(ED2)</span></td>
                                 <td>Cross heart～偽りのない気持ち</td> <td>マリー(東山奈央)&マリー2(小清水亜美)</td>
@@ -1144,7 +1147,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">5</span><div class="bar-chart" style="width:100px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=かくりよの宿飯 とおりゃんせ" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=かくりよの宿飯 とおりゃんせ">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">5</span></td>
                                 <td>かくりよの宿飯(弐) <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>とおりゃんせ</td> <td>東山奈央</td>
@@ -1152,7 +1155,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">4</span><div class="bar-chart" style="width:80px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=ウマ娘 シンデレラグレイ ふたり" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=ウマ娘 シンデレラグレイ ふたり">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">5</span></td>
                                 <td>ウマ娘 シンデレラグレイ(第2クール) <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>ふたり</td> <td>オグリキャップ、タマモクロス</td>
@@ -1160,7 +1163,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">4</span><div class="bar-chart" style="width:80px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=笑顔のたえない職場です。 Thankful" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=笑顔のたえない職場です。 Thankful">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">5</span></td>
                                 <td>笑顔のたえない職場です。 <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>Thankful</td> <td>Sizuk</td>
@@ -1168,7 +1171,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">4</span><div class="bar-chart" style="width:80px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=終末ツーリング グライド" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=終末ツーリング グライド">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">5</span></td>
                                 <td>終末ツーリング <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>グライド</td> <td>Myuk</td>
@@ -1176,7 +1179,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">4</span><div class="bar-chart" style="width:80px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=ワンダンス Wondrous" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=ワンダンス Wondrous">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">16</span></td>
                                 <td>ワンダンス <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>Wondrous</td> <td>ELSEE</td>
@@ -1184,7 +1187,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">5</span><div class="bar-chart" style="width:100px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=SI-VIS 幻想曲(アラベスク)を君に" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=SI-VIS 幻想曲(アラベスク)を君に">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">16</span></td>
                                 <td>SI-VIS <span style="font-size:0.8em; color:#777;">(IN)</span></td>
                                 <td>幻想曲(アラベスク)を君に</td> <td>SI-VIS</td>
@@ -1192,7 +1195,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">4</span><div class="bar-chart" style="width:80px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=顔に出ない柏田さんと顔に出る太田君 百面相" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=顔に出ない柏田さんと顔に出る太田君 百面相">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">16</span></td>
                                 <td>顔に出ない柏田さんと顔に出る太田君 <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>百面相</td> <td>はしメロ</td>
@@ -1200,7 +1203,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">4</span><div class="bar-chart" style="width:80px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=3年Z組銀八先生 桜風" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=3年Z組銀八先生 桜風">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">16</span></td>
                                 <td>3年Z組銀八先生 <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>桜風</td> <td>ぼっちぼろまる</td>
@@ -1208,7 +1211,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">3</span><div class="bar-chart" style="width:60px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=SI-VIS MELODEA" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=SI-VIS MELODEA">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">16</span></td>
                                 <td>SI-VIS <span style="font-size:0.8em; color:#777;">(IN)</span></td>
                                 <td>MELODEA</td> <td>SI-VIS</td>
@@ -1216,7 +1219,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">3</span><div class="bar-chart" style="width:60px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=SI-VIS FRIENDS ＆ SMILE" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=SI-VIS FRIENDS ＆ SMILE">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">16</span></td>
                                 <td>SI-VIS <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>FRIENDS ＆ SMILE</td> <td>SI-VIS</td>
@@ -1224,7 +1227,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">3</span><div class="bar-chart" style="width:60px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=元祖！バンドリちゃん 元祖！バンドリちゃんのテーマ" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=元祖！バンドリちゃん 元祖！バンドリちゃんのテーマ">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">16</span></td>
                                 <td>元祖！バンドリちゃん <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>元祖！バンドリちゃんのテーマ</td> <td>香澄×蘭×彩×友希那×こころ×ましろ×レイヤ×燈×ドロリス×あられ</td>
@@ -1232,7 +1235,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">3</span><div class="bar-chart" style="width:60px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=太陽よりも眩しい星 最新話" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=太陽よりも眩しい星 最新話">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">16</span></td>
                                 <td>太陽よりも眩しい星 <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>最新話</td> <td>和ぬか</td>
@@ -1240,7 +1243,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">3</span><div class="bar-chart" style="width:60px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=東島丹三郎は仮面ライダーになりたい Wanna be" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=東島丹三郎は仮面ライダーになりたい Wanna be">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">16</span></td>
                                 <td>東島丹三郎は仮面ライダーになりたい <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>Wanna be</td> <td>TeddyLoid feat. Shigeru Matsuzaki & TOPHAMHAT-KYO</td>
@@ -1248,7 +1251,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">3</span><div class="bar-chart" style="width:60px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=永久のユウグレ プラットフォーム" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=永久のユウグレ プラットフォーム">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">16</span></td>
                                 <td>永久のユウグレ <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>プラットフォーム</td> <td>Uru</td>
@@ -1256,7 +1259,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">3</span><div class="bar-chart" style="width:60px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=異世界かるてっと３ 異世界こんちぇると" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=異世界かるてっと３ 異世界こんちぇると">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">16</span></td>
                                 <td>異世界かるてっと３ <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>異世界こんちぇると</td> <td>アインズ、カズマ、スバル、ターニャ</td>
@@ -1264,7 +1267,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">3</span><div class="bar-chart" style="width:60px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=私を喰べたい、ひとでなし リリィ" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=私を喰べたい、ひとでなし リリィ">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">16</span></td>
                                 <td>私を喰べたい、ひとでなし <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>リリィ</td> <td>八百歳比名子（CV：上田麗奈）</td>
@@ -1272,7 +1275,7 @@
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">3</span><div class="bar-chart" style="width:60px;"></div></div></td>
                             </tr>
                             
-                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=野生のラスボスが現れた！ レベルを上げて物理で殴る" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row " data-href="#host/search.php?searchword=野生のラスボスが現れた！ レベルを上げて物理で殴る">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-normal">16</span></td>
                                 <td>野生のラスボスが現れた！ <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>レベルを上げて物理で殴る</td> <td>岸田教団＆THE明星ロケッツ</td>
@@ -1463,7 +1466,14 @@
                         reverse: true, 
                         min: 0.5, // 1位の上に少し余白
                         max: 20.5, 
-                        ticks: { stepSize: 1, callback: function(val) { return (val < 1 || val > 20) ? '' : val; } },
+                        // 修正: 整数のみ表示
+                        ticks: { 
+                            stepSize: 1, 
+                            callback: function(val) { 
+                                if (val % 1 === 0 && val >= 1 && val <= 20) return val;
+                                return ''; 
+                            } 
+                        },
                         title: { display: true, text: '順位' }
                     },
                     x: { 
@@ -1476,11 +1486,31 @@
         });
     }
 
+    // 修正: グラフを画像として保存するためのHTML生成
     function downloadGraphHTML() {
         const isCount = document.getElementById('graph_view_count').classList.contains('active');
-        const id = isCount ? 'graph_view_count' : 'graph_view_user';
+        const canvasId = isCount ? 'rankingChartCount' : 'rankingChartUser';
         const title = isCount ? "推移(数)" : "推移(人)";
-        downloadHTML(id, 'graph.html', title);
+        const filename = 'graph.html';
+
+        const canvas = document.getElementById(canvasId);
+        // Canvasの状態を画像データURLとして取得
+        const imgData = canvas.toDataURL('image/png');
+        
+        // ヘッダーテキスト取得
+        const headerText = isCount ? 
+            '2026年冬アニメ 歌唱数ランキング推移 (Top 20)' : 
+            '2026年冬アニメ 歌唱人数ランキング推移 (Top 20)';
+            
+        // 画像を埋め込んだHTMLコンテンツを作成
+        const content = `
+            <div class="category-header">${headerText}</div>
+            <div class="chart-wrapper">
+                <img src="${imgData}" style="width:100%; max-width:800px; border:1px solid #ccc; display:block; margin:0 auto;">
+            </div>
+        `;
+        
+        generateDownload(content, filename, title);
     }
 
     // --- 以下、既存機能 ---
@@ -1633,6 +1663,10 @@
         tr.rank-row-2 td { background-color: #f5f5f5 !important; }
         tr.rank-row-3 td { background-color: #fff0e6 !important; }
 
+        .chart-wrapper {
+            background: #fff; padding: 10px; border-radius: 8px; border: 1px solid #ccc;
+        }
+
         @media print {
             * {
                 -webkit-print-color-adjust: exact !important;
@@ -1654,21 +1688,24 @@
     <script>
         const host = 'http://ykr.moe:11059';
 
-        function onRankingClick(row) {
-            if (window.getSelection().toString().length > 0) return;
-            const rawHref = row.getAttribute('data-href');
-            if (rawHref && rawHref.startsWith('#host')) {
-                const url = rawHref.replace('#host', host);
-                window.location.href = url;
-            }
-        }
-
         document.addEventListener('DOMContentLoaded', () => {
+            // クール集計リンク有効化
             document.querySelectorAll('a.export-link').forEach(link => {
                 const rawHref = link.getAttribute('href');
                 if (rawHref && rawHref.startsWith('#host')) {
                     link.href = rawHref.replace('#host', host);
                 }
+            });
+
+            // 修正: ランキング行クリック有効化 (ダッシュボードでは無効だが保存ファイルでは有効)
+            document.querySelectorAll('tr[data-href]').forEach(row => {
+                row.addEventListener('click', () => {
+                    if (window.getSelection().toString().length > 0) return;
+                    const rawHref = row.getAttribute('data-href');
+                    if (rawHref && rawHref.startsWith('#host')) {
+                        window.location.href = rawHref.replace('#host', host);
+                    }
+                });
             });
         });
 
