@@ -121,8 +121,8 @@ ranking_count_html_content = ""
 ranking_user_html_content = ""
 cool_data_exists = False
 ranking_data_list = [] 
-graph_series_data_count = {} # グラフ用データ(歌唱数)
-graph_series_data_user = {}  # グラフ用データ(人数)
+graph_series_data_count = {} 
+graph_series_data_user = {}
 
 created_lists_html = ""
 uncreated_lists_html = ""
@@ -138,9 +138,7 @@ for file_path in offline_files:
             if '曲名' in offline_df.columns:
                 targets = [normalize_offline_text(str(x)) for x in offline_df['曲名'].tolist()]
                 offline_targets.extend(targets)
-                print(f"オフラインリスト({file_path})を読み込みました。追加件数: {len(targets)}")
-        except Exception as e:
-            print(f"オフラインリスト({file_path})読み込みエラー: {e}")
+        except Exception: pass
 
 # --- カテゴリ別リストHTML生成関数 ---
 def generate_category_html_block(category_name, item_list):
@@ -179,7 +177,6 @@ if cool_file and os.path.exists(cool_file):
         for enc in ['utf-8-sig', 'cp932', 'shift_jis']:
             try:
                 raw_df = pd.read_csv(cool_file, header=None, encoding=enc)
-                print(f"集計表({cool_file})をエンコーディング {enc} で読み込みました。")
                 break
             except UnicodeDecodeError: continue
         
@@ -206,18 +203,14 @@ if cool_file and os.path.exists(cool_file):
                 analysis_source_df['norm_workname'] = ""
 
             exclude_keywords = ['test', 'テスト', 'システム', 'admin', 'System']
-            # 全期間履歴データ（日付順）
             full_history = analysis_source_df[
                 (~analysis_source_df['歌った人'].astype(str).apply(lambda x: any(k in x for k in exclude_keywords)))
             ].sort_values('dt_obj')
             
-            # 表示期間設定
             disp_start = pd.to_datetime("2026/01/01")
             disp_end = pd.to_datetime("2026/03/31")
-            # 表示用履歴データ
             target_history_display = full_history[(full_history['dt_obj'] >= disp_start) & (full_history['dt_obj'] <= disp_end)]
 
-            # クール定義読み込み
             categorized_data = {}
             ALLOWED_CATEGORIES = ["2026年冬アニメ", "2025年秋アニメ"]
             current_category = None
@@ -237,7 +230,7 @@ if cool_file and os.path.exists(cool_file):
                     categorized_data[current_category].append({"anime": anime, "type": type_, "artist": artist, "song": song})
 
             # ==========================================
-            # ★ グラフ用データ計算 (履歴全期間・日次推移)
+            # ★ グラフ用データ計算
             # ==========================================
             print("グラフデータ計算中...")
             graph_target_cat = "2026年冬アニメ"
@@ -252,8 +245,7 @@ if cool_file and os.path.exists(cool_file):
                         "name": f"{item['anime']} - {item['song']}"
                     })
 
-                # マッチング事前計算
-                matched_records = [] # {date, item_idx, user}
+                matched_records = []
                 for idx, item in enumerate(items_with_norm):
                     song_pat, anime_pat = item["song_norm"], item["anime_norm"]
                     if not song_pat and not anime_pat: continue
@@ -282,7 +274,7 @@ if cool_file and os.path.exists(cool_file):
                     rec_ptr, total_recs = 0, len(matched_records)
                     
                     for current_dt in unique_dates:
-                        dt_str = current_dt.strftime("%Y-%m-%d") # 線グラフ用にフォーマット統一
+                        dt_str = current_dt.strftime("%Y-%m-%d")
                         while rec_ptr < total_recs and matched_records[rec_ptr]['date'] <= current_dt:
                             rec = matched_records[rec_ptr]
                             idx, user = rec['item_idx'], rec['user']
@@ -312,9 +304,8 @@ if cool_file and os.path.exists(cool_file):
                             if rank <= 20:
                                 if d['name'] not in graph_series_data_user: graph_series_data_user[d['name']] = []
                                 graph_series_data_user[d['name']].append({"x": dt_str, "y": rank})
-            print("グラフデータ計算完了")
 
-            # --- 通常集計HTML生成 & リスト生成 ---
+            # --- 通常集計HTML生成 ---
             for category, items in categorized_data.items():
                 cat_created_items, cat_uncreated_items = [], []
                 
@@ -332,7 +323,6 @@ if cool_file and os.path.exists(cool_file):
                     group_items = list(group_iter)
                     rowspan = len(group_items)
                     analysis_html_content += '<tbody class="anime-group">'
-                    
                     for i, item in enumerate(group_items):
                         t_song, t_anime = normalize_text(item["song"]), normalize_text(item["anime"])
                         
@@ -374,8 +364,7 @@ if cool_file and os.path.exists(cool_file):
                 created_lists_html += generate_category_html_block(category, cat_created_items)
                 uncreated_lists_html += generate_category_html_block(category, cat_uncreated_items)
             cool_data_exists = True
-            print("クール集計処理完了。")
-            
+
             # --- ランキング表生成 ---
             def generate_ranking_html(mode="count"):
                 html_out = ""
@@ -418,7 +407,6 @@ if cool_file and os.path.exists(cool_file):
 
             ranking_count_html_content = generate_ranking_html("count")
             ranking_user_html_content = generate_ranking_html("user")
-            print("ランキング生成完了。")
         else:
             print("CSV読み込み失敗")
     except Exception as e:
@@ -426,27 +414,17 @@ if cool_file and os.path.exists(cool_file):
         import traceback
         traceback.print_exc()
 
-# ==========================================
 # HTML生成
-# ==========================================
-columns_to_hide = ['コメント'] 
 if not final_df.empty:
-    html_df = final_df.drop(columns=columns_to_hide, errors='ignore')
+    html_df = final_df.drop(columns=['コメント'], errors='ignore')
 else:
     html_df = pd.DataFrame()
 
 setlist_rows = ""
 for _, row in html_df.iterrows():
-    setlist_rows += '<tr>'
-    for val in row:
-        setlist_rows += f'<td>{val}</td>'
-    setlist_rows += '</tr>'
+    setlist_rows += '<tr>' + ''.join([f'<td>{val}</td>' for val in row]) + '</tr>'
+setlist_headers = "".join([f'<th onclick="sortTable({i})">{col} <i class="fas fa-sort"></i></th>' for i, col in enumerate(html_df.columns)])
 
-setlist_headers = ""
-for col in html_df.columns:
-    setlist_headers += f'<th onclick="sortTable({list(html_df.columns).index(col)})">{col} <i class="fas fa-sort"></i></th>'
-
-# グラフ用データをJSON形式に変換
 graph_json_count = json.dumps(graph_series_data_count, ensure_ascii=False)
 graph_json_user = json.dumps(graph_series_data_user, ensure_ascii=False)
 
@@ -467,7 +445,7 @@ html_content = f"""
         a.export-link {{ color: inherit; text-decoration: none; pointer-events: none; cursor: default; }}
         tr.ranking-row {{ cursor: default; }}
         th, td {{ padding: 5px 8px; text-align: left; border-bottom: 1px solid #eee; font-size: 13px; vertical-align: middle; line-height: 1.3; }}
-        th {{ background-color: var(--primary-color); color: #fff; position: sticky; top: 0; z-index: 10; font-weight: bold; }}
+        th {{ background-color: var(--primary-color); color: #fff; position: sticky; top: 0; z-index: 10; font-weight: bold; cursor: pointer; }}
         .top-section {{ flex: 0 0 auto; background-color: var(--header-bg); box-shadow: 0 2px 5px rgba(0,0,0,0.1); z-index: 100; }}
         .header-inner {{ padding: 8px 15px; display: flex; justify-content: space-between; align-items: center; }}
         h1 {{ margin: 0; font-size: 1.2rem; color: var(--primary-color); }}
@@ -509,8 +487,8 @@ html_content = f"""
         tr.rank-row-2 td {{ background-color: #f5f5f5 !important; }}
         tr.rank-row-3 td {{ background-color: #fff0e6 !important; }}
         .rankingTable tr:nth-child(1) th {{ background-color: var(--primary-color) !important; color: #fff !important; }}
-        /* グラフ用 */
-        .chart-container {{ position: relative; height: 70vh; width: 100%; margin-top: 20px; background: #fff; padding: 10px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }}
+        /* グラフ用レイアウト調整 */
+        .chart-container {{ position: relative; height: 75vh; width: 100%; margin-top: 20px; background: #fff; padding: 10px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }}
         
         @media print {{
             * {{ -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }}
@@ -620,21 +598,77 @@ html_content = f"""
         if(charts[type]) return;
         const ctx = document.getElementById(canvasId).getContext('2d');
         const datasets = Object.keys(dataObj).map((key, i) => ({{
-            label: key, data: dataObj[key],
-            borderColor: colors[i % colors.length], backgroundColor: colors[i % colors.length],
-            pointRadius: 4, pointHoverRadius: 7, tension: 0.1, fill: false, borderWidth: 2
+            label: key, 
+            data: dataObj[key],
+            borderColor: colors[i % colors.length], 
+            backgroundColor: colors[i % colors.length],
+            pointRadius: 4, 
+            pointHoverRadius: 8, 
+            tension: 0.1, 
+            fill: false, 
+            borderWidth: 1.5, // 通常時は細く
+            hoverBorderWidth: 4 // タップ(ホバー)時は太く
         }}));
+
         charts[type] = new Chart(ctx, {{
-            type: 'line', data: {{ datasets }},
+            type: 'line', 
+            data: {{ datasets }},
             options: {{
-                responsive: true, maintainAspectRatio: false,
+                responsive: true, 
+                maintainAspectRatio: false,
+                layout: {{
+                    padding: {{ top: 30, bottom: 20, left: 10, right: 30 }} // ★余白調整
+                }},
+                interaction: {{
+                    mode: 'nearest', // ★1点集中モード（一番近い線だけ反応）
+                    axis: 'x',
+                    intersect: true
+                }},
                 scales: {{
-                    y: {{ reverse: true, min: 1, max: 20, ticks: {{ stepSize: 1 }}, title: {{ display: true, text: '順位' }} }},
-                    x: {{ type: 'time', time: {{ unit: 'day', tooltipFormat: 'yyyy/MM/dd' }}, title: {{ display: true, text: '日付' }} }}
+                    y: {{ 
+                        reverse: true, 
+                        min: 0.8, // ★1位の上に余白を作る
+                        max: 20.2, 
+                        ticks: {{ stepSize: 1 }}, 
+                        title: {{ display: true, text: '順位' }},
+                        grid: {{ display: true, drawBorder: false }}
+                    }},
+                    x: {{ 
+                        type: 'time', 
+                        time: {{ unit: 'day', tooltipFormat: 'yyyy/MM/dd' }}, 
+                        title: {{ display: true, text: '日付' }},
+                        grid: {{ display: false }} // ★縦のグリッドを消してスッキリ
+                    }}
                 }},
                 plugins: {{
-                    tooltip: {{ mode: 'index', intersect: false, callbacks: {{ label: c => c.dataset.label + ': ' + c.parsed.y + '位' }} }},
-                    legend: {{ position: 'bottom', labels: {{ boxWidth: 10 }} }}
+                    tooltip: {{
+                        backgroundColor: 'rgba(255, 255, 255, 0.9)', // 明るい背景
+                        titleColor: '#2c3e50',
+                        bodyColor: '#333',
+                        borderColor: '#ccc',
+                        borderWidth: 1,
+                        displayColors: true,
+                        callbacks: {{
+                            // タイトルに曲名を表示
+                            title: function(context) {{
+                                if (context.length > 0) {{
+                                    return context[0].dataset.label;
+                                }}
+                                return '';
+                            }},
+                            // 本文は「日付」と「順位」だけシンプルに
+                            label: function(context) {{
+                                const date = context.label; // x軸の日付
+                                const rank = context.parsed.y;
+                                return date + ': ' + rank + '位';
+                            }}
+                        }}
+                    }},
+                    legend: {{ 
+                        position: 'bottom', 
+                        labels: {{ boxWidth: 10, font: {{ size: 10 }} }},
+                        // 凡例クリック時の挙動はデフォルト（表示/非表示）
+                    }}
                 }}
             }}
         }});
@@ -661,10 +695,6 @@ html_content = f"""
         document.getElementById(name).classList.add('active');
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         if(btn) btn.classList.add('active');
-        else {{
-             // ボタンがない場合のフォールバック(初期表示など)
-             if(name==='setlist') document.querySelectorAll('.tab-btn')[0].classList.add('active');
-        }}
         
         document.querySelectorAll('.ctrl-group').forEach(c => c.classList.remove('active'));
         if(name==='setlist') document.getElementById('ctrl-setlist').classList.add('active');
@@ -697,6 +727,10 @@ html_content = f"""
                 link.href = rawHref.replace('#host', host);
             }}
         }});
+        // 初期タブセット（ボタンがない場合用）
+        if(document.querySelector('.tab-btn.active') === null) {{
+             openTab('setlist', document.querySelectorAll('.tab-btn')[0]);
+        }}
     }});
 
     function toggleCategory(header) {{
