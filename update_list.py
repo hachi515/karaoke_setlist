@@ -690,8 +690,9 @@ if cool_file and os.path.exists(cool_file):
                             clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
                             search_word = f"{clean_anime} {item['song']}"
                             
+                            # 修正: onclickを削除し、data-hrefのみとする
                             html_out += f"""
-                            <tr class="has-count ranking-row {row_rank_class}" data-href="#host/search.php?searchword={search_word}" onclick="onRankingClick(this)">
+                            <tr class="has-count ranking-row {row_rank_class}" data-href="#host/search.php?searchword={search_word}">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;">{rank_display}</td>
                                 <td>{item["anime"]} <span style="font-size:0.8em; color:#777;">({item["type"]})</span></td>
                                 <td>{item["song"]}</td> <td>{item["artist"]}</td>
@@ -892,7 +893,7 @@ html_content = f"""
             background-color: #fff;
             border-right: 1px solid #eee;
             vertical-align: middle;
-            font-weight: normal; color: inherit;      
+            font-weight: normal; color: inherit;       
         }}
 
         .rank-badge {{
@@ -922,9 +923,12 @@ html_content = f"""
             flex-direction: column;
         }}
         /* 詳細情報固定表示エリア */
+        /* 修正: 折り返しと高さ自動調整 */
         .chart-info {{
-            height: 35px;
-            line-height: 35px;
+            min-height: 35px;
+            height: auto;
+            line-height: 1.4;
+            padding: 5px;
             text-align: center;
             font-weight: bold;
             color: #2c3e50;
@@ -933,9 +937,9 @@ html_content = f"""
             margin-bottom: 5px;
             border-radius: 4px;
             font-size: 14px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            white-space: normal;
+            overflow: visible;
+            word-break: break-all;
         }}
         .canvas-container {{
             flex: 1;
@@ -1162,7 +1166,14 @@ html_content = f"""
                         reverse: true, 
                         min: 0.5, // 1位の上に少し余白
                         max: 20.5, 
-                        ticks: {{ stepSize: 1, callback: function(val) {{ return (val < 1 || val > 20) ? '' : val; }} }},
+                        // 修正: 整数のみ表示
+                        ticks: {{ 
+                            stepSize: 1, 
+                            callback: function(val) {{ 
+                                if (val % 1 === 0 && val >= 1 && val <= 20) return val;
+                                return ''; 
+                            }} 
+                        }},
                         title: {{ display: true, text: '順位' }}
                     }},
                     x: {{ 
@@ -1175,11 +1186,31 @@ html_content = f"""
         }});
     }}
 
+    // 修正: グラフを画像として保存するためのHTML生成
     function downloadGraphHTML() {{
         const isCount = document.getElementById('graph_view_count').classList.contains('active');
-        const id = isCount ? 'graph_view_count' : 'graph_view_user';
+        const canvasId = isCount ? 'rankingChartCount' : 'rankingChartUser';
         const title = isCount ? "推移(数)" : "推移(人)";
-        downloadHTML(id, 'graph.html', title);
+        const filename = 'graph.html';
+
+        const canvas = document.getElementById(canvasId);
+        // Canvasの状態を画像データURLとして取得
+        const imgData = canvas.toDataURL('image/png');
+        
+        // ヘッダーテキスト取得
+        const headerText = isCount ? 
+            '2026年冬アニメ 歌唱数ランキング推移 (Top 20)' : 
+            '2026年冬アニメ 歌唱人数ランキング推移 (Top 20)';
+            
+        // 画像を埋め込んだHTMLコンテンツを作成
+        const content = `
+            <div class="category-header">${{headerText}}</div>
+            <div class="chart-wrapper">
+                <img src="${{imgData}}" style="width:100%; max-width:800px; border:1px solid #ccc; display:block; margin:0 auto;">
+            </div>
+        `;
+        
+        generateDownload(content, filename, title);
     }}
 
     // --- 以下、既存機能 ---
@@ -1332,6 +1363,10 @@ html_content = f"""
         tr.rank-row-2 td {{ background-color: #f5f5f5 !important; }}
         tr.rank-row-3 td {{ background-color: #fff0e6 !important; }}
 
+        .chart-wrapper {{
+            background: #fff; padding: 10px; border-radius: 8px; border: 1px solid #ccc;
+        }}
+
         @media print {{
             * {{
                 -webkit-print-color-adjust: exact !important;
@@ -1353,21 +1388,24 @@ html_content = f"""
     <script>
         const host = 'http://ykr.moe:11059';
 
-        function onRankingClick(row) {{
-            if (window.getSelection().toString().length > 0) return;
-            const rawHref = row.getAttribute('data-href');
-            if (rawHref && rawHref.startsWith('#host')) {{
-                const url = rawHref.replace('#host', host);
-                window.location.href = url;
-            }}
-        }}
-
         document.addEventListener('DOMContentLoaded', () => {{
+            // クール集計リンク有効化
             document.querySelectorAll('a.export-link').forEach(link => {{
                 const rawHref = link.getAttribute('href');
                 if (rawHref && rawHref.startsWith('#host')) {{
                     link.href = rawHref.replace('#host', host);
                 }}
+            }});
+
+            // 修正: ランキング行クリック有効化 (ダッシュボードでは無効だが保存ファイルでは有効)
+            document.querySelectorAll('tr[data-href]').forEach(row => {{
+                row.addEventListener('click', () => {{
+                    if (window.getSelection().toString().length > 0) return;
+                    const rawHref = row.getAttribute('data-href');
+                    if (rawHref && rawHref.startsWith('#host')) {{
+                        window.location.href = rawHref.replace('#host', host);
+                    }}
+                }});
             }});
         }});
 
