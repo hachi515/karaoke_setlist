@@ -172,8 +172,8 @@ else:
 # ★集計処理
 # ==========================================
 analysis_html_content = "" 
-ranking_count_html_content = "" # 歌唱数ランキング用
-ranking_user_html_content = ""  # 歌唱人数ランキング用
+ranking_count_html_content = "" # 変更: 歌唱数ランキング用
+ranking_user_html_content = ""  # 変更: 歌唱人数ランキング用
 
 cool_data_exists = False
 ranking_data_list = [] 
@@ -446,7 +446,8 @@ if cool_file and os.path.exists(cool_file):
                             prev_val = d['val']
                             if rank <= 20:
                                 if d['name'] not in graph_series_data_count: graph_series_data_count[d['name']] = []
-                                graph_series_data_count[d['name']].append({"x": dt_str, "y": rank})
+                                # ★修正: 横軸(x)に順位、縦軸(y)に日付を設定
+                                graph_series_data_count[d['name']].append({"x": rank, "y": dt_str})
 
                         # --- 人数ランキング ---
                         ranking_src_user = []
@@ -462,7 +463,8 @@ if cool_file and os.path.exists(cool_file):
                             prev_val = d['val']
                             if rank <= 20:
                                 if d['name'] not in graph_series_data_user: graph_series_data_user[d['name']] = []
-                                graph_series_data_user[d['name']].append({"x": dt_str, "y": rank})
+                                # ★修正: 横軸(x)に順位、縦軸(y)に日付を設定
+                                graph_series_data_user[d['name']].append({"x": rank, "y": dt_str})
 
             print("グラフデータ計算完了。")
 
@@ -690,6 +692,7 @@ if cool_file and os.path.exists(cool_file):
                             clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
                             search_word = f"{clean_anime} {item['song']}"
                             
+                            # 修正: onclickを削除し、data-hrefのみとする
                             html_out += f"""
                             <tr class="has-count ranking-row {row_rank_class}" data-href="#host/search.php?searchword={search_word}">
                                 <td align="center" style="font-weight:bold; font-size:1.1rem;">{rank_display}</td>
@@ -787,9 +790,6 @@ html_content = f"""
         th, td {{
             padding: 5px 8px; text-align: left; border-bottom: 1px solid #eee;
             font-size: 13px; vertical-align: middle; line-height: 1.3;
-            /* 修正: 長いテキストを強制的に折り返す */
-            word-break: break-all;
-            overflow-wrap: anywhere;
         }}
         th {{
             background-color: var(--primary-color); color: #fff;
@@ -895,7 +895,7 @@ html_content = f"""
             background-color: #fff;
             border-right: 1px solid #eee;
             vertical-align: middle;
-            font-weight: normal; color: inherit;       
+            font-weight: normal; color: inherit;        
         }}
 
         .rank-badge {{
@@ -925,6 +925,7 @@ html_content = f"""
             flex-direction: column;
         }}
         /* 詳細情報固定表示エリア */
+        /* 修正: 折り返しと高さ自動調整 */
         .chart-info {{
             min-height: 35px;
             height: auto;
@@ -976,20 +977,6 @@ html_content = f"""
             .category-header {{ page-break-after: avoid; }}
             thead {{ display: table-header-group; }}
             .chart-wrapper {{ height: auto; }}
-        }}
-
-        /* 修正: スマホ用調整 */
-        @media screen and (max-width: 600px) {{
-            /* テーブルの最低幅制限を解除して画面内に収める */
-            .analysisTable th, .rankingTable th {{
-                min-width: auto !important;
-                width: auto !important;
-            }}
-            /* フォントサイズなどを微調整 */
-            th, td {{
-                font-size: 12px;
-                padding: 4px 2px;
-            }}
         }}
     </style>
 </head>
@@ -1100,11 +1087,22 @@ html_content = f"""
         const ctx = document.getElementById(canvasId).getContext('2d');
         const infoDivId = type === 'count' ? 'chart-info-count' : 'chart-info-user';
         
-        // 最新の順位でTOP5を判定 (色分け用には使うが、表示制限は解除)
+        // 最新の順位でTOP5を判定
         const allKeys = Object.keys(dataObj);
-        
+        const latestRank = [];
+        allKeys.forEach(key => {{
+            const arr = dataObj[key];
+            if(arr.length > 0) {{
+                // データ構造変更: x=rank, y=date
+                latestRank.push({{ key: key, rank: arr[arr.length - 1].x }});
+            }}
+        }});
+        latestRank.sort((a,b) => a.rank - b.rank);
+        const top5 = latestRank.slice(0, 5).map(x => x.key);
+
         const datasets = allKeys.map((key, i) => {{
             const color = colors[i % colors.length];
+            const isTop5 = top5.includes(key);
             return {{
                 label: key, 
                 data: dataObj[key],
@@ -1115,7 +1113,7 @@ html_content = f"""
                 tension: 0.1, 
                 fill: false, 
                 borderWidth: 2,
-                hidden: false // 変更: TOP5制限を解除し全て表示
+                hidden: !isTop5 // TOP5以外は初期非表示（凡例で取り消し線）
             }};
         }});
 
@@ -1123,11 +1121,12 @@ html_content = f"""
             type: 'line', 
             data: {{ datasets }},
             options: {{
+                indexAxis: 'y', // ★グラフを回転 (X軸を値、Y軸をインデックス/日付に)
                 responsive: true, 
                 maintainAspectRatio: false,
                 interaction: {{
                     mode: 'nearest',
-                    axis: 'x',
+                    axis: 'y', // ★インタラクション軸をYに変更
                     intersect: true
                 }},
                 plugins: {{
@@ -1142,11 +1141,11 @@ html_content = f"""
                             if (tooltip.body) {{
                                 const dataPoint = tooltip.dataPoints[0];
                                 // 日付の整形 (Jan 28, 2026 -> 1/28)
-                                const dateObj = new Date(dataPoint.label);
+                                const dateObj = new Date(dataPoint.label); // labelはY軸(日付)
                                 const dateStr = (dateObj.getMonth() + 1) + '/' + dateObj.getDate();
                                 
-                                // 指定のフォーマット: 作品名 曲名　1/28（1位）
-                                infoDiv.innerHTML = `<span style="color:${{dataPoint.dataset.borderColor}}">●</span> ${{dataPoint.dataset.label}}　${{dateStr}}（${{dataPoint.parsed.y}}位）`;
+                                // ★修正: 順位はX軸 (parsed.x) から取得
+                                infoDiv.innerHTML = `<span style="color:${{dataPoint.dataset.borderColor}}">●</span> ${{dataPoint.dataset.label}}　${{dateStr}}（${{dataPoint.parsed.x}}位）`;
                             }}
                         }}
                     }},
@@ -1167,25 +1166,26 @@ html_content = f"""
                     }}
                 }},
                 scales: {{
-                    y: {{ 
-                        reverse: true, 
-                        min: 0.5, // 1位の上に少し余白
+                    x: {{ // ★旧Y軸設定をX軸へ移動 (順位)
+                        min: 0.5, 
                         max: 20.5, 
-                        // 修正: 整数のみ表示 & 1～20位まで全表示
+                        // ★横軸は左から右へ 1 -> 20 なので reverse:false (デフォルト)
                         ticks: {{ 
                             stepSize: 1, 
-                            autoSkip: false, // 追加: 間引きを防止
                             callback: function(val) {{ 
                                 if (val % 1 === 0 && val >= 1 && val <= 20) return val;
                                 return ''; 
                             }} 
                         }},
-                        title: {{ display: true, text: '順位' }}
+                        title: {{ display: true, text: '順位' }},
+                        position: 'bottom'
                     }},
-                    x: {{ 
+                    y: {{ // ★旧X軸設定をY軸へ移動 (日付)
                         type: 'time', 
                         time: {{ unit: 'day', displayFormats: {{ day: 'M/d' }} }},
-                        title: {{ display: true, text: '日付' }}
+                        title: {{ display: true, text: '日付' }},
+                        reverse: true, // ★上を最新にする場合はfalse、下を最新(リスト順)にする場合はtrue
+                        position: 'left'
                     }}
                 }}
             }}
@@ -1326,12 +1326,7 @@ html_content = f"""
     <style>
         body {{ font-family: "Helvetica Neue", Arial, sans-serif; font-size: 13px; color: #333; }}
         table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; }}
-        th, td {{ 
-            border: 1px solid #ccc; padding: 5px 8px; text-align: left; vertical-align: middle; 
-            /* 保存用HTMLでも折り返し有効化 */
-            word-break: break-all;
-            overflow-wrap: anywhere;
-        }}
+        th, td {{ border: 1px solid #ccc; padding: 5px 8px; text-align: left; vertical-align: middle; }}
         th {{ background-color: #2c3e50; color: #fff; }}
         td[rowspan] {{ background-color: #fff; }}
         
