@@ -15,7 +15,7 @@
         a.export-link { color: inherit; text-decoration: none; pointer-events: none; cursor: default; }
         tr.ranking-row { cursor: default; }
         th, td { padding: 5px 8px; text-align: left; border-bottom: 1px solid #eee; font-size: 13px; vertical-align: middle; line-height: 1.3; }
-        th { background-color: var(--primary-color); color: #fff; position: sticky; top: 0; z-index: 10; font-weight: bold; }
+        th { background-color: var(--primary-color); color: #fff; position: sticky; top: 0; z-index: 10; font-weight: bold; cursor: pointer; }
         .top-section { flex: 0 0 auto; background-color: var(--header-bg); box-shadow: 0 2px 5px rgba(0,0,0,0.1); z-index: 100; }
         .header-inner { padding: 8px 15px; display: flex; justify-content: space-between; align-items: center; }
         h1 { margin: 0; font-size: 1.2rem; color: var(--primary-color); }
@@ -57,8 +57,8 @@
         tr.rank-row-2 td { background-color: #f5f5f5 !important; }
         tr.rank-row-3 td { background-color: #fff0e6 !important; }
         .rankingTable tr:nth-child(1) th { background-color: var(--primary-color) !important; color: #fff !important; }
-        /* グラフ用 */
-        .chart-container { position: relative; height: 70vh; width: 100%; margin-top: 20px; background: #fff; padding: 10px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        /* グラフ用レイアウト調整 */
+        .chart-container { position: relative; height: 75vh; width: 100%; margin-top: 20px; background: #fff; padding: 10px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
         
         @media print {
             * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -77,7 +77,7 @@
     <div class="top-section">
         <div class="header-inner">
             <h1>Karaoke Dashboard</h1>
-            <div class="update-time">2026/01/27 19:43 更新</div>
+            <div class="update-time">2026/01/27 19:49 更新</div>
         </div>
         <div class="tabs">
             <button class="tab-btn active" onclick="openTab('setlist', this)">セットリスト</button>
@@ -224,21 +224,77 @@
         if(charts[type]) return;
         const ctx = document.getElementById(canvasId).getContext('2d');
         const datasets = Object.keys(dataObj).map((key, i) => ({
-            label: key, data: dataObj[key],
-            borderColor: colors[i % colors.length], backgroundColor: colors[i % colors.length],
-            pointRadius: 4, pointHoverRadius: 7, tension: 0.1, fill: false, borderWidth: 2
+            label: key, 
+            data: dataObj[key],
+            borderColor: colors[i % colors.length], 
+            backgroundColor: colors[i % colors.length],
+            pointRadius: 4, 
+            pointHoverRadius: 8, 
+            tension: 0.1, 
+            fill: false, 
+            borderWidth: 1.5, // 通常時は細く
+            hoverBorderWidth: 4 // タップ(ホバー)時は太く
         }));
+
         charts[type] = new Chart(ctx, {
-            type: 'line', data: { datasets },
+            type: 'line', 
+            data: { datasets },
             options: {
-                responsive: true, maintainAspectRatio: false,
+                responsive: true, 
+                maintainAspectRatio: false,
+                layout: {
+                    padding: { top: 30, bottom: 20, left: 10, right: 30 } // ★余白調整
+                },
+                interaction: {
+                    mode: 'nearest', // ★1点集中モード（一番近い線だけ反応）
+                    axis: 'x',
+                    intersect: true
+                },
                 scales: {
-                    y: { reverse: true, min: 1, max: 20, ticks: { stepSize: 1 }, title: { display: true, text: '順位' } },
-                    x: { type: 'time', time: { unit: 'day', tooltipFormat: 'yyyy/MM/dd' }, title: { display: true, text: '日付' } }
+                    y: { 
+                        reverse: true, 
+                        min: 0.8, // ★1位の上に余白を作る
+                        max: 20.2, 
+                        ticks: { stepSize: 1 }, 
+                        title: { display: true, text: '順位' },
+                        grid: { display: true, drawBorder: false }
+                    },
+                    x: { 
+                        type: 'time', 
+                        time: { unit: 'day', tooltipFormat: 'yyyy/MM/dd' }, 
+                        title: { display: true, text: '日付' },
+                        grid: { display: false } // ★縦のグリッドを消してスッキリ
+                    }
                 },
                 plugins: {
-                    tooltip: { mode: 'index', intersect: false, callbacks: { label: c => c.dataset.label + ': ' + c.parsed.y + '位' } },
-                    legend: { position: 'bottom', labels: { boxWidth: 10 } }
+                    tooltip: {
+                        backgroundColor: 'rgba(255, 255, 255, 0.9)', // 明るい背景
+                        titleColor: '#2c3e50',
+                        bodyColor: '#333',
+                        borderColor: '#ccc',
+                        borderWidth: 1,
+                        displayColors: true,
+                        callbacks: {
+                            // タイトルに曲名を表示
+                            title: function(context) {
+                                if (context.length > 0) {
+                                    return context[0].dataset.label;
+                                }
+                                return '';
+                            },
+                            // 本文は「日付」と「順位」だけシンプルに
+                            label: function(context) {
+                                const date = context.label; // x軸の日付
+                                const rank = context.parsed.y;
+                                return date + ': ' + rank + '位';
+                            }
+                        }
+                    },
+                    legend: { 
+                        position: 'bottom', 
+                        labels: { boxWidth: 10, font: { size: 10 } },
+                        // 凡例クリック時の挙動はデフォルト（表示/非表示）
+                    }
                 }
             }
         });
@@ -265,10 +321,6 @@
         document.getElementById(name).classList.add('active');
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         if(btn) btn.classList.add('active');
-        else {
-             // ボタンがない場合のフォールバック(初期表示など)
-             if(name==='setlist') document.querySelectorAll('.tab-btn')[0].classList.add('active');
-        }
         
         document.querySelectorAll('.ctrl-group').forEach(c => c.classList.remove('active'));
         if(name==='setlist') document.getElementById('ctrl-setlist').classList.add('active');
@@ -301,6 +353,10 @@
                 link.href = rawHref.replace('#host', host);
             }
         });
+        // 初期タブセット（ボタンがない場合用）
+        if(document.querySelector('.tab-btn.active') === null) {
+             openTab('setlist', document.querySelectorAll('.tab-btn')[0]);
+        }
     });
 
     function toggleCategory(header) {
