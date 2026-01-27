@@ -50,7 +50,6 @@ def normalize_offline_text(text):
     text = re.sub(r'\s+', ' ', text).strip()
     return text.upper()
 
-# --- 関数: マッチング判定 ---
 def check_match(target_text, source_series):
     if not target_text: return pd.Series([False] * len(source_series))
     safe_target = re.escape(target_text)
@@ -183,10 +182,10 @@ if cool_file and os.path.exists(cool_file):
         if raw_df is not None:
             raw_df = raw_df.fillna("").drop_duplicates(keep='last')
             
-            # --- 全期間のデータ準備 (グラフ計算用) ---
+            # --- 全期間のデータ準備 ---
             analysis_source_df = final_df.copy()
             analysis_source_df['dt_obj'] = pd.to_datetime(analysis_source_df['取得日'], errors='coerce')
-            analysis_source_df = analysis_source_df.dropna(subset=['dt_obj']) # 日付なし除外
+            analysis_source_df = analysis_source_df.dropna(subset=['dt_obj'])
             analysis_source_df['norm_filename'] = analysis_source_df['曲名（ファイル名）'].apply(normalize_text)
             
             def get_rescued_workname(row):
@@ -436,77 +435,96 @@ html_content = f"""
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Karaoke Dashboard</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
-        :root {{ --primary-color: #2c3e50; --accent-color: #3498db; --bg-color: #f4f7f6; --text-color: #333; --header-bg: #fff; --border-color: #e0e0e0; }}
-        html, body {{ height: 100%; margin: 0; padding: 0; overflow: hidden; font-family: "Helvetica Neue", Arial, sans-serif; background-color: var(--bg-color); color: var(--text-color); font-size: 13px; display: flex; flex-direction: column; }}
-        a.export-link {{ color: inherit; text-decoration: none; pointer-events: none; cursor: default; }}
-        tr.ranking-row {{ cursor: default; }}
-        th, td {{ padding: 5px 8px; text-align: left; border-bottom: 1px solid #eee; font-size: 13px; vertical-align: middle; line-height: 1.3; }}
-        th {{ background-color: var(--primary-color); color: #fff; position: sticky; top: 0; z-index: 10; font-weight: bold; cursor: pointer; }}
-        .top-section {{ flex: 0 0 auto; background-color: var(--header-bg); box-shadow: 0 2px 5px rgba(0,0,0,0.1); z-index: 100; }}
-        .header-inner {{ padding: 8px 15px; display: flex; justify-content: space-between; align-items: center; }}
-        h1 {{ margin: 0; font-size: 1.2rem; color: var(--primary-color); }}
-        .update-time {{ font-size: 0.8rem; color: #7f8c8d; }}
-        .tabs {{ display: flex; padding: 0 15px; border-bottom: 1px solid var(--border-color); overflow-x: auto; }}
-        .tab-btn {{ padding: 10px 15px; cursor: pointer; border: none; background: none; font-weight: bold; color: #7f8c8d; border-bottom: 3px solid transparent; font-size: 14px; white-space: nowrap; }}
-        .tab-btn.active {{ color: var(--accent-color); border-bottom-color: var(--accent-color); }}
-        .controls-row {{ padding: 8px 15px; display: flex; gap: 8px; align-items: center; background-color: #fff; border-bottom: 1px solid var(--border-color); height: 40px; flex-wrap: nowrap; overflow-x: auto; }}
-        .search-box {{ padding: 6px 12px; border: 1px solid #ccc; border-radius: 4px; width: 250px; font-size: 13px; outline: none; }}
-        .btn {{ padding: 6px 12px; border-radius: 4px; border: none; cursor: pointer; color: #fff; background-color: var(--accent-color); font-size: 13px; font-weight: bold; white-space: nowrap; }}
-        .btn:hover {{ opacity: 0.9; }}
-        .btn-dl {{ background-color: #2ecc71; }}
-        .btn-list {{ background-color: #9b59b6; font-size: 12px; }}
-        .count-display {{ margin-left: auto; font-weight: bold; font-size: 13px; }}
+        :root {{ 
+            --bg-color: #1e1e2f; 
+            --card-bg: #27293d;
+            --text-color: #e0e0e0;
+            --accent-color: #e14eca;
+            --primary-grad: linear-gradient(0deg, #ec008c 0%, #fc6767 100%);
+            --header-bg: #27293d;
+        }}
+        html, body {{ height: 100%; margin: 0; padding: 0; overflow: hidden; font-family: 'Roboto', "Helvetica Neue", Arial, sans-serif; background-color: var(--bg-color); color: var(--text-color); font-size: 13px; display: flex; flex-direction: column; }}
+        a.export-link {{ color: #00f2c3; text-decoration: none; pointer-events: none; cursor: default; }}
+        th, td {{ padding: 8px 10px; text-align: left; border-bottom: 1px solid #3d3f54; font-size: 13px; vertical-align: middle; color: #fff; }}
+        th {{ background-color: #34374c; color: #00f2c3; position: sticky; top: 0; z-index: 10; font-weight: bold; cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px; }}
+        
+        /* Modern Scrollbar */
+        ::-webkit-scrollbar {{ width: 8px; height: 8px; }}
+        ::-webkit-scrollbar-track {{ background: #1e1e2f; }}
+        ::-webkit-scrollbar-thumb {{ background: #e14eca; border-radius: 4px; }}
+        
+        .top-section {{ flex: 0 0 auto; background-color: var(--header-bg); box-shadow: 0 4px 10px rgba(0,0,0,0.3); z-index: 100; border-bottom: 1px solid #e14eca; }}
+        .header-inner {{ padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; }}
+        h1 {{ margin: 0; font-size: 1.4rem; background: var(--primary-grad); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 800; }}
+        .update-time {{ font-size: 0.8rem; color: #888; }}
+        
+        .tabs {{ display: flex; padding: 0 20px; gap: 15px; overflow-x: auto; }}
+        .tab-btn {{ padding: 12px 10px; cursor: pointer; border: none; background: none; font-weight: bold; color: #888; border-bottom: 2px solid transparent; font-size: 13px; transition: 0.3s; }}
+        .tab-btn.active {{ color: #00f2c3; border-bottom-color: #00f2c3; text-shadow: 0 0 8px rgba(0,242,195,0.4); }}
+        
+        .controls-row {{ padding: 10px 20px; display: flex; gap: 10px; align-items: center; background-color: #2b2e3f; height: 50px; flex-wrap: nowrap; overflow-x: auto; }}
+        .search-box {{ padding: 8px 12px; background: #1e1e2f; border: 1px solid #555; color: #fff; border-radius: 20px; width: 250px; outline: none; }}
+        .btn {{ padding: 8px 16px; border-radius: 20px; border: none; cursor: pointer; color: #fff; background: linear-gradient(45deg, #1d8cf8, #3358f4); font-size: 12px; font-weight: bold; box-shadow: 0 4px 6px rgba(50,50,93,.11), 0 1px 3px rgba(0,0,0,.08); transition: transform 0.2s; }}
+        .btn:hover {{ transform: translateY(-1px); }}
+        .btn-dl {{ background: linear-gradient(45deg, #00f2c3, #0098f0); color: #1e1e2f; }}
+        .btn-list {{ background: linear-gradient(45deg, #e14eca, #ba54f5); }}
+        
         .ctrl-group {{ display: none; width: 100%; align-items: center; gap:8px; }}
         .ctrl-group.active {{ display: flex; }}
         .ctrl-right {{ margin-left: auto; display: flex; gap: 8px; }}
-        .content-area {{ flex: 1; position: relative; overflow: hidden; }}
-        .tab-content {{ display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 0 15px 40px 15px; }}
+        .content-area {{ flex: 1; position: relative; overflow: hidden; background: #1e1e2f; }}
+        .tab-content {{ display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 20px; }}
         .tab-content.active {{ display: block; }}
-        table {{ width: 100%; border-collapse: separate; border-spacing: 0; background: #fff; border-radius: 4px; margin-top: 10px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }}
-        tr:nth-child(even) {{ background-color: #fafafa; }}
-        tr:hover {{ background-color: #f1f8ff; }}
+        
+        table {{ width: 100%; border-collapse: separate; border-spacing: 0; background: #27293d; border-radius: 8px; margin-top: 10px; box-shadow: 0 0 20px rgba(0,0,0,0.2); }}
+        tr:nth-child(even) {{ background-color: #2b2e3f; }}
+        tr:hover {{ background-color: #34374c; }}
         tr.hidden {{ display: none !important; }}
-        .category-header {{ margin-top: 20px; padding: 10px 15px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 6px; font-weight: bold; font-size: 1.1rem; cursor: pointer; user-select: none; }}
+        
+        .category-header {{ margin-top: 25px; padding: 12px 20px; background: linear-gradient(90deg, #1d8cf8 0%, #1e1e2f 100%); color: white; border-radius: 6px; font-weight: bold; font-size: 1.1rem; cursor: pointer; border-left: 5px solid #e14eca; }}
         .category-content {{ display: block; transition: all 0.3s; }}
         .category-content.collapsed {{ display: none; }}
-        tr.has-count {{ background-color: #fff; color: #333; }}
-        .count-wrapper {{ display: flex; align-items: center; gap: 8px; }}
-        .count-num {{ width: 25px; text-align: right; font-size:1.1rem; }}
-        .bar-chart {{ height: 10px; background: linear-gradient(90deg, #3498db, #2980b9); border-radius: 5px; }}
-        .bar-chart-user {{ height: 10px; background: linear-gradient(90deg, #2ecc71, #27ae60); border-radius: 5px; }}
-        td[rowspan] {{ background-color: #fff; border-right: 1px solid #eee; vertical-align: middle; font-weight: normal; color: inherit; }}
-        .rank-badge {{ display: inline-block; width: 24px; height: 24px; line-height: 24px; border-radius: 50%; text-align: center; color: #fff; font-weight: bold; font-size: 12px; background-color: #95a5a6; }}
-        .rank-1 {{ background-color: #f1c40f; width: 28px; height: 28px; line-height: 28px; }}
-        .rank-2 {{ background-color: #bdc3c7; }}
-        .rank-3 {{ background-color: #d35400; }}
-        tr.rank-row-1 td {{ background-color: #fff8e1 !important; }}
-        tr.rank-row-2 td {{ background-color: #f5f5f5 !important; }}
-        tr.rank-row-3 td {{ background-color: #fff0e6 !important; }}
-        .rankingTable tr:nth-child(1) th {{ background-color: var(--primary-color) !important; color: #fff !important; }}
-        /* グラフ用レイアウト調整 */
-        .chart-container {{ position: relative; height: 75vh; width: 100%; margin-top: 20px; background: #fff; padding: 10px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }}
+        tr.has-count {{ color: #fff; }}
+        
+        .rank-badge {{ display: inline-block; width: 24px; height: 24px; line-height: 24px; border-radius: 50%; text-align: center; color: #1e1e2f; font-weight: bold; background-color: #888; box-shadow: 0 0 10px rgba(255,255,255,0.2); }}
+        .rank-1 {{ background-color: #ffd700; box-shadow: 0 0 15px #ffd700; }}
+        .rank-2 {{ background-color: #c0c0c0; box-shadow: 0 0 10px #c0c0c0; }}
+        .rank-3 {{ background-color: #cd7f32; box-shadow: 0 0 10px #cd7f32; }}
+        
+        tr.rank-row-1 td {{ background-color: rgba(255, 215, 0, 0.1) !important; color: #ffd700; }}
+        tr.rank-row-2 td {{ background-color: rgba(192, 192, 192, 0.1) !important; }}
+        tr.rank-row-3 td {{ background-color: rgba(205, 127, 50, 0.1) !important; }}
+
+        .chart-wrapper {{
+            background: #27293d;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 1px 20px 0px rgba(0,0,0,0.1);
+            border: 1px solid #2b3553;
+            height: 75vh;
+            position: relative;
+        }}
+        .chart-controls {{
+            position: absolute; top: 20px; right: 30px; z-index: 10;
+        }}
+        
+        .count-num {{ color: #00f2c3; font-weight: bold; }}
         
         @media print {{
-            * {{ -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }}
-            body {{ overflow: visible !important; height: auto !important; display: block !important; }}
-            .top-section {{ display: none !important; }}
-            .content-area {{ overflow: visible !important; position: static !important; }}
-            .tab-content {{ position: static !important; display: block !important; overflow: visible !important; padding: 0 !important; }}
-            .category-content {{ display: block !important; }}
-            tbody.anime-group {{ break-inside: avoid; page-break-inside: avoid; }}
-            .category-header {{ page-break-after: avoid; }}
-            thead {{ display: table-header-group; }}
+             body {{ background-color: #fff; color: #000; }}
+             .chart-wrapper {{ background: #fff; border: none; height: auto; }}
         }}
     </style>
 </head>
 <body>
     <div class="top-section">
         <div class="header-inner">
-            <h1>Karaoke Dashboard</h1>
+            <h1>Karaoke Dashboard <span style="font-size:0.5em; opacity:0.7;">Cyber Edition</span></h1>
             <div class="update-time">{current_datetime_str} 更新</div>
         </div>
         <div class="tabs">
@@ -519,66 +537,50 @@ html_content = f"""
         </div>
         <div class="controls-row">
             <div id="ctrl-setlist" class="ctrl-group active">
-                <input type="text" id="searchInput" class="search-box" placeholder="キーワード (例: 曲名 歌手)...">
-                <button onclick="performSearch()" class="btn"><i class="fas fa-search"></i> 検索</button>
-                <button onclick="resetFilter()" class="btn" style="background:#95a5a6"><i class="fas fa-undo"></i></button>
-                <div class="count-display" id="countDisplay">読み込み中...</div>
+                <input type="text" id="searchInput" class="search-box" placeholder="Search...">
+                <button onclick="performSearch()" class="btn">SEARCH</button>
+                <button onclick="resetFilter()" class="btn" style="background:#555">RESET</button>
+                <div class="count-display" id="countDisplay" style="color:#fff; margin-left:auto;"></div>
             </div>
             <div id="ctrl-analysis" class="ctrl-group">
                 <div class="ctrl-right">
-                    <button onclick="downloadList('list-created-content', 'created_list.html', '作成済みリスト')" class="btn btn-list">作成リスト保存</button>
-                    <button onclick="downloadList('list-uncreated-content', 'uncreated_list.html', '未作成リスト')" class="btn btn-list" style="background-color:#e74c3c;">未作成リスト保存</button>
-                    <button onclick="downloadHTML('print-target', 'karaoke_analysis.html', 'クール集計結果')" class="btn btn-dl" style="margin-left:10px;"><i class="fas fa-file-code"></i> HTML保存</button>
+                    <button onclick="downloadList('list-created-content', 'created_list.html', '作成済みリスト')" class="btn btn-list">作成済DL</button>
+                    <button onclick="downloadList('list-uncreated-content', 'uncreated_list.html', '未作成リスト')" class="btn btn-list" style="background:#e14eca">未作成DL</button>
+                    <button onclick="downloadHTML('print-target', 'karaoke_analysis.html', 'クール集計結果')" class="btn btn-dl">HTML</button>
                 </div>
             </div>
-            <div id="ctrl-ranking-count" class="ctrl-group">
-                <div class="ctrl-right">
-                    <button onclick="downloadHTML('ranking-count-print-target', 'karaoke_ranking_count.html', '歌唱数ランキング')" class="btn btn-dl"><i class="fas fa-trophy"></i> 歌唱数ランキング保存</button>
-                </div>
-            </div>
-            <div id="ctrl-ranking-user" class="ctrl-group">
-                <div class="ctrl-right">
-                    <button onclick="downloadHTML('ranking-user-print-target', 'karaoke_ranking_user.html', '歌唱人数ランキング')" class="btn btn-dl"><i class="fas fa-users"></i> 歌唱人数ランキング保存</button>
-                </div>
-            </div>
-            <div id="ctrl-graph" class="ctrl-group">
-                <div class="ctrl-right">
-                    <button onclick="downloadGraphPDF()" class="btn btn-dl" style="background-color:#e67e22;"><i class="fas fa-file-pdf"></i> PDF保存</button>
-                </div>
-            </div>
+            <div id="ctrl-ranking-count" class="ctrl-group"><div class="ctrl-right"><button onclick="downloadHTML('ranking-count-print-target', 'karaoke_ranking_count.html', '歌唱数ランキング')" class="btn btn-dl">保存</button></div></div>
+            <div id="ctrl-ranking-user" class="ctrl-group"><div class="ctrl-right"><button onclick="downloadHTML('ranking-user-print-target', 'karaoke_ranking_user.html', '歌唱人数ランキング')" class="btn btn-dl">保存</button></div></div>
+            <div id="ctrl-graph" class="ctrl-group"><div class="ctrl-right"><button onclick="downloadGraphPDF()" class="btn btn-dl" style="background-color:#e67e22;">PDF保存</button></div></div>
         </div>
     </div>
 
     <div class="content-area">
         <div id="setlist" class="tab-content active">
             <table id="setlistTable"><thead><tr>{setlist_headers}</tr></thead><tbody>{setlist_rows}</tbody></table>
-            {"" if setlist_rows else '<div style="padding:20px;text-align:center">データがありません</div>'}
+            {"" if setlist_rows else '<div style="padding:20px;text-align:center;color:#888;">No Data</div>'}
         </div>
         <div id="analysis" class="tab-content">
-            <div style="margin-top:15px; font-size:0.9rem; color:#7f8c8d; text-align:right;">集計対象: 2026/01/01 - 2026/03/31</div>
-            <div id="print-target">
-                {analysis_html_content if cool_data_exists else '<div style="padding:20px;text-align:center;color:#e74c3c;">集計データがありません</div>'}
-            </div>
+            <div style="margin-top:5px; font-size:0.8rem; color:#888; text-align:right;">Period: 2026/01/01 - 2026/03/31</div>
+            <div id="print-target">{analysis_html_content if cool_data_exists else "No Data"}</div>
         </div>
         <div id="ranking_count" class="tab-content">
-            <div style="margin-top:15px; font-size:0.9rem; color:#7f8c8d; text-align:right;">集計対象: 2026/01/01 - 2026/03/31</div>
-            <div id="ranking-count-print-target">
-                {ranking_count_html_content if ranking_count_html_content else '<div style="padding:20px;text-align:center;color:#e74c3c;">ランキング対象データがありません</div>'}
-            </div>
+            <div id="ranking-count-print-target">{ranking_count_html_content if ranking_count_html_content else "No Data"}</div>
         </div>
         <div id="ranking_user" class="tab-content">
-            <div style="margin-top:15px; font-size:0.9rem; color:#7f8c8d; text-align:right;">集計対象: 2026/01/01 - 2026/03/31</div>
-            <div id="ranking-user-print-target">
-                {ranking_user_html_content if ranking_user_html_content else '<div style="padding:20px;text-align:center;color:#e74c3c;">ランキング対象データがありません</div>'}
-            </div>
+            <div id="ranking-user-print-target">{ranking_user_html_content if ranking_user_html_content else "No Data"}</div>
         </div>
         <div id="graph_view_count" class="tab-content">
-            <div class="category-header">2026年冬アニメ 歌唱数ランキング推移 (Top 20)</div>
-            <div class="chart-container"><canvas id="rankingChartCount"></canvas></div>
+            <div class="chart-wrapper">
+                <div class="chart-controls"><button class="btn" onclick="resetGraph('count')">表示リセット (TOP5)</button></div>
+                <canvas id="rankingChartCount"></canvas>
+            </div>
         </div>
         <div id="graph_view_user" class="tab-content">
-            <div class="category-header">2026年冬アニメ 歌唱人数ランキング推移 (Top 20)</div>
-            <div class="chart-container"><canvas id="rankingChartUser"></canvas></div>
+            <div class="chart-wrapper">
+                <div class="chart-controls"><button class="btn" onclick="resetGraph('user')">表示リセット (TOP5)</button></div>
+                <canvas id="rankingChartUser"></canvas>
+            </div>
         </div>
     </div>
 
@@ -587,28 +589,58 @@ html_content = f"""
 
 <script>
     const host = 'http://ykr.moe:11059';
-    
-    // --- グラフ用設定 ---
     const dataCount = {graph_json_count};
     const dataUser = {graph_json_user};
     let charts = {{ count: null, user: null }};
-    const colors = ['#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#46f0f0', '#f032e6', '#bcf60c', '#fabebe', '#008080', '#e6beff', '#9a6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1', '#000075', '#808080'];
+    
+    // Neon colors palette
+    const neonColors = [
+        '#ff0055', '#00ff9f', '#00ccff', '#ffee00', '#aa00ff', '#ff9900', '#00ff00', '#0066ff',
+        '#ff00cc', '#ccff00', '#00ffff', '#ff3333', '#cc00ff', '#33ff33', '#3366ff', '#ff6600'
+    ];
+
+    function createGradient(ctx, color) {{
+        const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+        gradient.addColorStop(0, color);
+        gradient.addColorStop(1, 'rgba(0,0,0,0)');
+        return gradient;
+    }}
 
     function initChart(type, dataObj, canvasId) {{
         if(charts[type]) return;
         const ctx = document.getElementById(canvasId).getContext('2d');
-        const datasets = Object.keys(dataObj).map((key, i) => ({{
-            label: key, 
-            data: dataObj[key],
-            borderColor: colors[i % colors.length], 
-            backgroundColor: colors[i % colors.length],
-            pointRadius: 4, 
-            pointHoverRadius: 8, 
-            tension: 0.1, 
-            fill: false, 
-            borderWidth: 1.5, // 通常時は細く
-            hoverBorderWidth: 4 // タップ(ホバー)時は太く
-        }}));
+        
+        // 直近の日付を取得してソートし、TOP5を決める
+        const allKeys = Object.keys(dataObj);
+        const latestRank = [];
+        allKeys.forEach(key => {{
+            const arr = dataObj[key];
+            if(arr.length > 0) {{
+                const last = arr[arr.length - 1];
+                latestRank.push({{ key: key, rank: last.y }});
+            }}
+        }});
+        latestRank.sort((a,b) => a.rank - b.rank);
+        const top5 = latestRank.slice(0, 5).map(x => x.key);
+
+        const datasets = allKeys.map((key, i) => {{
+            const color = neonColors[i % neonColors.length];
+            const isTop5 = top5.includes(key);
+            return {{
+                label: key, 
+                data: dataObj[key],
+                borderColor: color,
+                backgroundColor: color, 
+                pointBackgroundColor: '#1e1e2f',
+                pointBorderColor: color,
+                pointRadius: 4, 
+                pointHoverRadius: 8, 
+                tension: 0.3, 
+                fill: false, 
+                borderWidth: 2,
+                hidden: !isTop5 // 初期表示はTop5のみ
+            }};
+        }});
 
         charts[type] = new Chart(ctx, {{
             type: 'line', 
@@ -616,85 +648,126 @@ html_content = f"""
             options: {{
                 responsive: true, 
                 maintainAspectRatio: false,
-                layout: {{
-                    padding: {{ top: 30, bottom: 20, left: 10, right: 30 }} // ★余白調整
-                }},
-                interaction: {{
-                    mode: 'nearest', // ★1点集中モード（一番近い線だけ反応）
-                    axis: 'x',
-                    intersect: true
+                layout: {{ padding: {{ top: 20, bottom: 10, left: 10, right: 30 }} }},
+                interaction: {{ mode: 'dataset', intersect: false }}, // 線全体に反応
+                onClick: (e, activeEls, chart) => {{
+                    // クリック時のフォーカス処理
+                    if(activeEls.length > 0) {{
+                        const datasetIndex = activeEls[0].datasetIndex;
+                        chart.data.datasets.forEach((ds, idx) => {{
+                            if(idx === datasetIndex) {{
+                                ds.borderColor = ds.backgroundColor; // 元の色
+                                ds.borderWidth = 4;
+                                ds.pointRadius = 6;
+                                ds.order = -1; // 最前面へ
+                            }} else {{
+                                ds.borderColor = 'rgba(100,100,100,0.2)'; // グレーアウト
+                                ds.borderWidth = 1;
+                                ds.pointRadius = 0; // 点を消す
+                                ds.order = 1;
+                            }}
+                        }});
+                    }} else {{
+                        // 何もないところをクリックで全復帰
+                        chart.data.datasets.forEach((ds, i) => {{
+                            const color = neonColors[i % neonColors.length];
+                            ds.borderColor = color;
+                            ds.borderWidth = 2;
+                            ds.pointRadius = 4;
+                        }});
+                    }}
+                    chart.update();
                 }},
                 scales: {{
                     y: {{ 
                         reverse: true, 
-                        min: 0.8, // ★1位の上に余白を作る
-                        max: 20.2, 
-                        ticks: {{ stepSize: 1 }}, 
-                        title: {{ display: true, text: '順位' }},
-                        grid: {{ display: true, drawBorder: false }}
+                        min: 0, // 1位の上に余白を作る
+                        max: 21, 
+                        ticks: {{ stepSize: 1, color: '#888', callback: function(val) {{ return (val < 1 || val > 20) ? '' : val; }} }}, 
+                        grid: {{ color: '#2b3553', drawBorder: false }}
                     }},
                     x: {{ 
                         type: 'time', 
-                        time: {{ unit: 'day', tooltipFormat: 'yyyy/MM/dd' }}, 
-                        title: {{ display: true, text: '日付' }},
-                        grid: {{ display: false }} // ★縦のグリッドを消してスッキリ
+                        time: {{ unit: 'day', displayFormats: {{ day: 'M/d' }} }}, 
+                        grid: {{ display: false }}, // 縦線なし
+                        ticks: {{ color: '#888' }}
                     }}
                 }},
                 plugins: {{
                     tooltip: {{
-                        backgroundColor: 'rgba(255, 255, 255, 0.9)', // 明るい背景
-                        titleColor: '#2c3e50',
-                        bodyColor: '#333',
-                        borderColor: '#ccc',
+                        backgroundColor: 'rgba(30, 30, 47, 0.9)',
+                        titleColor: '#fff',
+                        bodyColor: '#00f2c3',
+                        borderColor: '#e14eca',
                         borderWidth: 1,
-                        displayColors: true,
+                        displayColors: false,
                         callbacks: {{
-                            // タイトルに曲名を表示
-                            title: function(context) {{
-                                if (context.length > 0) {{
-                                    return context[0].dataset.label;
-                                }}
-                                return '';
-                            }},
-                            // 本文は「日付」と「順位」だけシンプルに
-                            label: function(context) {{
-                                const date = context.label; // x軸の日付
-                                const rank = context.parsed.y;
-                                return date + ': ' + rank + '位';
-                            }}
+                            title: function(context) {{ return context[0].dataset.label; }},
+                            label: function(context) {{ return context.label + ': ' + context.parsed.y + '位'; }}
                         }}
                     }},
                     legend: {{ 
                         position: 'bottom', 
-                        labels: {{ boxWidth: 10, font: {{ size: 10 }} }},
-                        // 凡例クリック時の挙動はデフォルト（表示/非表示）
+                        labels: {{ boxWidth: 10, font: {{ size: 11 }}, color: '#aaa', padding: 20 }},
+                        onClick: function(e, legendItem, legend) {{
+                            const index = legendItem.datasetIndex;
+                            const ci = legend.chart;
+                            if (ci.isDatasetVisible(index)) {{
+                                ci.hide(index);
+                                legendItem.hidden = true;
+                            }} else {{
+                                ci.show(index);
+                                legendItem.hidden = false;
+                            }}
+                        }}
                     }}
                 }}
             }}
         }});
     }}
 
+    function resetGraph(type) {{
+        if(charts[type]) {{
+            charts[type].destroy();
+            charts[type] = null;
+        }}
+        const id = type === 'count' ? 'rankingChartCount' : 'rankingChartUser';
+        const data = type === 'count' ? dataCount : dataUser;
+        initChart(type, data, id);
+    }}
+
+    // PDF保存 (背景色対策)
     function downloadGraphPDF() {{
         const isCount = document.getElementById('graph_view_count').classList.contains('active');
         const id = isCount ? 'rankingChartCount' : 'rankingChartUser';
         const title = isCount ? "2026年冬アニメ 歌唱数ランキング推移" : "2026年冬アニメ 歌唱人数ランキング推移";
         const canvas = document.getElementById(id);
+        
+        // 黒背景でCanvasを再描画
         const w = canvas.width, h = canvas.height;
         const newC = document.createElement('canvas'); newC.width=w; newC.height=h;
-        const ctx = newC.getContext('2d'); ctx.fillStyle="#fff"; ctx.fillRect(0,0,w,h); ctx.drawImage(canvas,0,0);
+        const ctx = newC.getContext('2d'); 
+        ctx.fillStyle="#1e1e2f"; // Dark BG
+        ctx.fillRect(0,0,w,h); 
+        ctx.drawImage(canvas,0,0);
+        
         const pdf = new jsPDF({{ orientation: 'landscape' }});
         const ratio = Math.min(pdf.internal.pageSize.getWidth()/w, pdf.internal.pageSize.getHeight()/h)*0.9;
+        pdf.setFillColor(30, 30, 47);
+        pdf.rect(0, 0, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight(), 'F'); // PDF全体背景
+        pdf.setTextColor(255, 255, 255);
         pdf.text(title, 10, 10);
         pdf.addImage(newC.toDataURL('image/jpeg',1.0), 'JPEG', 10, 15, w*ratio, h*ratio);
         pdf.save("ranking_graph.pdf");
     }}
 
-    // --- タブ制御 ---
+    // タブ制御
     function openTab(name, btn) {{
         document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
         document.getElementById(name).classList.add('active');
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         if(btn) btn.classList.add('active');
+        else if(name==='setlist') document.querySelectorAll('.tab-btn')[0].classList.add('active');
         
         document.querySelectorAll('.ctrl-group').forEach(c => c.classList.remove('active'));
         if(name==='setlist') document.getElementById('ctrl-setlist').classList.add('active');
@@ -710,128 +783,35 @@ html_content = f"""
             initChart('user', dataUser, 'rankingChartUser');
         }}
     }}
-
-    function onRankingClick(row) {{
-        if (window.getSelection().toString().length > 0) return;
-        const rawHref = row.getAttribute('data-href');
-        if (rawHref && rawHref.startsWith('#host')) {{
-            const url = rawHref.replace('#host', host);
-            window.location.href = url;
-        }}
+    
+    // その他共通関数
+    function toggleCategory(h) {{ h.nextElementSibling.classList.toggle('collapsed'); }}
+    function downloadHTML(id, fn, t) {{
+        const c = document.getElementById(id).innerHTML;
+        const b = new Blob([`<html><head><title>${{t}}</title><style>table{{width:100%;border-collapse:collapse}}th,td{{border:1px solid #ccc;padding:5px}}th{{background:#2c3e50;color:#fff}}.rank-badge{{display:inline-block;width:20px;background:#999;color:#fff;border-radius:50%;text-align:center}}.rank-1{{background:#f1c40f}}.category-header{{background:#667eea;color:#fff;padding:5px;margin-top:20px}}</style></head><body><h1>${{t}}</h1>${{c}}</body></html>`], {{type:'text/html'}});
+        const l = document.createElement('a'); l.href=URL.createObjectURL(b); l.download=fn; l.click();
     }}
-
-    document.addEventListener('DOMContentLoaded', () => {{
-        document.querySelectorAll('a.export-link').forEach(link => {{
-            const rawHref = link.getAttribute('href');
-            if (rawHref && rawHref.startsWith('#host')) {{
-                link.href = rawHref.replace('#host', host);
-            }}
-        }});
-        // 初期タブセット（ボタンがない場合用）
-        if(document.querySelector('.tab-btn.active') === null) {{
-             openTab('setlist', document.querySelectorAll('.tab-btn')[0]);
-        }}
-    }});
-
-    function toggleCategory(header) {{
-        const content = header.nextElementSibling;
-        content.classList.toggle('collapsed');
-        const icon = header.querySelector('i');
-        if(icon) {{
-            icon.className = content.classList.contains('collapsed') ? 'fas fa-chevron-right' : 'fas fa-chevron-down';
-            icon.style.float = 'right';
-        }}
-    }}
-
-    function downloadHTML(elementId, filename, title) {{
-        const element = document.getElementById(elementId);
-        const htmlContent = element.innerHTML;
-        generateDownload(htmlContent, filename, title);
-    }}
-    function downloadList(elementId, filename, title) {{
-        const element = document.getElementById(elementId);
-        if(element) {{
-            const htmlContent = element.innerHTML;
-            generateDownload(htmlContent, filename, title);
-        }}
-    }}
-
-    function generateDownload(content, filename, title) {{
-        const fullHtml = `
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-<meta charset="UTF-8"><title>${{title}}</title>
-<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-<style>
-body {{ font-family: "Helvetica Neue", Arial, sans-serif; font-size: 13px; color: #333; }}
-table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; }}
-th, td {{ border: 1px solid #ccc; padding: 5px 8px; text-align: left; vertical-align: middle; }}
-th {{ background-color: #2c3e50; color: #fff; }}
-td[rowspan] {{ background-color: #fff; }}
-.category-header {{ background: #667eea; color: white; padding: 10px; margin-top: 20px; font-weight: bold; border-radius: 4px; }}
-.category-content {{ display: block; }}
-a.export-link {{ display: block; color: #333; text-decoration: none; }}
-.bar-chart {{ height: 10px; background: #3498db; border-radius: 5px; }}
-.bar-chart-user {{ height: 10px; background: #2ecc71; border-radius: 5px; }}
-.rank-badge {{ display: inline-block; width: 24px; height: 24px; line-height: 24px; border-radius: 50%; text-align: center; color: #fff; font-weight: bold; background-color: #95a5a6; }}
-.rank-1 {{ background-color: #f1c40f; }} .rank-2 {{ background-color: #bdc3c7; }} .rank-3 {{ background-color: #d35400; }}
-</style>
-</head><body><h1>${{title}}</h1>${{content}}</body></html>`;
-        const blob = new Blob([fullHtml], {{type: 'text/html'}});
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = filename;
-        link.click();
-    }}
-
-    // 検索・ソート機能
+    function downloadList(id, fn, t) {{ if(document.getElementById(id)) downloadHTML(id, fn, t); }}
     const searchInput = document.getElementById("searchInput");
     const table = document.getElementById("setlistTable");
     const countDisplay = document.getElementById('countDisplay');
-    let tableData = [], tbodyRows = [];
-
-    window.addEventListener('DOMContentLoaded', () => {{
-        const tbody = table.tBodies[0];
-        if (tbody) {{
-            tbodyRows = Array.from(tbody.rows);
-            tableData = tbodyRows.map(row => row.innerText.toUpperCase());
-            countDisplay.innerText = '全 ' + tbodyRows.length + ' 件';
-        }}
-    }});
-
-    searchInput.addEventListener("keyup", function(event) {{ if (event.key === "Enter") performSearch(); }});
+    let tbodyRows = [];
+    window.onload = () => {{ if(table.tBodies[0]) {{ tbodyRows = Array.from(table.tBodies[0].rows); countDisplay.innerText = tbodyRows.length + ' Total'; }} }};
     function performSearch() {{
-        const filter = searchInput.value.toUpperCase();
-        const keywords = filter.replace(/　/g, " ").split(" ").filter(k => k.length > 0);
-        let visibleCount = 0;
-        const total = tableData.length;
-        for (let i = 0; i < total; i++) {{
-            let isMatch = true;
-            const rowText = tableData[i];
-            for (let k = 0; k < keywords.length; k++) {{
-                if (rowText.indexOf(keywords[k]) === -1) {{ isMatch = false; break; }}
-            }}
-            if (isMatch || keywords.length === 0) {{ tbodyRows[i].classList.remove('hidden'); visibleCount++; }} 
-            else {{ tbodyRows[i].classList.add('hidden'); }}
-        }}
-        countDisplay.innerText = '表示: ' + visibleCount + ' / ' + total;
+        const k = searchInput.value.toUpperCase().replace(/　/g," ").split(" ").filter(s=>s);
+        let c=0; tbodyRows.forEach(r => {{ const m = k.every(w => r.innerText.toUpperCase().includes(w)); r.classList.toggle('hidden', !m); if(m) c++; }});
+        countDisplay.innerText = c + ' / ' + tbodyRows.length;
     }}
-    function resetFilter() {{ searchInput.value = ""; performSearch(); }}
+    function resetFilter() {{ searchInput.value=""; performSearch(); }}
     function sortTable(n) {{
-        const tbody = table.tBodies[0];
-        const rows = Array.from(tbody.rows);
-        const th = table.querySelectorAll('th')[n];
-        let dir = th.getAttribute('data-dir') === 'asc' ? 'desc' : 'asc';
-        table.querySelectorAll('th').forEach(h => h.setAttribute('data-dir', ''));
-        th.setAttribute('data-dir', dir);
-        rows.sort((a, b) => {{
-            const valA = a.cells[n].innerText.trim();
-            const valB = b.cells[n].innerText.trim();
-            if (!isNaN(valA) && !isNaN(valB) && valA!=='' && valB!=='') return dir === 'asc' ? valA - valB : valB - valA;
-            return dir === 'asc' ? valA.localeCompare(valB,'ja') : valB.localeCompare(valA,'ja');
+        const tb = table.tBodies[0], r = Array.from(tb.rows), th = table.querySelectorAll('th')[n];
+        const d = th.getAttribute('data-d')==='a'?'d':'a';
+        table.querySelectorAll('th').forEach(h=>h.setAttribute('data-d','')); th.setAttribute('data-d',d);
+        r.sort((a,b) => {{
+            const x=a.cells[n].innerText.trim(), y=b.cells[n].innerText.trim();
+            return d==='a' ? (isNaN(x)?x.localeCompare(y,'ja'):x-y) : (isNaN(x)?y.localeCompare(x,'ja'):y-x);
         }});
-        rows.forEach(row => tbody.appendChild(row));
+        r.forEach(x=>tb.appendChild(x));
     }}
 </script>
 </body>
