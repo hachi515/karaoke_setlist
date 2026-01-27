@@ -6,6 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Karaoke Dashboard</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         :root {
             --primary-color: #2c3e50;
@@ -25,16 +28,8 @@
             display: flex; flex-direction: column;
         }
 
-        a.export-link {
-            color: inherit;
-            text-decoration: none;
-            pointer-events: none;
-            cursor: default;
-        }
-
-        tr.ranking-row {
-            cursor: default; 
-        }
+        a.export-link { color: inherit; text-decoration: none; pointer-events: none; cursor: default; }
+        tr.ranking-row { cursor: default; }
         
         th, td {
             padding: 5px 8px; text-align: left; border-bottom: 1px solid #eee;
@@ -46,10 +41,8 @@
         }
 
         .top-section {
-            flex: 0 0 auto;
-            background-color: var(--header-bg);
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            z-index: 100;
+            flex: 0 0 auto; background-color: var(--header-bg);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1); z-index: 100;
         }
         .header-inner {
             padding: 8px 15px; display: flex; justify-content: space-between; align-items: center;
@@ -57,9 +50,7 @@
         h1 { margin: 0; font-size: 1.2rem; color: var(--primary-color); }
         .update-time { font-size: 0.8rem; color: #7f8c8d; }
 
-        .tabs {
-            display: flex; padding: 0 15px; border-bottom: 1px solid var(--border-color);
-        }
+        .tabs { display: flex; padding: 0 15px; border-bottom: 1px solid var(--border-color); }
         .tab-btn {
             padding: 10px 20px; cursor: pointer; border: none; background: none;
             font-weight: bold; color: #7f8c8d; border-bottom: 3px solid transparent;
@@ -70,9 +61,7 @@
         .controls-row {
             padding: 8px 15px; display: flex; gap: 8px; align-items: center;
             background-color: #fff; border-bottom: 1px solid var(--border-color);
-            height: 40px; 
-            flex-wrap: nowrap;
-            overflow-x: auto;
+            height: 40px; flex-wrap: nowrap; overflow-x: auto;
         }
         .search-box {
             padding: 6px 12px; border: 1px solid #ccc; border-radius: 4px;
@@ -88,18 +77,15 @@
         .btn-list { background-color: #9b59b6; font-size: 12px; }
         .count-display { margin-left: auto; font-weight: bold; font-size: 13px; }
 
-        .ctrl-setlist { display: flex; width: 100%; align-items: center; gap:8px; }
-        .ctrl-analysis { display: none; width: 100%; align-items: center; justify-content: flex-end; gap:5px; }
-        .ctrl-ranking { display: none; width: 100%; align-items: center; justify-content: flex-end; }
+        .ctrl-group { display: none; width: 100%; align-items: center; gap:8px; }
+        .ctrl-group.active { display: flex; }
+        .ctrl-right { margin-left: auto; display: flex; gap: 8px; }
 
-        .content-area {
-            flex: 1; position: relative; overflow: hidden; 
-        }
+        .content-area { flex: 1; position: relative; overflow: hidden; }
         .tab-content {
             display: none; position: absolute; 
             top: 0; left: 0; right: 0; bottom: 0;
-            overflow-y: auto; 
-            -webkit-overflow-scrolling: touch;
+            overflow-y: auto; -webkit-overflow-scrolling: touch;
             padding: 0 15px 40px 15px;
         }
         .tab-content.active { display: block; }
@@ -125,26 +111,11 @@
         .category-content.collapsed { display: none; }
         
         tr.has-count { background-color: #fff; color: #333; }
-        
         .count-wrapper { display: flex; align-items: center; gap: 8px; }
         .count-num { width: 25px; text-align: right; font-size:1.1rem; }
-        .bar-chart {
-            height: 10px; background: linear-gradient(90deg, #3498db, #2980b9);
-            border-radius: 5px;
-        }
-
-        /* ★追加: ユーザー数グラフ用CSS */
-        .bar-chart-user {
-            height: 10px; background: linear-gradient(90deg, #2ecc71, #27ae60);
-            border-radius: 5px;
-        }
-
-        td[rowspan] {
-            background-color: #fff;
-            border-right: 1px solid #eee;
-            vertical-align: middle;
-            font-weight: normal; color: inherit;      
-        }
+        .bar-chart { height: 10px; background: linear-gradient(90deg, #3498db, #2980b9); border-radius: 5px; }
+        .bar-chart-user { height: 10px; background: linear-gradient(90deg, #2ecc71, #27ae60); border-radius: 5px; }
+        td[rowspan] { background-color: #fff; border-right: 1px solid #eee; vertical-align: middle; font-weight: normal; color: inherit; }
 
         .rank-badge {
             display: inline-block; width: 24px; height: 24px; line-height: 24px;
@@ -154,42 +125,52 @@
         .rank-1 { background-color: #f1c40f; width: 28px; height: 28px; line-height: 28px; }
         .rank-2 { background-color: #bdc3c7; }
         .rank-3 { background-color: #d35400; }
-        
-        /* ★追加: ランキング上位の行背景色 */
-        tr.rank-row-1 td { background-color: #fff8e1 !important; } /* 淡いゴールド */
-        tr.rank-row-2 td { background-color: #f5f5f5 !important; } /* 淡いシルバー */
-        tr.rank-row-3 td { background-color: #fff0e6 !important; } /* 淡いブロンズ */
-
-        /* ヘッダー色と衝突しないように調整 */
+        tr.rank-row-1 td { background-color: #fff8e1 !important; }
+        tr.rank-row-2 td { background-color: #f5f5f5 !important; }
+        tr.rank-row-3 td { background-color: #fff0e6 !important; }
         .rankingTable tr:nth-child(1) th { background-color: var(--primary-color) !important; color: #fff !important; }
 
+        /* グラフ用コンテナ */
+        .chart-wrapper {
+            background: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-top: 15px;
+            height: 75vh;
+            display: flex;
+            flex-direction: column;
+        }
+        /* 詳細情報固定表示エリア */
+        .chart-info {
+            height: 35px;
+            line-height: 35px;
+            text-align: center;
+            font-weight: bold;
+            color: #2c3e50;
+            background: #f1f3f5;
+            border: 1px solid #e0e0e0;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .canvas-container {
+            flex: 1;
+            position: relative;
+            min-height: 0;
+        }
+
         @media print {
-            * {
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-                color-adjust: exact !important;
-            }
-            body {
-                overflow: visible !important;
-                height: auto !important;
-                display: block !important;
-            }
+            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            body { overflow: visible !important; height: auto !important; display: block !important; }
             .top-section { display: none !important; }
             .content-area { overflow: visible !important; position: static !important; }
-            .tab-content { 
-                position: static !important; 
-                display: block !important; 
-                overflow: visible !important; 
-                padding: 0 !important;
-            }
+            .tab-content { position: static !important; display: block !important; overflow: visible !important; padding: 0 !important; }
             .category-content { display: block !important; }
-            
-            tbody.anime-group {
-                break-inside: avoid;
-                page-break-inside: avoid;
-            }
+            tbody.anime-group { break-inside: avoid; page-break-inside: avoid; }
             .category-header { page-break-after: avoid; }
             thead { display: table-header-group; }
+            .chart-wrapper { height: auto; }
         }
     </style>
 </head>
@@ -197,31 +178,44 @@
     <div class="top-section">
         <div class="header-inner">
             <h1>Karaoke Dashboard</h1>
-            <div class="update-time">2026/01/27 23:43 更新</div>
+            <div class="update-time">2026/01/28 00:03 更新</div>
         </div>
         <div class="tabs">
-            <button class="tab-btn active" onclick="openTab('setlist')">セットリスト</button>
-            <button class="tab-btn" onclick="openTab('analysis')">クール集計</button>
-            <button class="tab-btn" onclick="openTab('ranking_count')">歌唱数ランキング</button>
-            <button class="tab-btn" onclick="openTab('ranking_user')">歌唱人数ランキング</button>
+            <button class="tab-btn active" onclick="openTab('setlist', this)">セットリスト</button>
+            <button class="tab-btn" onclick="openTab('analysis', this)">クール集計</button>
+            <button class="tab-btn" onclick="openTab('ranking_count', this)">歌唱数ランキング</button>
+            <button class="tab-btn" onclick="openTab('ranking_user', this)">歌唱人数ランキング</button>
+            <button class="tab-btn" onclick="openTab('graph_view_count', this)">推移(数)</button>
+            <button class="tab-btn" onclick="openTab('graph_view_user', this)">推移(人)</button>
         </div>
         <div class="controls-row">
-            <div id="ctrl-setlist" class="ctrl-setlist">
+            <div id="ctrl-setlist" class="ctrl-group active">
                 <input type="text" id="searchInput" class="search-box" placeholder="キーワード (例: 曲名 歌手)...">
                 <button onclick="performSearch()" class="btn"><i class="fas fa-search"></i> 検索</button>
                 <button onclick="resetFilter()" class="btn" style="background:#95a5a6"><i class="fas fa-undo"></i></button>
                 <div class="count-display" id="countDisplay">読み込み中...</div>
             </div>
-            <div id="ctrl-analysis" class="ctrl-analysis">
-                <button onclick="downloadList('list-created-content', 'created_list.html', '作成済みリスト')" class="btn btn-list">作成リスト保存</button>
-                <button onclick="downloadList('list-uncreated-content', 'uncreated_list.html', '未作成リスト')" class="btn btn-list" style="background-color:#e74c3c;">未作成リスト保存</button>
-                <button onclick="downloadHTML()" class="btn btn-dl" style="margin-left:10px;"><i class="fas fa-file-code"></i> HTML保存</button>
+            <div id="ctrl-analysis" class="ctrl-group">
+                <div class="ctrl-right">
+                    <button onclick="downloadList('list-created-content', 'created_list.html', '作成済みリスト')" class="btn btn-list">作成リスト保存</button>
+                    <button onclick="downloadList('list-uncreated-content', 'uncreated_list.html', '未作成リスト')" class="btn btn-list" style="background-color:#e74c3c;">未作成リスト保存</button>
+                    <button onclick="downloadHTML('print-target', 'karaoke_analysis.html', 'クール集計結果')" class="btn btn-dl" style="margin-left:10px;"><i class="fas fa-file-code"></i> HTML保存</button>
+                </div>
             </div>
-            <div id="ctrl-ranking-count" class="ctrl-ranking">
-                <button onclick="downloadRanking('count')" class="btn btn-dl"><i class="fas fa-trophy"></i> 歌唱数ランキング保存</button>
+            <div id="ctrl-ranking-count" class="ctrl-group">
+                <div class="ctrl-right">
+                    <button onclick="downloadHTML('ranking-count-print-target', 'karaoke_ranking_count.html', '歌唱数ランキング')" class="btn btn-dl"><i class="fas fa-trophy"></i> 歌唱数ランキング保存</button>
+                </div>
             </div>
-            <div id="ctrl-ranking-user" class="ctrl-ranking">
-                <button onclick="downloadRanking('user')" class="btn btn-dl"><i class="fas fa-users"></i> 歌唱人数ランキング保存</button>
+            <div id="ctrl-ranking-user" class="ctrl-group">
+                <div class="ctrl-right">
+                    <button onclick="downloadHTML('ranking-user-print-target', 'karaoke_ranking_user.html', '歌唱人数ランキング')" class="btn btn-dl"><i class="fas fa-users"></i> 歌唱人数ランキング保存</button>
+                </div>
+            </div>
+            <div id="ctrl-graph" class="ctrl-group">
+                <div class="ctrl-right">
+                    <button onclick="downloadGraphPDF()" class="btn btn-dl" style="background-color:#e67e22;"><i class="fas fa-file-pdf"></i> PDF保存</button>
+                </div>
             </div>
         </div>
     </div>
@@ -307,7 +301,7 @@
                             </tr>
                             
                             <tr class="has-count ranking-row rank-row-2" data-href="#host/search.php?searchword=魔術師クノンは見えている ラケナリアの夢" onclick="onRankingClick(this)">
-                                <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-2">2</span> <i class="fas fa-medal" style="color:#C0C0C0;"></i></td>
+                                <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-2">2</span></td>
                                 <td>魔術師クノンは見えている <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>ラケナリアの夢</td> <td>ヰ世界情緒</td>
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">8</span><div class="bar-chart-user" style="width:100px;"></div></div></td>
@@ -315,7 +309,7 @@
                             </tr>
                             
                             <tr class="has-count ranking-row rank-row-3" data-href="#host/search.php?searchword=ダーウィン事変 Make Me Wonder" onclick="onRankingClick(this)">
-                                <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-3">3</span> <i class="fas fa-medal" style="color:#CD7F32;"></i></td>
+                                <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-3">3</span></td>
                                 <td>ダーウィン事変 <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>Make Me Wonder</td> <td>Official髭男dism</td>
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">7</span><div class="bar-chart-user" style="width:100px;"></div></div></td>
@@ -323,7 +317,7 @@
                             </tr>
                             
                             <tr class="has-count ranking-row rank-row-3" data-href="#host/search.php?searchword=綺麗にしてもらえますか。 若葉のころ" onclick="onRankingClick(this)">
-                                <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-3">3</span> <i class="fas fa-medal" style="color:#CD7F32;"></i></td>
+                                <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-3">3</span></td>
                                 <td>綺麗にしてもらえますか。 <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>若葉のころ</td> <td>清浦夏実</td>
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">7</span><div class="bar-chart-user" style="width:100px;"></div></div></td>
@@ -485,7 +479,7 @@
                             </tr>
                             
                             <tr class="has-count ranking-row rank-row-2" data-href="#host/search.php?searchword=僕のヒーローアカデミア I" onclick="onRankingClick(this)">
-                                <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-2">2</span> <i class="fas fa-medal" style="color:#C0C0C0;"></i></td>
+                                <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-2">2</span></td>
                                 <td>僕のヒーローアカデミア(FINAL SEASON) <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>I</td> <td>BUMP OF CHICKEN</td>
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">5</span><div class="bar-chart-user" style="width:100px;"></div></div></td>
@@ -493,7 +487,7 @@
                             </tr>
                             
                             <tr class="has-count ranking-row rank-row-2" data-href="#host/search.php?searchword=かくりよの宿飯 涙のレシピ" onclick="onRankingClick(this)">
-                                <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-2">2</span> <i class="fas fa-medal" style="color:#C0C0C0;"></i></td>
+                                <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-2">2</span></td>
                                 <td>かくりよの宿飯(弐) <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>涙のレシピ</td> <td>東山奈央</td>
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">4</span><div class="bar-chart-user" style="width:80px;"></div></div></td>
@@ -501,7 +495,7 @@
                             </tr>
                             
                             <tr class="has-count ranking-row rank-row-2" data-href="#host/search.php?searchword=かくりよの宿飯 涙のレシピ×ひと匙の光" onclick="onRankingClick(this)">
-                                <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-2">2</span> <i class="fas fa-medal" style="color:#C0C0C0;"></i></td>
+                                <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-2">2</span></td>
                                 <td>かくりよの宿飯(弐) <span style="font-size:0.8em; color:#777;">(ED2)</span></td>
                                 <td>涙のレシピ×ひと匙の光</td> <td>津場木葵(CV.東山奈央)大旦那(CV.小西克幸)</td>
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">4</span><div class="bar-chart-user" style="width:80px;"></div></div></td>
@@ -782,7 +776,7 @@
                             </tr>
                             
                             <tr class="has-count ranking-row rank-row-2" data-href="#host/search.php?searchword=魔術師クノンは見えている ラケナリアの夢" onclick="onRankingClick(this)">
-                                <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-2">2</span> <i class="fas fa-medal" style="color:#C0C0C0;"></i></td>
+                                <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-2">2</span></td>
                                 <td>魔術師クノンは見えている <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>ラケナリアの夢</td> <td>ヰ世界情緒</td>
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">8</span><div class="bar-chart-user" style="width:100px;"></div></div></td>
@@ -790,7 +784,7 @@
                             </tr>
                             
                             <tr class="has-count ranking-row rank-row-2" data-href="#host/search.php?searchword=かぐや様は告らせたい 大人への階段 アブナイキオク" onclick="onRankingClick(this)">
-                                <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-2">2</span> <i class="fas fa-medal" style="color:#C0C0C0;"></i></td>
+                                <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-2">2</span></td>
                                 <td>かぐや様は告らせたい 大人への階段 <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>アブナイキオク</td> <td>鈴木雅之 feat.古賀葵</td>
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">8</span><div class="bar-chart-user" style="width:100px;"></div></div></td>
@@ -1024,7 +1018,7 @@
                             </tr>
                             
                             <tr class="has-count ranking-row rank-row-2" data-href="#host/search.php?searchword=私を喰べたい、ひとでなし 贄-nie-" onclick="onRankingClick(this)">
-                                <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-2">2</span> <i class="fas fa-medal" style="color:#C0C0C0;"></i></td>
+                                <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-2">2</span></td>
                                 <td>私を喰べたい、ひとでなし <span style="font-size:0.8em; color:#777;">(OP)</span></td>
                                 <td>贄-nie-</td> <td>吉乃</td>
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">6</span><div class="bar-chart-user" style="width:100px;"></div></div></td>
@@ -1032,7 +1026,7 @@
                             </tr>
                             
                             <tr class="has-count ranking-row rank-row-3" data-href="#host/search.php?searchword=僕のヒーローアカデミア I" onclick="onRankingClick(this)">
-                                <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-3">3</span> <i class="fas fa-medal" style="color:#CD7F32;"></i></td>
+                                <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-3">3</span></td>
                                 <td>僕のヒーローアカデミア(FINAL SEASON) <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>I</td> <td>BUMP OF CHICKEN</td>
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">5</span><div class="bar-chart-user" style="width:100px;"></div></div></td>
@@ -1040,7 +1034,7 @@
                             </tr>
                             
                             <tr class="has-count ranking-row rank-row-3" data-href="#host/search.php?searchword=異世界かるてっと３ 君色、僕色" onclick="onRankingClick(this)">
-                                <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-3">3</span> <i class="fas fa-medal" style="color:#CD7F32;"></i></td>
+                                <td align="center" style="font-weight:bold; font-size:1.1rem;"><span class="rank-badge rank-3">3</span></td>
                                 <td>異世界かるてっと３ <span style="font-size:0.8em; color:#777;">(ED)</span></td>
                                 <td>君色、僕色</td> <td>鈴木このみ 伊東歌詞太郎</td>
                                 <td class="count-cell"><div class="count-wrapper"><span class="count-num">5</span><div class="bar-chart-user" style="width:100px;"></div></div></td>
@@ -1241,6 +1235,21 @@
                             </tbody></table></div></div>
             </div>
         </div>
+
+        <div id="graph_view_count" class="tab-content">
+            <div class="category-header">2026年冬アニメ 歌唱数ランキング推移 (Top 20)</div>
+            <div class="chart-wrapper">
+                <div id="chart-info-count" class="chart-info">グラフの点をタップ・ホバーで詳細を表示</div>
+                <div class="canvas-container"><canvas id="rankingChartCount"></canvas></div>
+            </div>
+        </div>
+        <div id="graph_view_user" class="tab-content">
+            <div class="category-header">2026年冬アニメ 歌唱人数ランキング推移 (Top 20)</div>
+            <div class="chart-wrapper">
+                <div id="chart-info-user" class="chart-info">グラフの点をタップ・ホバーで詳細を表示</div>
+                <div class="canvas-container"><canvas id="rankingChartUser"></canvas></div>
+            </div>
+        </div>
     </div>
 
     <div id="list-created-content" style="display:none;">
@@ -1307,258 +1316,228 @@
     <tbody class="anime-group"><tr><td rowspan="1">ワンパンマン(第3期)</td><td align="center"><a href="#host/search.php?searchword=ワンパンマン Get No Satisfied !" class="export-link">OP</a></td><td><a href="#host/search.php?searchword=ワンパンマン Get No Satisfied !" class="export-link">JAM Project feat.BABYMETAL</a></td><td><a href="#host/search.php?searchword=ワンパンマン Get No Satisfied !" class="export-link">Get No Satisfied !</a></td></tr></tbody><tbody class="anime-group"><tr><td rowspan="1">破産富豪(The Richest Man in GAME)</td><td align="center"><a href="#host/search.php?searchword=破産富豪 Empty Heart" class="export-link">OP</a></td><td><a href="#host/search.php?searchword=破産富豪 Empty Heart" class="export-link">いれいす</a></td><td><a href="#host/search.php?searchword=破産富豪 Empty Heart" class="export-link">Empty Heart</a></td></tr></tbody><tbody class="anime-group"><tr><td rowspan="1">龍族Ⅱ -The Mourner's Eyes-</td><td align="center"><a href="#host/search.php?searchword=龍族Ⅱ -The Mourner's Eyes- WE ARE MADE" class="export-link">OP</a></td><td><a href="#host/search.php?searchword=龍族Ⅱ -The Mourner's Eyes- WE ARE MADE" class="export-link">Hazel Fernandes</a></td><td><a href="#host/search.php?searchword=龍族Ⅱ -The Mourner's Eyes- WE ARE MADE" class="export-link">WE ARE MADE</a></td></tr></tbody></table></div></div></div>
 
 <script>
-    function onRankingClick(row) {
+    const host = 'http://ykr.moe:11059';
+    const dataCount = {"かぐや様は告らせたい 大人への階段 アブナイキオク": [{"x": "2026-01-10", "y": 1}, {"x": "2026-01-11", "y": 1}, {"x": "2026-01-12", "y": 2}, {"x": "2026-01-13", "y": 5}, {"x": "2026-01-14", "y": 4}, {"x": "2026-01-17", "y": 4}, {"x": "2026-01-18", "y": 4}, {"x": "2026-01-24", "y": 6}, {"x": "2026-01-25", "y": 5}, {"x": "2026-01-26", "y": 5}], "花ざかりの君たちへ アドレナ": [{"x": "2026-01-10", "y": 2}, {"x": "2026-01-11", "y": 3}, {"x": "2026-01-12", "y": 1}, {"x": "2026-01-13", "y": 1}, {"x": "2026-01-14", "y": 1}, {"x": "2026-01-17", "y": 1}, {"x": "2026-01-18", "y": 1}, {"x": "2026-01-24", "y": 1}, {"x": "2026-01-25", "y": 1}, {"x": "2026-01-26", "y": 1}], "魔術師クノンは見えている ラケナリアの夢": [{"x": "2026-01-10", "y": 2}, {"x": "2026-01-11", "y": 1}, {"x": "2026-01-12", "y": 2}, {"x": "2026-01-13", "y": 2}, {"x": "2026-01-14", "y": 3}, {"x": "2026-01-17", "y": 2}, {"x": "2026-01-18", "y": 2}, {"x": "2026-01-24", "y": 2}, {"x": "2026-01-25", "y": 2}, {"x": "2026-01-26", "y": 2}], "幼馴染とはラブコメにならない あまのじゃく": [{"x": "2026-01-10", "y": 4}, {"x": "2026-01-11", "y": 6}, {"x": "2026-01-12", "y": 8}, {"x": "2026-01-13", "y": 9}, {"x": "2026-01-14", "y": 9}, {"x": "2026-01-17", "y": 12}, {"x": "2026-01-18", "y": 12}, {"x": "2026-01-24", "y": 15}, {"x": "2026-01-25", "y": 13}, {"x": "2026-01-26", "y": 11}], "綺麗にしてもらえますか。 若葉のころ": [{"x": "2026-01-10", "y": 4}, {"x": "2026-01-11", "y": 6}, {"x": "2026-01-12", "y": 6}, {"x": "2026-01-13", "y": 5}, {"x": "2026-01-14", "y": 6}, {"x": "2026-01-17", "y": 4}, {"x": "2026-01-18", "y": 4}, {"x": "2026-01-24", "y": 3}, {"x": "2026-01-25", "y": 3}, {"x": "2026-01-26", "y": 3}], "29歳独身中堅冒険者の日常 君が灯してくれた光を今": [{"x": "2026-01-10", "y": 4}, {"x": "2026-01-11", "y": 3}, {"x": "2026-01-12", "y": 2}, {"x": "2026-01-13", "y": 5}, {"x": "2026-01-14", "y": 6}, {"x": "2026-01-17", "y": 7}, {"x": "2026-01-18", "y": 7}, {"x": "2026-01-24", "y": 7}, {"x": "2026-01-25", "y": 10}, {"x": "2026-01-26", "y": 11}], "勇者パーティーにかわいい子がいたので、告白してみた。 Lavish!!": [{"x": "2026-01-10", "y": 4}, {"x": "2026-01-11", "y": 6}, {"x": "2026-01-12", "y": 6}, {"x": "2026-01-13", "y": 5}, {"x": "2026-01-14", "y": 6}, {"x": "2026-01-17", "y": 7}, {"x": "2026-01-18", "y": 7}, {"x": "2026-01-24", "y": 7}, {"x": "2026-01-25", "y": 6}, {"x": "2026-01-26", "y": 7}], "ダーウィン事変 Make Me Wonder": [{"x": "2026-01-11", "y": 3}, {"x": "2026-01-12", "y": 2}, {"x": "2026-01-13", "y": 2}, {"x": "2026-01-14", "y": 1}, {"x": "2026-01-17", "y": 2}, {"x": "2026-01-18", "y": 2}, {"x": "2026-01-24", "y": 3}, {"x": "2026-01-25", "y": 4}, {"x": "2026-01-26", "y": 3}], "違国日記 言伝": [{"x": "2026-01-11", "y": 9}, {"x": "2026-01-12", "y": 12}, {"x": "2026-01-13", "y": 13}, {"x": "2026-01-14", "y": 13}, {"x": "2026-01-17", "y": 12}, {"x": "2026-01-18", "y": 12}, {"x": "2026-01-24", "y": 15}, {"x": "2026-01-25", "y": 13}, {"x": "2026-01-26", "y": 14}], "「お前ごときが魔王に勝てると思うな」と勇者パーティを追放されたので、王都で気ままに暮らしたい I need": [{"x": "2026-01-11", "y": 9}, {"x": "2026-01-12", "y": 12}, {"x": "2026-01-13", "y": 13}, {"x": "2026-01-14", "y": 13}, {"x": "2026-01-17", "y": 12}, {"x": "2026-01-18", "y": 12}, {"x": "2026-01-24", "y": 19}, {"x": "2026-01-25", "y": 19}], "綺麗にしてもらえますか。 綺麗。": [{"x": "2026-01-11", "y": 9}, {"x": "2026-01-12", "y": 8}, {"x": "2026-01-13", "y": 9}, {"x": "2026-01-14", "y": 9}, {"x": "2026-01-17", "y": 7}, {"x": "2026-01-18", "y": 7}, {"x": "2026-01-24", "y": 7}, {"x": "2026-01-25", "y": 6}, {"x": "2026-01-26", "y": 7}], "シャンピニオンの魔女 魔法使いの日記": [{"x": "2026-01-11", "y": 9}, {"x": "2026-01-12", "y": 8}, {"x": "2026-01-13", "y": 4}, {"x": "2026-01-14", "y": 4}, {"x": "2026-01-17", "y": 4}, {"x": "2026-01-18", "y": 4}, {"x": "2026-01-24", "y": 5}, {"x": "2026-01-25", "y": 6}, {"x": "2026-01-26", "y": 7}], "呪術廻戦(死滅回游 前編) AIZO": [{"x": "2026-01-11", "y": 9}, {"x": "2026-01-12", "y": 12}, {"x": "2026-01-13", "y": 15}, {"x": "2026-01-14", "y": 13}, {"x": "2026-01-17", "y": 16}, {"x": "2026-01-18", "y": 16}, {"x": "2026-01-24", "y": 19}, {"x": "2026-01-25", "y": 19}], "勇者パーティを追い出された器用貧乏 シルベ": [{"x": "2026-01-11", "y": 9}, {"x": "2026-01-12", "y": 12}, {"x": "2026-01-13", "y": 9}, {"x": "2026-01-14", "y": 9}, {"x": "2026-01-17", "y": 10}, {"x": "2026-01-18", "y": 10}, {"x": "2026-01-24", "y": 15}, {"x": "2026-01-25", "y": 17}, {"x": "2026-01-26", "y": 18}], "真夜中ハートチューン 月に向かって撃て": [{"x": "2026-01-12", "y": 8}, {"x": "2026-01-13", "y": 9}, {"x": "2026-01-14", "y": 9}, {"x": "2026-01-17", "y": 10}, {"x": "2026-01-18", "y": 10}, {"x": "2026-01-24", "y": 7}, {"x": "2026-01-25", "y": 10}, {"x": "2026-01-26", "y": 11}], "魔王の娘は優しすぎる!! たのしいかくれんぼ": [{"x": "2026-01-13", "y": 15}, {"x": "2026-01-14", "y": 16}], "地獄楽(第二期) かすかなはな": [{"x": "2026-01-14", "y": 16}, {"x": "2026-01-17", "y": 16}, {"x": "2026-01-18", "y": 16}, {"x": "2026-01-24", "y": 15}, {"x": "2026-01-25", "y": 19}, {"x": "2026-01-26", "y": 18}], "人外教室の人間嫌い教師 ニンゲン": [{"x": "2026-01-14", "y": 16}, {"x": "2026-01-17", "y": 12}, {"x": "2026-01-18", "y": 12}, {"x": "2026-01-24", "y": 19}], "幼馴染とはラブコメにならない あいらびゅ♡": [{"x": "2026-01-17", "y": 16}, {"x": "2026-01-18", "y": 16}, {"x": "2026-01-24", "y": 13}, {"x": "2026-01-25", "y": 13}, {"x": "2026-01-26", "y": 14}], "【推しの子】(第3期) Bのリベンジ": [{"x": "2026-01-17", "y": 16}, {"x": "2026-01-18", "y": 16}, {"x": "2026-01-24", "y": 7}, {"x": "2026-01-25", "y": 6}, {"x": "2026-01-26", "y": 5}], "Fate/strange Fake PROVANT": [{"x": "2026-01-17", "y": 16}, {"x": "2026-01-18", "y": 16}, {"x": "2026-01-24", "y": 19}], "悪役令嬢は隣国の王太子に溺愛される 愛のファンファーレ": [{"x": "2026-01-24", "y": 7}, {"x": "2026-01-25", "y": 10}, {"x": "2026-01-26", "y": 7}], "葬送のフリーレン(第2期) The Story of Us": [{"x": "2026-01-24", "y": 13}, {"x": "2026-01-25", "y": 13}, {"x": "2026-01-26", "y": 14}], "うるわしの宵の月 うるわし": [{"x": "2026-01-24", "y": 19}, {"x": "2026-01-25", "y": 17}, {"x": "2026-01-26", "y": 14}], "不滅のあなたへ(Season3) ふめつのあなた": [{"x": "2026-01-24", "y": 19}, {"x": "2026-01-25", "y": 19}, {"x": "2026-01-26", "y": 18}], "エリスの聖杯 Happy Ever After feat. 由薫": [{"x": "2026-01-24", "y": 19}, {"x": "2026-01-25", "y": 19}], "カヤちゃんはコワくない ": [{"x": "2026-01-24", "y": 19}, {"x": "2026-01-25", "y": 19}], "悪役令嬢は隣国の王太子に溺愛される 魔法の音": [{"x": "2026-01-24", "y": 19}], "アルネの事件簿 人形の街": [{"x": "2026-01-25", "y": 19}]};
+    const dataUser = {"かぐや様は告らせたい 大人への階段 アブナイキオク": [{"x": "2026-01-10", "y": 1}, {"x": "2026-01-11", "y": 1}, {"x": "2026-01-12", "y": 2}, {"x": "2026-01-13", "y": 3}, {"x": "2026-01-14", "y": 4}, {"x": "2026-01-17", "y": 2}, {"x": "2026-01-18", "y": 2}, {"x": "2026-01-24", "y": 2}, {"x": "2026-01-25", "y": 2}, {"x": "2026-01-26", "y": 2}], "花ざかりの君たちへ アドレナ": [{"x": "2026-01-10", "y": 2}, {"x": "2026-01-11", "y": 3}, {"x": "2026-01-12", "y": 1}, {"x": "2026-01-13", "y": 1}, {"x": "2026-01-14", "y": 1}, {"x": "2026-01-17", "y": 1}, {"x": "2026-01-18", "y": 1}, {"x": "2026-01-24", "y": 1}, {"x": "2026-01-25", "y": 1}, {"x": "2026-01-26", "y": 1}], "魔術師クノンは見えている ラケナリアの夢": [{"x": "2026-01-10", "y": 2}, {"x": "2026-01-11", "y": 1}, {"x": "2026-01-12", "y": 2}, {"x": "2026-01-13", "y": 2}, {"x": "2026-01-14", "y": 2}, {"x": "2026-01-17", "y": 2}, {"x": "2026-01-18", "y": 2}, {"x": "2026-01-24", "y": 2}, {"x": "2026-01-25", "y": 2}, {"x": "2026-01-26", "y": 2}], "幼馴染とはラブコメにならない あまのじゃく": [{"x": "2026-01-10", "y": 4}, {"x": "2026-01-11", "y": 6}, {"x": "2026-01-12", "y": 8}, {"x": "2026-01-13", "y": 9}, {"x": "2026-01-14", "y": 9}, {"x": "2026-01-17", "y": 12}, {"x": "2026-01-18", "y": 10}, {"x": "2026-01-24", "y": 19}, {"x": "2026-01-25", "y": 15}, {"x": "2026-01-26", "y": 11}], "綺麗にしてもらえますか。 若葉のころ": [{"x": "2026-01-10", "y": 4}, {"x": "2026-01-11", "y": 6}, {"x": "2026-01-12", "y": 4}, {"x": "2026-01-13", "y": 5}, {"x": "2026-01-14", "y": 5}, {"x": "2026-01-17", "y": 5}, {"x": "2026-01-18", "y": 6}, {"x": "2026-01-24", "y": 6}, {"x": "2026-01-25", "y": 4}, {"x": "2026-01-26", "y": 4}], "29歳独身中堅冒険者の日常 君が灯してくれた光を今": [{"x": "2026-01-10", "y": 4}, {"x": "2026-01-11", "y": 3}, {"x": "2026-01-12", "y": 4}, {"x": "2026-01-13", "y": 5}, {"x": "2026-01-14", "y": 5}, {"x": "2026-01-17", "y": 5}, {"x": "2026-01-18", "y": 5}, {"x": "2026-01-24", "y": 6}, {"x": "2026-01-25", "y": 4}, {"x": "2026-01-26", "y": 4}], "勇者パーティーにかわいい子がいたので、告白してみた。 Lavish!!": [{"x": "2026-01-10", "y": 4}, {"x": "2026-01-11", "y": 6}, {"x": "2026-01-12", "y": 4}, {"x": "2026-01-13", "y": 5}, {"x": "2026-01-14", "y": 5}, {"x": "2026-01-17", "y": 7}, {"x": "2026-01-18", "y": 6}, {"x": "2026-01-24", "y": 9}, {"x": "2026-01-25", "y": 4}, {"x": "2026-01-26", "y": 4}], "ダーウィン事変 Make Me Wonder": [{"x": "2026-01-11", "y": 3}, {"x": "2026-01-12", "y": 4}, {"x": "2026-01-13", "y": 3}, {"x": "2026-01-14", "y": 2}, {"x": "2026-01-17", "y": 2}, {"x": "2026-01-18", "y": 2}, {"x": "2026-01-24", "y": 2}, {"x": "2026-01-25", "y": 4}, {"x": "2026-01-26", "y": 4}], "違国日記 言伝": [{"x": "2026-01-11", "y": 9}, {"x": "2026-01-12", "y": 12}, {"x": "2026-01-13", "y": 13}, {"x": "2026-01-14", "y": 14}, {"x": "2026-01-17", "y": 17}], "「お前ごときが魔王に勝てると思うな」と勇者パーティを追放されたので、王都で気ままに暮らしたい I need": [{"x": "2026-01-11", "y": 9}, {"x": "2026-01-12", "y": 12}, {"x": "2026-01-13", "y": 13}, {"x": "2026-01-14", "y": 14}, {"x": "2026-01-17", "y": 17}, {"x": "2026-01-18", "y": 17}], "綺麗にしてもらえますか。 綺麗。": [{"x": "2026-01-11", "y": 9}, {"x": "2026-01-12", "y": 8}, {"x": "2026-01-13", "y": 9}, {"x": "2026-01-14", "y": 9}, {"x": "2026-01-17", "y": 7}, {"x": "2026-01-18", "y": 10}, {"x": "2026-01-24", "y": 13}, {"x": "2026-01-25", "y": 10}, {"x": "2026-01-26", "y": 11}], "シャンピニオンの魔女 魔法使いの日記": [{"x": "2026-01-11", "y": 9}, {"x": "2026-01-12", "y": 8}, {"x": "2026-01-13", "y": 5}, {"x": "2026-01-14", "y": 5}, {"x": "2026-01-17", "y": 7}, {"x": "2026-01-18", "y": 6}, {"x": "2026-01-24", "y": 13}, {"x": "2026-01-25", "y": 15}, {"x": "2026-01-26", "y": 17}], "呪術廻戦(死滅回游 前編) AIZO": [{"x": "2026-01-11", "y": 9}, {"x": "2026-01-12", "y": 12}, {"x": "2026-01-13", "y": 13}, {"x": "2026-01-14", "y": 9}, {"x": "2026-01-17", "y": 12}, {"x": "2026-01-18", "y": 10}, {"x": "2026-01-24", "y": 13}, {"x": "2026-01-25", "y": 15}, {"x": "2026-01-26", "y": 17}], "勇者パーティを追い出された器用貧乏 シルベ": [{"x": "2026-01-11", "y": 9}, {"x": "2026-01-12", "y": 12}, {"x": "2026-01-13", "y": 9}, {"x": "2026-01-14", "y": 9}, {"x": "2026-01-17", "y": 12}, {"x": "2026-01-18", "y": 10}, {"x": "2026-01-24", "y": 19}], "真夜中ハートチューン 月に向かって撃て": [{"x": "2026-01-12", "y": 8}, {"x": "2026-01-13", "y": 9}, {"x": "2026-01-14", "y": 9}, {"x": "2026-01-17", "y": 7}, {"x": "2026-01-18", "y": 6}, {"x": "2026-01-24", "y": 9}, {"x": "2026-01-25", "y": 10}, {"x": "2026-01-26", "y": 11}], "魔王の娘は優しすぎる!! たのしいかくれんぼ": [{"x": "2026-01-13", "y": 13}, {"x": "2026-01-14", "y": 14}, {"x": "2026-01-17", "y": 17}, {"x": "2026-01-18", "y": 17}, {"x": "2026-01-24", "y": 19}], "地獄楽(第二期) かすかなはな": [{"x": "2026-01-14", "y": 14}, {"x": "2026-01-17", "y": 12}, {"x": "2026-01-18", "y": 10}, {"x": "2026-01-24", "y": 9}, {"x": "2026-01-25", "y": 10}, {"x": "2026-01-26", "y": 10}], "人外教室の人間嫌い教師 ニンゲン": [{"x": "2026-01-14", "y": 14}, {"x": "2026-01-17", "y": 7}, {"x": "2026-01-18", "y": 10}, {"x": "2026-01-24", "y": 19}, {"x": "2026-01-26", "y": 17}], "【推しの子】(第3期) Bのリベンジ": [{"x": "2026-01-17", "y": 12}, {"x": "2026-01-18", "y": 10}, {"x": "2026-01-24", "y": 6}, {"x": "2026-01-25", "y": 4}, {"x": "2026-01-26", "y": 4}], "悪役令嬢は隣国の王太子に溺愛される 愛のファンファーレ": [{"x": "2026-01-17", "y": 17}, {"x": "2026-01-18", "y": 17}, {"x": "2026-01-24", "y": 2}, {"x": "2026-01-25", "y": 4}, {"x": "2026-01-26", "y": 4}], "うるわしの宵の月 うるわし": [{"x": "2026-01-17", "y": 17}, {"x": "2026-01-18", "y": 17}, {"x": "2026-01-24", "y": 19}, {"x": "2026-01-25", "y": 15}, {"x": "2026-01-26", "y": 11}], "幼馴染とはラブコメにならない あいらびゅ♡": [{"x": "2026-01-17", "y": 17}, {"x": "2026-01-18", "y": 17}, {"x": "2026-01-24", "y": 13}, {"x": "2026-01-25", "y": 15}, {"x": "2026-01-26", "y": 17}], "シャンピニオンの魔女 君は": [{"x": "2026-01-17", "y": 17}, {"x": "2026-01-18", "y": 17}], "透明男と人間女～そのうち夫婦になるふたり～ 星眼鏡": [{"x": "2026-01-17", "y": 17}, {"x": "2026-01-18", "y": 17}, {"x": "2026-01-24", "y": 19}, {"x": "2026-01-25", "y": 15}, {"x": "2026-01-26", "y": 17}], "Fate/strange Fake PROVANT": [{"x": "2026-01-17", "y": 17}, {"x": "2026-01-18", "y": 17}], "勇者刑に処す(懲罰勇者9004隊刑務記録) Kill the Noise": [{"x": "2026-01-17", "y": 17}, {"x": "2026-01-18", "y": 17}], "不滅のあなたへ(Season3) ふめつのあなた": [{"x": "2026-01-17", "y": 17}, {"x": "2026-01-18", "y": 17}, {"x": "2026-01-24", "y": 13}, {"x": "2026-01-25", "y": 15}, {"x": "2026-01-26", "y": 17}], "葬送のフリーレン(第2期) The Story of Us": [{"x": "2026-01-24", "y": 9}, {"x": "2026-01-25", "y": 10}, {"x": "2026-01-26", "y": 11}], "エリスの聖杯 Happy Ever After feat. 由薫": [{"x": "2026-01-24", "y": 13}, {"x": "2026-01-25", "y": 10}, {"x": "2026-01-26", "y": 11}], "カヤちゃんはコワくない ": [{"x": "2026-01-24", "y": 19}, {"x": "2026-01-25", "y": 15}, {"x": "2026-01-26", "y": 17}], "魔都精兵のスレイブ(2) Cipher Cipher": [{"x": "2026-01-24", "y": 19}], "悪役令嬢は隣国の王太子に溺愛される 魔法の音": [{"x": "2026-01-24", "y": 19}], "MFゴースト(3rd Season) TIMELESS POWER(feat. MOTSU)": [{"x": "2026-01-24", "y": 19}], "転生したらドラゴンの卵だった Gliding Claw": [{"x": "2026-01-24", "y": 19}], "Fate/strange Fake 潜在的なアイ": [{"x": "2026-01-24", "y": 19}], "アルネの事件簿 人形の街": [{"x": "2026-01-25", "y": 15}, {"x": "2026-01-26", "y": 17}], "エリスの聖杯 カメリア": [{"x": "2026-01-25", "y": 15}, {"x": "2026-01-26", "y": 17}], "正反対な君と僕 メガネを外して": [{"x": "2026-01-25", "y": 15}, {"x": "2026-01-26", "y": 17}], "正反対な君と僕 ": [{"x": "2026-01-25", "y": 15}, {"x": "2026-01-26", "y": 17}], "魔王の娘は優しすぎる!! We Can Do!!": [{"x": "2026-01-25", "y": 15}, {"x": "2026-01-26", "y": 17}]};
+    let charts = { count: null, user: null };
+    
+    // 標準的なカラーパレット
+    const colors = [
+        '#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#46f0f0', '#f032e6', 
+        '#bcf60c', '#fabebe', '#008080', '#e6beff', '#9a6324', '#fffac8', '#800000', '#aaffc3', 
+        '#808000', '#ffd8b1', '#000075', '#808080'
+    ];
+
+    function initChart(type, dataObj, canvasId) {
+        if(charts[type]) return;
+        const ctx = document.getElementById(canvasId).getContext('2d');
+        const infoDivId = type === 'count' ? 'chart-info-count' : 'chart-info-user';
+        
+        // 最新の順位でTOP5を判定
+        const allKeys = Object.keys(dataObj);
+        const latestRank = [];
+        allKeys.forEach(key => {
+            const arr = dataObj[key];
+            if(arr.length > 0) {
+                latestRank.push({ key: key, rank: arr[arr.length - 1].y });
+            }
+        });
+        latestRank.sort((a,b) => a.rank - b.rank);
+        const top5 = latestRank.slice(0, 5).map(x => x.key);
+
+        const datasets = allKeys.map((key, i) => {
+            const color = colors[i % colors.length];
+            const isTop5 = top5.includes(key);
+            return {
+                label: key, 
+                data: dataObj[key],
+                borderColor: color,
+                backgroundColor: color,
+                pointRadius: 4, 
+                pointHoverRadius: 8, 
+                tension: 0.1, 
+                fill: false, 
+                borderWidth: 2,
+                hidden: !isTop5 // TOP5以外は初期非表示（凡例で取り消し線）
+            };
+        });
+
+        charts[type] = new Chart(ctx, {
+            type: 'line', 
+            data: { datasets },
+            options: {
+                responsive: true, 
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'nearest',
+                    axis: 'x',
+                    intersect: true
+                },
+                plugins: {
+                    tooltip: {
+                        enabled: false, // ツールチップを無効化
+                        external: function(context) {
+                            // ツールチップの内容を上部のdivに表示
+                            const tooltip = context.tooltip;
+                            const infoDiv = document.getElementById(infoDivId);
+                            if (tooltip.opacity === 0) return;
+                            
+                            if (tooltip.body) {
+                                const dataPoint = tooltip.dataPoints[0];
+                                const label = dataPoint.dataset.label;
+                                const date = dataPoint.label;
+                                const rank = dataPoint.parsed.y;
+                                
+                                // 指定のフォーマット: 作品名 曲名 ●月●日（●位）
+                                // ※ labelには既に "作品名 曲名" が入っている
+                                infoDiv.innerHTML = `<span style="color:${dataPoint.dataset.borderColor}">●</span> ${label}　${date}（${rank}位）`;
+                            }
+                        }
+                    },
+                    legend: { 
+                        position: 'bottom',
+                        labels: { boxWidth: 10, padding: 15 },
+                        onClick: function(e, legendItem, legend) {
+                            const index = legendItem.datasetIndex;
+                            const ci = legend.chart;
+                            if (ci.isDatasetVisible(index)) {
+                                ci.hide(index);
+                                legendItem.hidden = true;
+                            } else {
+                                ci.show(index);
+                                legendItem.hidden = false;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: { 
+                        reverse: true, 
+                        min: 0.5, // 1位の上に少し余白
+                        max: 20.5, 
+                        ticks: { stepSize: 1, callback: v => (v<1||v>20)?'':v },
+                        title: { display: true, text: '順位' }
+                    },
+                    x: { 
+                        type: 'time', 
+                        time: { unit: 'day', displayFormats: { day: 'M/d' } },
+                        title: { display: true, text: '日付' }
+                    }
+                }
+            }
+        });
     }
 
-    function openTab(tabName) {
-        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-        document.getElementById(tabName).classList.add('active');
+    function downloadGraphPDF() {
+        const isCount = document.getElementById('graph_view_count').classList.contains('active');
+        const id = isCount ? 'rankingChartCount' : 'rankingChartUser';
+        const title = isCount ? "2026年冬アニメ 歌唱数ランキング推移" : "2026年冬アニメ 歌唱人数ランキング推移";
+        const canvas = document.getElementById(id);
         
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        const w = canvas.width, h = canvas.height;
+        const newC = document.createElement('canvas'); newC.width=w; newC.height=h;
+        const ctx = newC.getContext('2d'); 
+        ctx.fillStyle="#ffffff"; ctx.fillRect(0,0,w,h); ctx.drawImage(canvas,0,0);
         
-        let btnIndex = 0;
-        if (tabName === 'analysis') btnIndex = 1;
-        if (tabName === 'ranking_count') btnIndex = 2;
-        if (tabName === 'ranking_user') btnIndex = 3;
-        
-        document.querySelectorAll('.tab-btn')[btnIndex].classList.add('active');
-        
-        document.getElementById('ctrl-setlist').style.display = 'none';
-        document.getElementById('ctrl-analysis').style.display = 'none';
-        document.getElementById('ctrl-ranking-count').style.display = 'none';
-        document.getElementById('ctrl-ranking-user').style.display = 'none';
+        const pdf = new jsPDF({ orientation: 'landscape' });
+        const ratio = Math.min(pdf.internal.pageSize.getWidth()/w, pdf.internal.pageSize.getHeight()/h)*0.85;
+        pdf.text(title, 10, 10);
+        pdf.addImage(newC.toDataURL('image/jpeg',1.0), 'JPEG', 10, 15, w*ratio, h*ratio);
+        pdf.save("ranking_graph.pdf");
+    }
 
-        if(tabName === 'setlist') {
-            document.getElementById('ctrl-setlist').style.display = 'flex';
-        } else if(tabName === 'analysis') {
-            document.getElementById('ctrl-analysis').style.display = 'flex';
-        } else if(tabName === 'ranking_count') {
-            document.getElementById('ctrl-ranking-count').style.display = 'flex';
-        } else if(tabName === 'ranking_user') {
-            document.getElementById('ctrl-ranking-user').style.display = 'flex';
+    function openTab(name, btn) {
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.getElementById(name).classList.add('active');
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        if(btn) btn.classList.add('active');
+        else if(name==='setlist') document.querySelectorAll('.tab-btn')[0].classList.add('active');
+        
+        document.querySelectorAll('.ctrl-group').forEach(c => c.classList.remove('active'));
+        if(name==='setlist') document.getElementById('ctrl-setlist').classList.add('active');
+        else if(name.startsWith('analysis')) document.getElementById('ctrl-analysis').classList.add('active');
+        else if(name==='ranking_count') document.getElementById('ctrl-ranking-count').classList.add('active');
+        else if(name==='ranking_user') document.getElementById('ctrl-ranking-user').classList.add('active');
+        else if(name==='graph_view_count') {
+            document.getElementById('ctrl-graph').classList.add('active');
+            initChart('count', dataCount, 'rankingChartCount');
+        }
+        else if(name==='graph_view_user') {
+            document.getElementById('ctrl-graph').classList.add('active');
+            initChart('user', dataUser, 'rankingChartUser');
         }
     }
+    
+    function onRankingClick(row) {
+        if (window.getSelection().toString().length > 0) return;
+        const rawHref = row.getAttribute('data-href');
+        if (rawHref && rawHref.startsWith('#host')) {
+            const url = rawHref.replace('#host', host);
+            window.location.href = url;
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('a.export-link').forEach(link => {
+            const rawHref = link.getAttribute('href');
+            if (rawHref && rawHref.startsWith('#host')) {
+                link.href = rawHref.replace('#host', host);
+            }
+        });
+        // 初期タブセット（ボタンがない場合用）
+        if(document.querySelector('.tab-btn.active') === null) {
+             openTab('setlist', document.querySelectorAll('.tab-btn')[0]);
+        }
+    });
 
     function toggleCategory(header) {
         const content = header.nextElementSibling;
         content.classList.toggle('collapsed');
         const icon = header.querySelector('i');
-        icon.className = content.classList.contains('collapsed') ? 'fas fa-chevron-right' : 'fas fa-chevron-down';
-        icon.style.float = 'right';
-    }
-
-    function downloadHTML() {
-        const element = document.getElementById('print-target');
-        const htmlContent = element.innerHTML;
-        generateDownload(htmlContent, 'karaoke_analysis.html', 'クール集計結果');
-    }
-
-    function downloadRanking(mode) {
-        let elementId = 'ranking-count-print-target';
-        let filename = 'karaoke_ranking_count.html';
-        let title = 'カラオケ歌唱数ランキング';
-        
-        if (mode === 'user') {
-            elementId = 'ranking-user-print-target';
-            filename = 'karaoke_ranking_user.html';
-            title = 'カラオケ歌唱人数ランキング';
-        }
-        
-        const element = document.getElementById(elementId);
-        const htmlContent = element.innerHTML;
-        generateDownload(htmlContent, filename, title);
-    }
-
-    function downloadList(elementId, filename, title) {
-        const element = document.getElementById(elementId);
-        if(element) {
-            const htmlContent = element.innerHTML;
-            generateDownload(htmlContent, filename, title);
+        if(icon) {
+            icon.className = content.classList.contains('collapsed') ? 'fas fa-chevron-right' : 'fas fa-chevron-down';
+            icon.style.float = 'right';
         }
     }
 
-    function generateDownload(content, filename, title) {
-        const fullHtml = `
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <title>${title}</title>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <style>
-        body { font-family: "Helvetica Neue", Arial, sans-serif; font-size: 13px; color: #333; }
-        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-        th, td { border: 1px solid #ccc; padding: 5px 8px; text-align: left; vertical-align: middle; }
-        th { background-color: #2c3e50; color: #fff; }
-        td[rowspan] { background-color: #fff; }
-        
-        .category-header { 
-            background: #667eea; color: white; padding: 10px; margin-top: 20px; 
-            font-weight: bold; border-radius: 4px; cursor: pointer; user-select: none;
+    function downloadHTML(id, filename, title) {
+        // IDが指定されていない場合は全体ダウンロード用の処理
+        if (!id) {
+            id = 'print-target'; // デフォルト
+            if (filename === undefined) filename = 'karaoke_analysis.html';
+            if (title === undefined) title = 'クール集計結果';
         }
-        .category-content { display: block; }
-        .category-content.collapsed { display: none; }
         
-        a.export-link {
-            display: block; 
-            margin: -5px -8px; 
-            padding: 5px 8px;  
-            color: #333; 
-            text-decoration: none; 
-            box-sizing: border-box;
-            cursor: pointer;
-        }
-        a.export-link:hover { background-color: #eef2f7; color: #3498db; }
+        const element = document.getElementById(id);
+        if (!element) return;
         
-        tr.ranking-row { cursor: pointer; }
-        tr.ranking-row:hover { background-color: #dbeafe; }
-        
-        .count-wrapper { display: flex; align-items: center; gap: 8px; }
-        .count-num { width: 25px; text-align: right; }
-        .bar-chart { height: 10px; background: #3498db; border-radius: 5px; }
-        .bar-chart-user { height: 10px; background: #2ecc71; border-radius: 5px; }
-        
-        .rank-badge {
-            display: inline-block; width: 24px; height: 24px; line-height: 24px;
-            border-radius: 50%; text-align: center; color: #fff; font-weight: bold; font-size: 12px;
-            background-color: #95a5a6;
-        }
-        .rank-1 { background-color: #f1c40f; width: 28px; height: 28px; line-height: 28px; }
-        .rank-2 { background-color: #bdc3c7; }
-        .rank-3 { background-color: #d35400; }
-        
-        tr.rank-row-1 td { background-color: #fff8e1 !important; }
-        tr.rank-row-2 td { background-color: #f5f5f5 !important; }
-        tr.rank-row-3 td { background-color: #fff0e6 !important; }
-
-        @media print {
-            * {
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-                color-adjust: exact !important;
-            }
-            .category-content { display: block !important; }
-            tbody.anime-group { break-inside: avoid; page-break-inside: avoid; }
-            .category-header { page-break-after: avoid; }
-            thead { display: table-header-group; }
-        }
-    </style>
-</head>
-<body>
-    <h1>${title}</h1>
-    <div style="text-align:right; font-size:0.9rem; color:#777;">出力日: 2026/01/27</div>
-    ${content}
-
-    <script>
-        const host = 'http://ykr.moe:11059';
-
-        function onRankingClick(row) {
-            if (window.getSelection().toString().length > 0) return;
-            const rawHref = row.getAttribute('data-href');
-            if (rawHref && rawHref.startsWith('#host')) {
-                const url = rawHref.replace('#host', host);
-                window.location.href = url;
-            }
-        }
-
-        document.addEventListener('DOMContentLoaded', () => {
-            document.querySelectorAll('a.export-link').forEach(link => {
-                const rawHref = link.getAttribute('href');
-                if (rawHref && rawHref.startsWith('#host')) {
-                    link.href = rawHref.replace('#host', host);
-                }
-            });
-        });
-
-        function toggleCategory(header) {
-            const content = header.nextElementSibling;
-            content.classList.toggle('collapsed');
-            const icon = header.querySelector('i');
-            if(icon) {
-                icon.className = content.classList.contains('collapsed') ? 'fas fa-chevron-right' : 'fas fa-chevron-down';
-                icon.style.float = 'right';
-            }
-        }
-    <\/script>
-</body>
-</html>`;
-
-        const blob = new Blob([fullHtml], {type: 'text/html'});
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = filename;
-        link.click();
+        const c = element.innerHTML;
+        const b = new Blob([`<html><head><title>${title}</title><style>table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:5px}th{background:#2c3e50;color:#fff}.rank-badge{display:inline-block;width:20px;background:#999;color:#fff;border-radius:50%;text-align:center}.rank-1{background:#f1c40f}.category-header{background:#667eea;color:#fff;padding:5px;margin-top:20px}</style></head><body><h1>${title}</h1>${c}</body></html>`], {type:'text/html'});
+        const l = document.createElement('a'); l.href=URL.createObjectURL(b); l.download=filename; l.click();
     }
-
+    
+    function downloadList(id, fn, t) { if(document.getElementById(id)) downloadHTML(id, fn, t); }
+    
     const searchInput = document.getElementById("searchInput");
     const table = document.getElementById("setlistTable");
     const countDisplay = document.getElementById('countDisplay');
-    let tableData = [];
     let tbodyRows = [];
-
-    window.addEventListener('DOMContentLoaded', () => {
-        const tbody = table.tBodies[0];
-        if (tbody) {
-            tbodyRows = Array.from(tbody.rows);
-            tableData = tbodyRows.map(row => row.innerText.toUpperCase());
-            countDisplay.innerText = '全 ' + tbodyRows.length + ' 件';
-        }
-    });
-
-    searchInput.addEventListener("keyup", function(event) {
-        if (event.key === "Enter") performSearch();
-    });
-
+    window.onload = () => { if(table.tBodies[0]) { tbodyRows = Array.from(table.tBodies[0].rows); countDisplay.innerText = '全 ' + tbodyRows.length + ' 件'; } };
     function performSearch() {
-        const filter = searchInput.value.toUpperCase();
-        const keywords = filter.replace(/　/g, " ").split(" ").filter(k => k.length > 0);
-        let visibleCount = 0;
-        const total = tableData.length;
-        
-        for (let i = 0; i < total; i++) {
-            let isMatch = true;
-            const rowText = tableData[i];
-            for (let k = 0; k < keywords.length; k++) {
-                if (rowText.indexOf(keywords[k]) === -1) {
-                    isMatch = false; break;
-                }
-            }
-            
-            if (isMatch || keywords.length === 0) {
-                tbodyRows[i].classList.remove('hidden');
-                visibleCount++;
-            } else {
-                tbodyRows[i].classList.add('hidden');
-            }
-        }
-        countDisplay.innerText = '表示: ' + visibleCount + ' / ' + total;
+        const k = searchInput.value.toUpperCase().replace(/　/g," ").split(" ").filter(s=>s);
+        let c=0; tbodyRows.forEach(r => { const m = k.every(w => r.innerText.toUpperCase().includes(w)); r.classList.toggle('hidden', !m); if(m) c++; });
+        countDisplay.innerText = '表示: ' + c + ' / ' + tbodyRows.length;
     }
-
-    function resetFilter() {
-        searchInput.value = "";
-        performSearch();
-    }
-
+    function resetFilter() { searchInput.value=""; performSearch(); }
     function sortTable(n) {
-        const tbody = table.tBodies[0];
-        const rows = Array.from(tbody.rows);
-        const th = table.querySelectorAll('th')[n];
-        let dir = th.getAttribute('data-dir') === 'asc' ? 'desc' : 'asc';
-        
-        table.querySelectorAll('th').forEach(h => h.setAttribute('data-dir', ''));
-        th.setAttribute('data-dir', dir);
-
-        rows.sort((a, b) => {
-            const valA = a.cells[n].innerText.trim();
-            const valB = b.cells[n].innerText.trim();
-            if (!isNaN(valA) && !isNaN(valB) && valA!=='' && valB!=='') {
-                return dir === 'asc' ? valA - valB : valB - valA;
-            }
-            return dir === 'asc' ? valA.localeCompare(valB,'ja') : valB.localeCompare(valA,'ja');
+        const tb = table.tBodies[0], r = Array.from(tb.rows), th = table.querySelectorAll('th')[n];
+        const d = th.getAttribute('data-d')==='a'?'d':'a';
+        table.querySelectorAll('th').forEach(h=>h.setAttribute('data-d','')); th.setAttribute('data-d',d);
+        r.sort((a,b) => {
+            const x=a.cells[n].innerText.trim(), y=b.cells[n].innerText.trim();
+            return d==='a' ? (isNaN(x)?x.localeCompare(y,'ja'):x-y) : (isNaN(x)?y.localeCompare(x,'ja'):y-x);
         });
-        rows.forEach(row => tbody.appendChild(row));
-        tbodyRows = rows;
-        tableData = tbodyRows.map(row => row.innerText.toUpperCase());
+        r.forEach(x=>tb.appendChild(x));
     }
 </script>
 </body>
