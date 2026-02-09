@@ -42,13 +42,6 @@
     "song": "Ruler"
   },
   {
-    "id": 1770648363946.2598,
-    "singer": "加古",
-    "work": "ダーウィン事変",
-    "artist": "Official髭男dism",
-    "song": "Make Me Wonder"
-  },
-  {
     "id": 1770648448866.7163,
     "singer": "つぼはち",
     "work": "呪術廻戦",
@@ -89,5 +82,12 @@
     "work": "地獄楽",
     "artist": "キタニタツヤ feat. BABYMETAL",
     "song": "かすかなはな"
+  },
+  {
+    "id": 1770648664779.8376,
+    "singer": "あきらん",
+    "work": "JELEE",
+    "artist": "JELEE",
+    "song": "JOURNEY"
   }
 ]
