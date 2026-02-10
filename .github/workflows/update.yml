@@ -43,3 +43,13 @@ jobs:
             git pull --rebase origin main
             git push origin main
           fi
+
+      # ★追加: Github Pagesへのデプロイ
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./  # index.htmlがあるディレクトリ
+          publish_branch: gh-pages  # 公開用ブランチ
+          keep_files: true # 既存ファイルを消さない
+          exclude_assets: '.github,*.py,*.yml,requirements.txt,README.md' # 不要なファイルを除外
