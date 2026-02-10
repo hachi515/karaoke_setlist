@@ -1,0 +1,760 @@
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Karaoke Dashboard</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --accent-color: #3498db;
+            --bg-color: #f4f7f6;
+            --text-color: #333;
+            --header-bg: #fff;
+            --border-color: #e0e0e0;
+        }
+        html, body {
+            height: 100%; margin: 0; padding: 0;
+            overflow: hidden; 
+            font-family: "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-size: 13px; 
+            display: flex; flex-direction: column;
+        }
+
+        a.export-link {
+            color: inherit;
+            text-decoration: none;
+            pointer-events: none;
+            cursor: default;
+        }
+
+        tr.ranking-row {
+            cursor: default; 
+        }
+        
+        th, td {
+            padding: 5px 8px; text-align: left; border-bottom: 1px solid #eee;
+            font-size: 13px; vertical-align: middle; line-height: 1.3;
+        }
+        th {
+            background-color: var(--primary-color); color: #fff;
+            position: sticky; top: 0; z-index: 10; font-weight: bold;
+        }
+
+        .top-section {
+            flex: 0 0 auto;
+            background-color: var(--header-bg);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            z-index: 100;
+        }
+        .header-inner {
+            padding: 8px 15px; display: flex; justify-content: space-between; align-items: center;
+        }
+        h1 { margin: 0; font-size: 1.2rem; color: var(--primary-color); }
+        .update-time { font-size: 0.8rem; color: #7f8c8d; }
+
+        .tabs {
+            display: flex; padding: 0 15px; border-bottom: 1px solid var(--border-color); overflow-x: auto;
+        }
+        .tab-btn {
+            padding: 10px 20px; cursor: pointer; border: none; background: none;
+            font-weight: bold; color: #7f8c8d; border-bottom: 3px solid transparent;
+            font-size: 14px; white-space: nowrap;
+        }
+        .tab-btn.active { color: var(--accent-color); border-bottom-color: var(--accent-color); }
+
+        .controls-row {
+            padding: 8px 15px; display: flex; gap: 8px; align-items: center;
+            background-color: #fff; border-bottom: 1px solid var(--border-color);
+            height: 40px; 
+            flex-wrap: nowrap;
+            overflow-x: auto;
+        }
+        .search-box {
+            padding: 6px 12px; border: 1px solid #ccc; border-radius: 4px;
+            width: 250px; font-size: 13px; outline: none;
+        }
+        .btn {
+            padding: 6px 12px; border-radius: 4px; border: none; cursor: pointer;
+            color: #fff; background-color: var(--accent-color); font-size: 13px;
+            font-weight: bold; white-space: nowrap;
+        }
+        .btn:hover { opacity: 0.9; }
+        .btn-dl { background-color: #2ecc71; }
+        .btn-list { background-color: #9b59b6; font-size: 12px; }
+        .count-display { margin-left: auto; font-weight: bold; font-size: 13px; }
+
+        .ctrl-setlist { display: flex; width: 100%; align-items: center; gap:8px; }
+        .ctrl-analysis { display: none; width: 100%; align-items: center; justify-content: flex-end; gap:5px; }
+        .ctrl-ranking { display: none; width: 100%; align-items: center; justify-content: flex-end; }
+        /* ★グラフ用コントロール */
+        .ctrl-graph { display: none; width: 100%; align-items: center; justify-content: flex-end; }
+
+        .content-area {
+            flex: 1; position: relative; overflow: hidden; 
+        }
+        .tab-content {
+            display: none; position: absolute; 
+            top: 0; left: 0; right: 0; bottom: 0;
+            overflow-y: auto; 
+            -webkit-overflow-scrolling: touch;
+            padding: 0 15px 40px 15px;
+        }
+        .tab-content.active { display: block; }
+
+        table {
+            width: 100%; border-collapse: separate; border-spacing: 0;
+            background: #fff; border-radius: 4px; margin-top: 10px; margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        tr:nth-child(even) { background-color: #fafafa; }
+        tr:hover { background-color: #f1f8ff; }
+        tr.hidden { display: none !important; }
+
+        .category-header {
+            margin-top: 20px; padding: 10px 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white; border-radius: 6px;
+            font-weight: bold; font-size: 1.1rem; cursor: pointer;
+            user-select: none;
+        }
+        .category-content { display: block; transition: all 0.3s; }
+        .category-content.collapsed { display: none; }
+        
+        tr.has-count { background-color: #fff; color: #333; }
+        
+        .count-wrapper { display: flex; align-items: center; gap: 8px; }
+        .count-num { width: 25px; text-align: right; font-size:1.1rem; }
+        .bar-chart {
+            height: 10px; background: linear-gradient(90deg, #3498db, #2980b9);
+            border-radius: 5px;
+        }
+
+        .bar-chart-user {
+            height: 10px; background: linear-gradient(90deg, #2ecc71, #27ae60);
+            border-radius: 5px;
+        }
+
+        td[rowspan] {
+            background-color: #fff;
+            border-right: 1px solid #eee;
+            vertical-align: middle;
+            font-weight: normal; color: inherit;        
+        }
+
+        .rank-badge {
+            display: inline-block; width: 24px; height: 24px; line-height: 24px;
+            border-radius: 50%; text-align: center; color: #fff; font-weight: bold; font-size: 12px;
+            background-color: #95a5a6;
+        }
+        .rank-1 { background-color: #f1c40f; width: 28px; height: 28px; line-height: 28px; }
+        .rank-2 { background-color: #bdc3c7; }
+        .rank-3 { background-color: #d35400; }
+        
+        tr.rank-row-1 td { background-color: #fff8e1 !important; }
+        tr.rank-row-2 td { background-color: #f5f5f5 !important; }
+        tr.rank-row-3 td { background-color: #fff0e6 !important; }
+
+        .rankingTable tr:nth-child(1) th { background-color: var(--primary-color) !important; color: #fff !important; }
+
+        /* ★グラフ用スタイル */
+        .chart-wrapper {
+            background: #fff;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-top: 15px;
+            height: 75vh;
+            display: flex;
+            flex-direction: column;
+        }
+        /* 詳細情報固定表示エリア */
+        /* 修正: 折り返しと高さ自動調整 */
+        .chart-info {
+            min-height: 35px;
+            height: auto;
+            line-height: 1.4;
+            padding: 5px;
+            text-align: center;
+            font-weight: bold;
+            color: #2c3e50;
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            margin-bottom: 5px;
+            border-radius: 4px;
+            font-size: 14px;
+            white-space: normal;
+            overflow: visible;
+            word-break: break-all;
+        }
+        .canvas-container {
+            flex: 1;
+            position: relative;
+            min-height: 0;
+        }
+
+        @media print {
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                color-adjust: exact !important;
+            }
+            body {
+                overflow: visible !important;
+                height: auto !important;
+                display: block !important;
+            }
+            .top-section { display: none !important; }
+            .content-area { overflow: visible !important; position: static !important; }
+            .tab-content { 
+                position: static !important; 
+                display: block !important; 
+                overflow: visible !important; 
+                padding: 0 !important;
+            }
+            .category-content { display: block !important; }
+            
+            tbody.anime-group {
+                break-inside: avoid;
+                page-break-inside: avoid;
+            }
+            .category-header { page-break-after: avoid; }
+            thead { display: table-header-group; }
+            .chart-wrapper { height: auto; }
+        }
+    </style>
+</head>
+<body>
+    <div class="top-section">
+        <div class="header-inner">
+            <h1>Karaoke Dashboard</h1>
+            <div class="update-time">2026/02/10 13:17 更新</div>
+        </div>
+        <div class="tabs">
+            <button class="tab-btn active" onclick="openTab('setlist')">セットリスト</button>
+            <button class="tab-btn" onclick="openTab('analysis')">クール集計</button>
+            <button class="tab-btn" onclick="openTab('ranking_count')">歌唱数ランキング</button>
+            <button class="tab-btn" onclick="openTab('ranking_user')">歌唱人数ランキング</button>
+            <button class="tab-btn" onclick="openTab('graph_view_count')">推移(数)</button>
+            <button class="tab-btn" onclick="openTab('graph_view_user')">推移(人)</button>
+        </div>
+        <div class="controls-row">
+            <div id="ctrl-setlist" class="ctrl-setlist">
+                <input type="text" id="searchInput" class="search-box" placeholder="キーワード (例: 曲名 歌手)...">
+                <button onclick="performSearch()" class="btn"><i class="fas fa-search"></i> 検索</button>
+                <button onclick="resetFilter()" class="btn" style="background:#95a5a6"><i class="fas fa-undo"></i></button>
+                <div class="count-display" id="countDisplay">読み込み中...</div>
+            </div>
+            <div id="ctrl-analysis" class="ctrl-analysis">
+                <button onclick="downloadList('list-created-content', 'created_list.html', '作成済みリスト')" class="btn btn-list">作成リスト保存</button>
+                <button onclick="downloadList('list-uncreated-content', 'uncreated_list.html', '未作成リスト')" class="btn btn-list" style="background-color:#e74c3c;">未作成リスト保存</button>
+                <button onclick="downloadHTML()" class="btn btn-dl" style="margin-left:10px;"><i class="fas fa-file-code"></i> HTML保存</button>
+            </div>
+            <div id="ctrl-ranking-count" class="ctrl-ranking">
+                <button onclick="downloadRanking('count')" class="btn btn-dl"><i class="fas fa-trophy"></i> 歌唱数ランキング保存</button>
+            </div>
+            <div id="ctrl-ranking-user" class="ctrl-ranking">
+                <button onclick="downloadRanking('user')" class="btn btn-dl"><i class="fas fa-users"></i> 歌唱人数ランキング保存</button>
+            </div>
+            <div id="ctrl-graph" class="ctrl-graph">
+                <button onclick="downloadGraphHTML()" class="btn btn-dl" style="background-color:#e67e22;"><i class="fas fa-file-code"></i> HTML保存</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="content-area">
+        <div id="setlist" class="tab-content active">
+            <table id="setlistTable">
+                <thead><tr><th onclick="sortTable(0)">部屋主 <i class="fas fa-sort"></i></th><th onclick="sortTable(1)">順番 <i class="fas fa-sort"></i></th><th onclick="sortTable(2)">曲名（ファイル名） <i class="fas fa-sort"></i></th><th onclick="sortTable(3)">作品名 <i class="fas fa-sort"></i></th><th onclick="sortTable(4)">歌手名 <i class="fas fa-sort"></i></th><th onclick="sortTable(5)">歌った人 <i class="fas fa-sort"></i></th><th onclick="sortTable(6)">取得日 <i class="fas fa-sort"></i></th></tr></thead>
+                <tbody><tr><td>芝ちゃん部屋</td><td>97</td><td>片付けの時間です。</td><td></td><td></td><td>システム</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>96</td><td>ハロ【パート分けあり】</td><td>ポケットモンスター Op</td><td>yama × ぼっちぼろまる</td><td>ぱにょ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>95</td><td>冒険のVLOG【CHiCO with HoneyWorks MV】</td><td>EDENS ZERO</td><td></td><td>ゆーき</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>94</td><td>アイオライト</td><td>ポケットモンスター ED 1</td><td>Duca</td><td>芝ちゃん</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>93</td><td>Bのリベンジ【アニメ映像ver1.3・1話映像・パート分け有り】</td><td>【推しの子】 IN</td><td>B小町</td><td>ヒロ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>92</td><td>Cipher Cipher</td><td>魔都精兵のスレイブ2 ED</td><td>花澤香菜</td><td>ゆに</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>91</td><td>世界は恋に落ちている【(PV)】</td><td>アオハライド OP</td><td>GUMI</td><td>ぱにょ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>90</td><td>決戦スピリット</td><td>ハイキュー!! TO THE TOP ED</td><td>CHiCO with HoneyWorks</td><td>ゆーき</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>89</td><td>熱烈*ラブコール【パート分け有】</td><td>B-PROJECT ～熱烈*ラブコール～ OP</td><td>B-PROJECT(4ユニット)</td><td>芝ちゃん</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>88</td><td>月に向かって撃て</td><td>真夜中ハートチューン OP</td><td>星街すいせい</td><td>ヒロ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>87</td><td>君が灯してくれた光を今onvo(feat.Hanon)【悠季】</td><td>29歳独身中堅冒険者の日常 OP</td><td>MARUMOCHI_from_HoneyWorks</td><td>ゆに</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>86</td><td>ロメオ</td><td>告白実行委員会～恋愛シリーズ～</td><td>LIP×LIP</td><td>ぱにょ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>85</td><td>私、アイドル宣言</td><td>HoneyWorks</td><td>mona(CV:夏川椎菜)</td><td>ゆーき</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>84</td><td>泣いていいんだ</td><td>柚木さんちの四兄弟。 Op</td><td>flumpool</td><td>芝ちゃん</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>83</td><td>光よ、僕に。【TV放送Ver.】</td><td>魔都精兵のスレイブ2 OP</td><td>鬼頭明里</td><td>ヒロ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>82</td><td>君の隣は空気が美味しい(feat.Kotoha)【悠季,onvo】</td><td>29歳独身中堅冒険者の日常 OP</td><td>MARUMOCHI from HoneyWorks</td><td>ゆに</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>81</td><td>ファンサ</td><td>告白実行委員会シリーズ】【HoneyWorks</td><td>mona</td><td>ぱにょ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>80</td><td>ヒロイン育成計画 feat. 涼海ひより</td><td>告白実行委員会～アイドルシリーズ～ IM</td><td>水瀬いのり</td><td>ゆーき</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>79</td><td>春日影 (MyGO!!!!! ver.)</td><td>BanG Dream! It's MyGO!!!!! In</td><td>MyGO!!!!!</td><td>芝ちゃん</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>78</td><td>彼女は今、迷宮の中。</td><td>中禅寺先生物怪講義録 先生が謎を解いてしまうから。 OP</td><td>HoneyWorks,花譜</td><td>ヒロ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>77</td><td>にんころダンス【パート分け-最終話反映】</td><td>忍者と殺し屋のふたりぐらし ED</td><td>HoneyWorks,ハコニワリリィ</td><td>ゆに</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>76</td><td>ジュリエッタ</td><td>ヒロインたるもの!～嫌われヒロインと内緒のお仕事～ OP</td><td>LIP×LIP</td><td>ぱにょ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>75</td><td>今、恋がはじまれ。 feat. 望月あずき(CV:高橋李依</td><td>告白実行委員会シリーズ</td><td>HoneyWorks</td><td>ゆーき</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>74</td><td>夏色サプライズ</td><td>神のみぞ知るセカイOVA OP</td><td>東山奈央</td><td>芝ちゃん</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>73</td><td>【幼馴染とはラブコメにならない】 [op] あいらびゅ♡／HoneyWorks meets 久住琳 芹澤優 平塚紗依 山本悠有希 ※パート分け有耳コピ bb242 (On-Off)</td><td>-</td><td></td><td>ヒロ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>72</td><td>Rookies</td><td>メダリスト 2nd Season ED</td><td>Conton Candy</td><td>ゆに</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>71</td><td>【ヒロインたるもの】[可愛くてごめん]『』「 feat. ちゅーたん(CV：早見沙織）／HoneyWorks」</td><td>-</td><td></td><td>ぱにょ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>70</td><td>おえかきしようよ【第5話 挿入歌 アニメ公式 MV】</td><td>魔王の娘は優しすぎる!!</td><td>ドゥ(CV:久野美咲)</td><td>ゆーき</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>69</td><td>LOVE KANON</td><td>神のみぞ知るセカイ In</td><td>中川かのん starring 東山奈央</td><td>芝ちゃん</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>68</td><td>【機動戦士ガンダム 閃光のハサウェイ】 [ED] Sweet Child O’Mine bb266 (On-Off)</td><td>-</td><td></td><td>ヒロ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>67</td><td>星眼鏡</td><td>透明男と人間女～そのうち夫婦になるふたり～ ED</td><td>石原夏織</td><td>ゆに</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>66</td><td>乙女どもよ。【CHiCO with HoneyWorks】</td><td>荒ぶる季節の乙女どもよ。 OP</td><td>CHiCO with HoneyWorks</td><td>ぱにょ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>65</td><td>あそぼうラララン【第4話 挿入歌 アニメ公式 MV】</td><td>魔王の娘は優しすぎる!!</td><td>ドゥ(CV:久野美咲)</td><td>ゆーき</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>64</td><td>君色ラブソング</td><td>マジカル☆スター かのん100% Ed</td><td>中川かのん starring 東山奈央</td><td>芝ちゃん</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>63</td><td>Sweet Magic</td><td>多聞くん今どっち!? OP</td><td>F/ACE</td><td>ヒロ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>62</td><td>アドレナ</td><td>花ざかりの君たちへ OP</td><td>YOASOBI</td><td>ゆに</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>61</td><td>醜い生き物</td><td>裏世界ピクニック OP</td><td>HoneyWorks feat.flower</td><td>ぱにょ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>60</td><td>イタズラタイム【第3話 挿入歌 二人パート分けあり アニメ公式 MV】</td><td>魔王の娘は優しすぎる!!</td><td>ドゥ(CV:久野美咲)サティ(CV:伊藤彩沙)</td><td>ゆーき</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>59</td><td>かのん100%</td><td>マジカル☆スター かのん100% Op</td><td>中川かのん starring 東山奈央</td><td>芝ちゃん</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>58</td><td>PERSONAL</td><td>金色のガッシュベル!! ED1</td><td>上戸彩</td><td>ヒロ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>57</td><td>あまのじゃく</td><td>幼馴染とはラブコメにならない ED</td><td>小玉ひかり</td><td>ゆに</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>56</td><td>ハッピーエンドプリンセス【最終話反映】</td><td>ティアムーン帝国物語～断頭台から始まる、姫の転生逆転ストーリー～ OP</td><td>上坂すみれ</td><td>ぱにょ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>55</td><td>きみはゆきだるま【第2話 挿入歌 アニメ公式 MV】</td><td>魔王の娘は優しすぎる!!</td><td>ドゥ(CV:久野美咲)</td><td>ゆーき</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>54</td><td>ハッピークレセント</td><td>神のみぞ知るセカイ In</td><td>中川かのん starring 東山奈央</td><td>芝ちゃん</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>53</td><td>【お気楽領主の楽しい領地防衛】おきらくぜ〜しょん ※OP (off-セミボーカル-UVRコーラス入-on〉／中島怜</td><td>-</td><td></td><td>ヒロ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>52</td><td>Make it</td><td>お気楽領主の楽しい領地防衛～生産系魔術で名もなき村を最強の城塞都市に～ ED</td><td>大渕野々花</td><td>ゆに</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>51</td><td>潜在的なアイ</td><td>Fate/strange Fake ED</td><td>13.3g</td><td>ぱにょ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>50</td><td>たのしいかくれんぼ【第1話 挿入歌 アニメ公式 MV】</td><td>魔王の娘は優しすぎる!!</td><td>ドゥ(CV:久野美咲)</td><td>ゆーき</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>49</td><td>形にできないモノローグ</td><td>ある朝ダミーヘッドマイクになっていた俺クンの人生 主題歌</td><td>KOTOKO</td><td>芝ちゃん</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>48</td><td>CATCH!!!</td><td>ヴィジランテ -僕のヒーローアカデミア ILLEGALS- 2期 OP</td><td>すりぃ</td><td>ヒロ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>47</td><td>We Can Do!!</td><td>魔王の娘は優しすぎる!! OP</td><td>石原夏織</td><td>ゆに</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>46</td><td>Make Me Wonder</td><td>ダーウィン事変 OP</td><td>Official髭男dism</td><td>ぱにょ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>45</td><td>Sunday Morning(パート分け有)</td><td>姫様”拷問”の時間です(2期) OP</td><td>ILLIT</td><td>ゆーき</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>44</td><td>大丈夫</td><td>レイトン ミステリー探偵社～カトリーのナゾトキファイル～ ED 1</td><td>花澤香菜</td><td>芝ちゃん</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>43</td><td>sukuu</td><td>勇者パーティを追い出された器用貧乏 ED</td><td>Nowlu</td><td>ヒロ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>42</td><td>YES!サマーラブ♡【パート分け】</td><td>勇者パーティーにかわいい子がいたので、告白してみた。 ED</td><td>ハピネス シケ ミサキ</td><td>ゆに</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>41</td><td>FRIENDS & SMILE【パート分け_2パート_12話まで】</td><td>SI-VIS The Sound of Heroes ED</td><td>SI-VIS</td><td>ぱにょ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>40</td><td>ray【パート分け】</td><td>超かぐや姫! ED</td><td>月見ヤチヨ(早見沙織)&かぐや(夏吉ゆうこ)</td><td>ゆーき</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>39</td><td>未来形Answer</td><td>俺物語!! OP</td><td>TRUSTRICK</td><td>芝ちゃん</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>38</td><td>ピュア feat.橋本絵莉子</td><td>正反対な君と僕 ED</td><td>PAT TASTA</td><td>ヒロ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>37</td><td>アザレアの風  キー変更： -1</td><td>うるわしの宵の月 Ed</td><td>UNISON SQUARE GARDEN</td><td>ゆに</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>36</td><td>So Far Away【パート分け_2パート_12話まで】</td><td>SI-VIS The Sound of Heroes OP</td><td>SI-VIS</td><td>ぱにょ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>35</td><td>恋になりたいAQUARIUM【ライブ映像 - 1stLive Day2】</td><td>ラブライブ! サンシャイン!! 2ndシングル</td><td>Aqours</td><td>ゆーき</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>34</td><td>Believe again〔2パート分け〕</td><td>ラブライブ!サンシャイン!! The School Idol Movie Over the Rainbow 劇中歌</td><td>Saint snow</td><td>芝ちゃん</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>33</td><td>スーパーノヴァ</td><td>SI-VIS: The Sound of Heroes OP2</td><td>SI-VIS</td><td>ヒロ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>32</td><td>うるわし</td><td>うるわしの宵の月 Op</td><td>UNISON SQUARE GARDEN</td><td>ゆに</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>31</td><td>君のこころは輝いてるかい?</td><td>ラブライブ! サンシャイン!!</td><td>Aqours</td><td>ぱにょ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>30</td><td>愛♡スクリーム【ver2 パート分け有_bb125】</td><td>オールナイトニッポンGOLD</td><td>AiScReam</td><td>ゆーき</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>29</td><td>僕らの走ってきた道は…</td><td>ラブライブ! サンシャイン!!</td><td>Aqours</td><td>芝ちゃん</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>28</td><td>Sanctuary</td><td>うたの☆プリンスさまっ♪ マジLOVE2000% IM</td><td>聖川真斗(CV:鈴村健一)</td><td>ヒロ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>27</td><td>Liberator</td><td>Liber_7 永劫の終わりを待つ君へ OP</td><td>Fuki</td><td>ゆに</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>26</td><td>MIRAI TICKET</td><td>ラブライブ! サンシャイン!!</td><td>Aqours</td><td>ぱにょ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>25</td><td>ユメを語るよりユメを歌おう</td><td>ラブライブ! サンシャイン!!</td><td>Aqours</td><td>ゆーき</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>24</td><td>幻日のヨハネ -SUNSHINE in the MIRROR-第3話挿入歌「Be as one!!!」／ダイヤ(CV_小宮有紗)ルビィ(降幡愛)チカ(伊波杏樹)</td><td>-</td><td></td><td>芝ちゃん</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>23</td><td>茜</td><td>[劇場版]僕の心のヤバイやつ 主題歌</td><td>ヨルシカ</td><td>ヒロ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>22</td><td>君は</td><td>シャンピニオンの魔女 ED</td><td>Ms.OOJA</td><td>ゆに</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>21</td><td>MY舞☆TONIGHT</td><td>ラブライブ! サンシャイン!!</td><td>Aqours</td><td>ぱにょ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>20</td><td>夜空はなんでも知ってるの?【ライブ映像 - 1stLive Day1】</td><td>ラブライブ! サンシャイン!! ユニットシングル第1弾</td><td>CYaRon!</td><td>ゆーき</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>19</td><td>未体験HORIZON</td><td>ラブライブ! サンシャイン!! 4thSingle</td><td>Aqours</td><td>芝ちゃん</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>18</td><td>ENDROLL【番宣映像編集・パート分け有り】</td><td>機動戦士ガンダム 閃光のハサウェイ キルケーの魔女 IN</td><td>川上洋平, SennaRin</td><td>ヒロ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>17</td><td>魔法使いの日記</td><td>シャンピニオンの魔女 OP</td><td>ロス</td><td>ゆに</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>16</td><td>Strowbery Trapper</td><td>ラブライブ! サンシャイン!!</td><td>Guilty Kiss</td><td>ぱにょ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>15</td><td>青空Jumping Heart【ライブ映像 - 1stLive Day2】</td><td>ラブライブ! サンシャイン!! アニメOP</td><td>Aqours</td><td>ゆーき</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>14</td><td>Awaken the power【パート有】</td><td>ラブライブ! サンシャイン!!(第2期) IN 第9話</td><td>Saint Aqours Snow</td><td>芝ちゃん</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>13</td><td>QUINTET PULSE</td><td>プリンセッション・オーケストラ Ed</td><td>オルケリア</td><td>ヒロ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>12</td><td>Break off</td><td>貴族転生～恵まれた生まれから最強の力を得る～ OP</td><td>SUPER★DRAGON</td><td>ゆに</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>11</td><td>veil【2話までで仮作成】</td><td>炎炎ノ消防隊 ED</td><td>須田景凪</td><td>ぱにょ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>10</td><td>WATER BLUE NEW WORLD</td><td>ラブライブ! サンシャイン!! アニメ第2期第12話挿入歌</td><td>Aqours</td><td>ゆーき</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>9</td><td>渦</td><td>BEYBLADE X Ed</td><td>imase</td><td>芝ちゃん</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>8</td><td>【貴族転生 ～恵まれた生まれから最強の力を得る～】《ED》You'll Be In My Heart 〜そばに〜／アリーチェ(CV 橘 杏咲)【On-Cat】</td><td>-</td><td></td><td>ヒロ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>7</td><td>Trigger(パート分け有)</td><td>eリコリス・リコイル IN</td><td>ClariS</td><td>ゆに</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>6</td><td>なまらめんこいギャル(Ver2)</td><td>道産子ギャルはなまらめんこい</td><td>オーイシマサヨシ</td><td>ぱにょ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>5</td><td>【メダリスト】 [OP] Cold Night／HANA ※パート分け有 bb261 ver2 (On-Off)</td><td>-</td><td></td><td>ゆーき</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>4</td><td>Fan Fanfare!!!【パート分け有】</td><td>世界でいちばん強くなりたい! Ed</td><td>Sweet Diva</td><td>芝ちゃん</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>3</td><td>Future Never Ends【※静止画】</td><td>プリンセッション・オーケストラ Ed</td><td>オルケリア</td><td>ヒロ</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>2</td><td>初恋</td><td>どうせ、恋してしまうんだ。 ED9</td><td>berry meet</td><td>ゆに</td><td>2026/02/10</td></tr><tr><td>芝ちゃん部屋</td><td>1</td><td>アタシのドレス【ver3.0・最終話まで】</td><td>メダリスト ED</td><td>ねぐせ。</td><td>ぱにょ</td><td>2026/02/10</td></tr></tbody>
+            </table>
+            
+        </div>
+
+        <div id="analysis" class="tab-content">
+            <div style="margin-top:15px; font-size:0.9rem; color:#7f8c8d; text-align:right;">集計対象: 2026/01/01 - 2026/03/31</div>
+            <div id="print-target">
+                <div style="padding:20px;text-align:center;color:#e74c3c;">集計データがありません</div>
+            </div>
+        </div>
+
+        <div id="ranking_count" class="tab-content">
+            <div style="margin-top:15px; font-size:0.9rem; color:#7f8c8d; text-align:right;">集計対象: 2026/01/01 - 2026/03/31</div>
+            <div id="ranking-count-print-target">
+                <div style="padding:20px;text-align:center;color:#e74c3c;">ランキング対象データがありません</div>
+            </div>
+        </div>
+        
+        <div id="ranking_user" class="tab-content">
+            <div style="margin-top:15px; font-size:0.9rem; color:#7f8c8d; text-align:right;">集計対象: 2026/01/01 - 2026/03/31</div>
+            <div id="ranking-user-print-target">
+                <div style="padding:20px;text-align:center;color:#e74c3c;">ランキング対象データがありません</div>
+            </div>
+        </div>
+
+        <div id="graph_view_count" class="tab-content">
+            <div class="category-header">2026年冬アニメ 歌唱数ランキング推移 (Top 20)</div>
+            <div class="chart-wrapper">
+                <div id="chart-info-count" class="chart-info">グラフの点をタップ・ホバーで詳細を表示</div>
+                <div class="canvas-container"><canvas id="rankingChartCount"></canvas></div>
+            </div>
+        </div>
+        <div id="graph_view_user" class="tab-content">
+            <div class="category-header">2026年冬アニメ 歌唱人数ランキング推移 (Top 20)</div>
+            <div class="chart-wrapper">
+                <div id="chart-info-user" class="chart-info">グラフの点をタップ・ホバーで詳細を表示</div>
+                <div class="canvas-container"><canvas id="rankingChartUser"></canvas></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="list-created-content" style="display:none;"></div>
+    <div id="list-uncreated-content" style="display:none;"></div>
+
+<script>
+    const host = 'http://ykr.moe:11059';
+    
+    // --- グラフ用データ ---
+    const dataCount = {};
+    const dataUser = {};
+    let charts = { count: null, user: null };
+    
+    // 標準カラーパレット
+    const colors = [
+        '#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#46f0f0', '#f032e6', 
+        '#bcf60c', '#fabebe', '#008080', '#e6beff', '#9a6324', '#fffac8', '#800000', '#aaffc3', 
+        '#808000', '#ffd8b1', '#000075', '#808080'
+    ];
+
+    function initChart(type, dataObj, canvasId) {
+        if(charts[type]) return;
+        const ctx = document.getElementById(canvasId).getContext('2d');
+        const infoDivId = type === 'count' ? 'chart-info-count' : 'chart-info-user';
+        
+        // 最新の順位でTOP5を判定
+        const allKeys = Object.keys(dataObj);
+        const latestRank = [];
+        allKeys.forEach(key => {
+            const arr = dataObj[key];
+            if(arr.length > 0) {
+                latestRank.push({ key: key, rank: arr[arr.length - 1].y });
+            }
+        });
+        latestRank.sort((a,b) => a.rank - b.rank);
+        const top5 = latestRank.slice(0, 5).map(x => x.key);
+
+        const datasets = allKeys.map((key, i) => {
+            const color = colors[i % colors.length];
+            const isTop5 = top5.includes(key);
+            return {
+                label: key, 
+                data: dataObj[key],
+                borderColor: color,
+                backgroundColor: color,
+                pointRadius: 4, 
+                pointHoverRadius: 8, 
+                tension: 0.1, 
+                fill: false, 
+                borderWidth: 2,
+                hidden: !isTop5 // TOP5以外は初期非表示（凡例で取り消し線）
+            };
+        });
+
+        charts[type] = new Chart(ctx, {
+            type: 'line', 
+            data: { datasets },
+            options: {
+                responsive: true, 
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'nearest',
+                    axis: 'x',
+                    intersect: true
+                },
+                plugins: {
+                    tooltip: {
+                        enabled: false, // ツールチップを無効化
+                        external: function(context) {
+                            // ツールチップの内容を上部のdivに表示
+                            const tooltip = context.tooltip;
+                            const infoDiv = document.getElementById(infoDivId);
+                            if (tooltip.opacity === 0) return;
+                            
+                            if (tooltip.body) {
+                                const dataPoint = tooltip.dataPoints[0];
+                                // 日付の整形 (Jan 28, 2026 -> 1/28)
+                                const dateObj = new Date(dataPoint.label);
+                                const dateStr = (dateObj.getMonth() + 1) + '/' + dateObj.getDate();
+                                
+                                // 指定のフォーマット: 作品名 曲名　1/28（1位）
+                                infoDiv.innerHTML = `<span style="color:${dataPoint.dataset.borderColor}">●</span> ${dataPoint.dataset.label}　${dateStr}（${dataPoint.parsed.y}位）`;
+                            }
+                        }
+                    },
+                    legend: { 
+                        position: 'bottom',
+                        labels: { boxWidth: 10, padding: 15 },
+                        onClick: function(e, legendItem, legend) {
+                            const index = legendItem.datasetIndex;
+                            const ci = legend.chart;
+                            if (ci.isDatasetVisible(index)) {
+                                ci.hide(index);
+                                legendItem.hidden = true;
+                            } else {
+                                ci.show(index);
+                                legendItem.hidden = false;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: { 
+                        reverse: true, 
+                        min: 0.5, // 1位の上に少し余白
+                        max: 20.5, 
+                        // 修正: 整数のみ表示
+                        ticks: { 
+                            stepSize: 1, 
+                            callback: function(val) { 
+                                if (val % 1 === 0 && val >= 1 && val <= 20) return val;
+                                return ''; 
+                            } 
+                        },
+                        title: { display: true, text: '順位' }
+                    },
+                    x: { 
+                        type: 'time', 
+                        time: { unit: 'day', displayFormats: { day: 'M/d' } },
+                        title: { display: true, text: '日付' }
+                    }
+                }
+            }
+        });
+    }
+
+    // 修正: グラフを画像として保存するためのHTML生成
+    function downloadGraphHTML() {
+        const isCount = document.getElementById('graph_view_count').classList.contains('active');
+        const canvasId = isCount ? 'rankingChartCount' : 'rankingChartUser';
+        const title = isCount ? "推移(数)" : "推移(人)";
+        const filename = 'graph.html';
+
+        const canvas = document.getElementById(canvasId);
+        // Canvasの状態を画像データURLとして取得
+        const imgData = canvas.toDataURL('image/png');
+        
+        // ヘッダーテキスト取得
+        const headerText = isCount ? 
+            '2026年冬アニメ 歌唱数ランキング推移 (Top 20)' : 
+            '2026年冬アニメ 歌唱人数ランキング推移 (Top 20)';
+            
+        // 画像を埋め込んだHTMLコンテンツを作成
+        const content = `
+            <div class="category-header">${headerText}</div>
+            <div class="chart-wrapper">
+                <img src="${imgData}" style="width:100%; max-width:800px; border:1px solid #ccc; display:block; margin:0 auto;">
+            </div>
+        `;
+        
+        generateDownload(content, filename, title);
+    }
+
+    // --- 以下、既存機能 ---
+
+    function onRankingClick(row) {
+        if (window.getSelection().toString().length > 0) return;
+        const rawHref = row.getAttribute('data-href');
+        if (rawHref && rawHref.startsWith('#host')) {
+            const url = rawHref.replace('#host', host);
+            window.location.href = url;
+        }
+    }
+
+    function openTab(tabName) {
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.getElementById(tabName).classList.add('active');
+        
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        
+        // タブボタンのアクティブ化ロジック
+        let btns = document.querySelectorAll('.tab-btn');
+        for(let i=0; i<btns.length; i++) {
+            if(btns[i].innerText.includes("セットリスト") && tabName === 'setlist') btns[i].classList.add('active');
+            else if(btns[i].innerText.includes("クール集計") && tabName === 'analysis') btns[i].classList.add('active');
+            else if(btns[i].innerText.includes("歌唱数ランキング") && tabName === 'ranking_count') btns[i].classList.add('active');
+            else if(btns[i].innerText.includes("歌唱人数ランキング") && tabName === 'ranking_user') btns[i].classList.add('active');
+            else if(btns[i].innerText.includes("推移(数)") && tabName === 'graph_view_count') btns[i].classList.add('active');
+            else if(btns[i].innerText.includes("推移(人)") && tabName === 'graph_view_user') btns[i].classList.add('active');
+        }
+        
+        // コントロール表示切り替え
+        document.getElementById('ctrl-setlist').style.display = 'none';
+        document.getElementById('ctrl-analysis').style.display = 'none';
+        document.getElementById('ctrl-ranking-count').style.display = 'none';
+        document.getElementById('ctrl-ranking-user').style.display = 'none';
+        document.querySelector('.ctrl-graph').style.display = 'none';
+
+        if(tabName === 'setlist') document.getElementById('ctrl-setlist').style.display = 'flex';
+        else if(tabName === 'analysis') document.getElementById('ctrl-analysis').style.display = 'flex';
+        else if(tabName === 'ranking_count') document.getElementById('ctrl-ranking-count').style.display = 'flex';
+        else if(tabName === 'ranking_user') document.getElementById('ctrl-ranking-user').style.display = 'flex';
+        else if(tabName === 'graph_view_count') {
+            document.querySelector('.ctrl-graph').style.display = 'flex';
+            initChart('count', dataCount, 'rankingChartCount');
+        }
+        else if(tabName === 'graph_view_user') {
+            document.querySelector('.ctrl-graph').style.display = 'flex';
+            initChart('user', dataUser, 'rankingChartUser');
+        }
+    }
+
+    function toggleCategory(header) {
+        const content = header.nextElementSibling;
+        content.classList.toggle('collapsed');
+        const icon = header.querySelector('i');
+        if(icon) {
+            icon.className = content.classList.contains('collapsed') ? 'fas fa-chevron-right' : 'fas fa-chevron-down';
+            icon.style.float = 'right';
+        }
+    }
+
+    function downloadHTML(elementId, filename, title) {
+        // 引数が省略された場合のデフォルト動作（全体のHTML保存）
+        if (!elementId) {
+            elementId = 'print-target';
+            filename = 'karaoke_analysis.html';
+            title = 'クール集計結果';
+        }
+        
+        const element = document.getElementById(elementId);
+        if(element) {
+            const htmlContent = element.innerHTML;
+            generateDownload(htmlContent, filename, title);
+        }
+    }
+
+    function downloadRanking(mode) {
+        let elementId = 'ranking-count-print-target';
+        let filename = 'karaoke_ranking_count.html';
+        let title = 'カラオケ歌唱数ランキング';
+        
+        if (mode === 'user') {
+            elementId = 'ranking-user-print-target';
+            filename = 'karaoke_ranking_user.html';
+            title = 'カラオケ歌唱人数ランキング';
+        }
+        
+        const element = document.getElementById(elementId);
+        const htmlContent = element.innerHTML;
+        generateDownload(htmlContent, filename, title);
+    }
+
+    function downloadList(elementId, filename, title) {
+        const element = document.getElementById(elementId);
+        if(element) {
+            const htmlContent = element.innerHTML;
+            generateDownload(htmlContent, filename, title);
+        }
+    }
+
+    function generateDownload(content, filename, title) {
+        const fullHtml = `
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>${title}</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { font-family: "Helvetica Neue", Arial, sans-serif; font-size: 13px; color: #333; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        th, td { border: 1px solid #ccc; padding: 5px 8px; text-align: left; vertical-align: middle; }
+        th { background-color: #2c3e50; color: #fff; }
+        td[rowspan] { background-color: #fff; }
+        
+        .category-header { 
+            background: #667eea; color: white; padding: 10px; margin-top: 20px; 
+            font-weight: bold; border-radius: 4px; cursor: pointer; user-select: none;
+        }
+        .category-content { display: block; }
+        .category-content.collapsed { display: none; }
+        
+        a.export-link {
+            display: block; 
+            margin: -5px -8px; 
+            padding: 5px 8px;  
+            color: #333; 
+            text-decoration: none; 
+            box-sizing: border-box;
+            cursor: pointer;
+        }
+        a.export-link:hover { background-color: #eef2f7; color: #3498db; }
+        
+        tr.ranking-row { cursor: pointer; }
+        tr.ranking-row:hover { background-color: #dbeafe; }
+        
+        .count-wrapper { display: flex; align-items: center; gap: 8px; }
+        .count-num { width: 25px; text-align: right; }
+        .bar-chart { height: 10px; background: #3498db; border-radius: 5px; }
+        .bar-chart-user { height: 10px; background: #2ecc71; border-radius: 5px; }
+        
+        .rank-badge {
+            display: inline-block; width: 24px; height: 24px; line-height: 24px;
+            border-radius: 50%; text-align: center; color: #fff; font-weight: bold; font-size: 12px;
+            background-color: #95a5a6;
+        }
+        .rank-1 { background-color: #f1c40f; width: 28px; height: 28px; line-height: 28px; }
+        .rank-2 { background-color: #bdc3c7; }
+        .rank-3 { background-color: #d35400; }
+        
+        tr.rank-row-1 td { background-color: #fff8e1 !important; }
+        tr.rank-row-2 td { background-color: #f5f5f5 !important; }
+        tr.rank-row-3 td { background-color: #fff0e6 !important; }
+
+        .chart-wrapper {
+            background: #fff; padding: 10px; border-radius: 8px; border: 1px solid #ccc;
+        }
+
+        @media print {
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                color-adjust: exact !important;
+            }
+            .category-content { display: block !important; }
+            tbody.anime-group { break-inside: avoid; page-break-inside: avoid; }
+            .category-header { page-break-after: avoid; }
+            thead { display: table-header-group; }
+        }
+    </style>
+</head>
+<body>
+    <h1>${title}</h1>
+    <div style="text-align:right; font-size:0.9rem; color:#777;">出力日: 2026/02/10</div>
+    ${content}
+
+    <script>
+        const host = 'http://ykr.moe:11059';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // クール集計リンク有効化
+            document.querySelectorAll('a.export-link').forEach(link => {
+                const rawHref = link.getAttribute('href');
+                if (rawHref && rawHref.startsWith('#host')) {
+                    link.href = rawHref.replace('#host', host);
+                }
+            });
+
+            // 修正: ランキング行クリック有効化 (ダッシュボードでは無効だが保存ファイルでは有効)
+            document.querySelectorAll('tr[data-href]').forEach(row => {
+                row.addEventListener('click', () => {
+                    if (window.getSelection().toString().length > 0) return;
+                    const rawHref = row.getAttribute('data-href');
+                    if (rawHref && rawHref.startsWith('#host')) {
+                        window.location.href = rawHref.replace('#host', host);
+                    }
+                });
+            });
+        });
+
+        function toggleCategory(header) {
+            const content = header.nextElementSibling;
+            content.classList.toggle('collapsed');
+            const icon = header.querySelector('i');
+            if(icon) {
+                icon.className = content.classList.contains('collapsed') ? 'fas fa-chevron-right' : 'fas fa-chevron-down';
+                icon.style.float = 'right';
+            }
+        }
+    <\/script>
+</body>
+</html>`;
+
+        const blob = new Blob([fullHtml], {type: 'text/html'});
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = filename;
+        link.click();
+    }
+
+    const searchInput = document.getElementById("searchInput");
+    const table = document.getElementById("setlistTable");
+    const countDisplay = document.getElementById('countDisplay');
+    let tableData = [];
+    let tbodyRows = [];
+
+    window.addEventListener('DOMContentLoaded', () => {
+        const tbody = table.tBodies[0];
+        if (tbody) {
+            tbodyRows = Array.from(tbody.rows);
+            tableData = tbodyRows.map(row => row.innerText.toUpperCase());
+            countDisplay.innerText = '全 ' + tbodyRows.length + ' 件';
+        }
+    });
+
+    searchInput.addEventListener("keyup", function(event) {
+        if (event.key === "Enter") performSearch();
+    });
+
+    function performSearch() {
+        const filter = searchInput.value.toUpperCase();
+        const keywords = filter.replace(/　/g, " ").split(" ").filter(k => k.length > 0);
+        let visibleCount = 0;
+        const total = tableData.length;
+        
+        for (let i = 0; i < total; i++) {
+            let isMatch = true;
+            const rowText = tableData[i];
+            for (let k = 0; k < keywords.length; k++) {
+                if (rowText.indexOf(keywords[k]) === -1) {
+                    isMatch = false; break;
+                }
+            }
+            
+            if (isMatch || keywords.length === 0) {
+                tbodyRows[i].classList.remove('hidden');
+                visibleCount++;
+            } else {
+                tbodyRows[i].classList.add('hidden');
+            }
+        }
+        countDisplay.innerText = '表示: ' + visibleCount + ' / ' + total;
+    }
+
+    function resetFilter() {
+        searchInput.value = "";
+        performSearch();
+    }
+
+    function sortTable(n) {
+        const tbody = table.tBodies[0];
+        const rows = Array.from(tbody.rows);
+        const th = table.querySelectorAll('th')[n];
+        let dir = th.getAttribute('data-dir') === 'asc' ? 'desc' : 'asc';
+        
+        table.querySelectorAll('th').forEach(h => h.setAttribute('data-dir', ''));
+        th.setAttribute('data-dir', dir);
+
+        rows.sort((a, b) => {
+            const valA = a.cells[n].innerText.trim();
+            const valB = b.cells[n].innerText.trim();
+            if (!isNaN(valA) && !isNaN(valB) && valA!=='' && valB!=='') {
+                return dir === 'asc' ? valA - valB : valB - valA;
+            }
+            return dir === 'asc' ? valA.localeCompare(valB,'ja') : valB.localeCompare(valA,'ja');
+        });
+        rows.forEach(row => tbody.appendChild(row));
+        tbodyRows = rows;
+        tableData = tbodyRows.map(row => row.innerText.toUpperCase());
+    }
+</script>
+</body>
+</html>
