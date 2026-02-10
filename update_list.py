@@ -14,70 +14,54 @@ from itertools import groupby
 # デプロイしたGASのウェブアプリURL
 GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyzKEPfj0bYcRyEdizwQXcduIOQFt2_njtFQSyGP9jBjrhR8pyVKwDol6VN7bLPrktq/exec"
 
-def load_df_from_gas_or_local(filename, encoding='utf-8', header='infer'):
-    """GASからCSVを取得し、失敗時はローカルを読み込む"""
-    df = pd.DataFrame()
-    
-    # 1. GASから取得試行
-    if GAS_WEB_APP_URL:
-        try:
-            print(f"[GAS] Fetching {filename} ...")
-            res = requests.get(GAS_WEB_APP_URL, params={'filename': filename}, timeout=30)
-            
-            if res.status_code == 200:
-                content = res.text
-                if content and content.strip():
-                    # GASはUTF-8で文字列を返すため、StringIOでDF化
-                    try:
-                        df = pd.read_csv(io.StringIO(content), header=header)
-                        print(f"[GAS] Success: Loaded {filename} ({len(df)} rows).")
-                        return df
-                    except pd.errors.EmptyDataError:
-                        print(f"[GAS] File {filename} is empty.")
-                    except Exception as parse_err:
-                        print(f"[GAS] Parse Error for {filename}: {parse_err}")
-                else:
-                    print(f"[GAS] File {filename} found but empty.")
+def load_df_from_gas(filename, **kwargs):
+    """GASからCSVデータをダウンロードしてDataFrameとして返す"""
+    print(f"[GAS] Loading {filename}...")
+    try:
+        # タイムアウトを少し長めに設定
+        response = requests.get(GAS_WEB_APP_URL, params={'filename': filename}, timeout=60)
+        
+        if response.status_code == 200:
+            content = response.text
+            if content and content.strip():
+                # GASからのレスポンスはUTF-8文字列なのでStringIOでラップしてpandasで読む
+                try:
+                    return pd.read_csv(io.StringIO(content), **kwargs)
+                except pd.errors.EmptyDataError:
+                    print(f"[GAS] File {filename} is empty.")
+                    return pd.DataFrame()
             else:
-                print(f"[GAS] Failed to fetch {filename}. Status: {res.status_code}")
-                
-        except Exception as e:
-            print(f"[GAS] Connection failed: {e}")
-
-    # 2. ローカルから取得（フォールバック）
-    if os.path.exists(filename):
-        print(f"[Local] Loading fallback for {filename}...")
-        try:
-            df = pd.read_csv(filename, encoding=encoding, header=header)
-            print(f"[Local] Loaded {filename}.")
-        except UnicodeDecodeError:
-            try:
-                df = pd.read_csv(filename, encoding='cp932', header=header)
-                print(f"[Local] Loaded {filename} (cp932).")
-            except:
-                pass
-    
-    return df
+                print(f"[GAS] File {filename} is empty or not found.")
+                return pd.DataFrame()
+        else:
+            print(f"[GAS] Error fetching {filename}: Status {response.status_code}")
+            return pd.DataFrame()
+    except Exception as e:
+        print(f"[GAS] Connection error for {filename}: {e}")
+        return pd.DataFrame()
 
 def save_df_to_gas(filename, df):
-    """DataFrameをCSVとしてGASへアップロード"""
-    if not GAS_WEB_APP_URL: return
+    """DataFrameをCSV文字列に変換してGASへアップロードする"""
+    print(f"[GAS] Uploading {filename}...")
     try:
-        print(f"[GAS] Uploading {filename}...")
         csv_buffer = io.StringIO()
         df.to_csv(csv_buffer, index=False)
-        payload = {'filename': filename, 'content': csv_buffer.getvalue()}
-        res = requests.post(GAS_WEB_APP_URL, json=payload, timeout=60)
         
-        if res.status_code == 200:
-            print(f"[GAS] Upload success: {filename}")
+        payload = {
+            'filename': filename,
+            'content': csv_buffer.getvalue()
+        }
+        
+        response = requests.post(GAS_WEB_APP_URL, json=payload, timeout=60)
+        if response.status_code == 200:
+            print(f"[GAS] Upload success: {response.text}")
         else:
-            print(f"[GAS] Upload failed: {res.status_code} - {res.text}")
+            print(f"[GAS] Upload failed: {response.status_code} - {response.text}")
     except Exception as e:
         print(f"[GAS] Upload error: {e}")
 
 # ==========================================
-# 元のコードロジック (I/O部分のみ置換)
+# 以下、ご提示いただいた元のコード (I/O部分のみ置換)
 # ==========================================
 
 # --- 時刻設定 ---
@@ -178,11 +162,13 @@ def check_match(target_text, source_series):
 
 # --- 1. 過去データ読み込み (修正箇所: GASから読み込み) ---
 history_file = "history.csv"
-history_df = load_df_from_gas_or_local(history_file)
+# ローカルファイル確認ロジックをGAS読み込みに置換
+history_df = load_df_from_gas(history_file)
 
 if not history_df.empty:
     history_df = history_df.fillna("")
 else:
+    print("履歴ファイルがGASに存在しないか、読み込みに失敗しました。新規作成します。")
     history_df = pd.DataFrame()
 
 # --- 2. 新しいデータ取得 ---
@@ -233,9 +219,10 @@ if new_data_frames:
         cols.insert(0, cols.pop(cols.index('部屋主')))
         final_df = final_df[cols]
 
-    # 修正箇所: ローカル保存からGAS保存に変更
+    # 修正箇所: to_csvではなくGASへのアップロードに変更
+    # final_df.to_csv(history_file, index=False, encoding='utf-8-sig')
     save_df_to_gas(history_file, final_df)
-    print("履歴ファイルを更新しました(GAS)。")
+    print("履歴ファイルをGAS上で更新しました。")
 else:
     final_df = history_df
     print("新しいデータなし。過去データを使用。")
@@ -260,13 +247,14 @@ uncreated_lists_html = ""
 
 cool_file = "cool_analysis.csv" 
 
-# --- オフラインリスト読み込み (修正箇所: GASのoffline_list.csv 1本化に対応) ---
+# --- オフラインリスト読み込み (修正箇所: GAS対応) ---
+# GAS上のファイル名は "offline_list.csv" 一つに統合されている前提
 offline_files = ["offline_list.csv"] 
 offline_targets = []
 
 for file_path in offline_files:
-    # 修正箇所: GASから読み込み
-    offline_df = load_df_from_gas_or_local(file_path)
+    # GASから読み込み
+    offline_df = load_df_from_gas(file_path)
     
     if not offline_df.empty:
         offline_df = offline_df.fillna("")
@@ -274,12 +262,12 @@ for file_path in offline_files:
         if '曲名' in offline_df.columns:
             targets = [normalize_offline_text(str(x)) for x in offline_df['曲名'].tolist()]
             offline_targets.extend(targets)
-            print(f"オフラインリスト({file_path})を読み込みました。追加件数: {len(targets)}")
+            print(f"オフラインリスト({file_path})をGASから読み込みました。追加件数: {len(targets)}")
         else:
             print(f"オフラインリスト({file_path})に'曲名'カラムが見つかりません。")
             
     else:
-        print(f"オフラインリスト({file_path})が見つかりません。")
+        print(f"オフラインリスト({file_path})がGASに見つかりません。")
 
 print(f"オフラインリスト合計件数: {len(offline_targets)}")
 
@@ -337,8 +325,10 @@ def generate_category_html_block(category_name, item_list):
     return html
 
 
-# 修正箇所: cool_analysis.csvをGASから読み込み (ヘッダーなし対応)
-raw_df = load_df_from_gas_or_local(cool_file, header=None)
+# --- Cool Analysis読み込み (修正箇所: GAS対応) ---
+# ローカルファイルチェックをGAS読み込みに置換
+# cool_analysis.csv はヘッダーが無い場合が多いので header=None を指定
+raw_df = load_df_from_gas(cool_file, header=None)
 
 if not raw_df.empty:
     try:
@@ -772,7 +762,7 @@ if not raw_df.empty:
         traceback.print_exc()
 
 else:
-    print("CSV読み込み失敗")
+    print("CSV読み込み失敗: cool_analysis.csv がGASから取得できませんでした。")
 
 
 # ==========================================
