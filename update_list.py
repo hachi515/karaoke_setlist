@@ -9,30 +9,54 @@ import io
 from itertools import groupby
 
 # ==========================================
-# ★ GAS連携用設定・関数 (ここを追加)
+# ★ GAS連携用設定・関数
 # ==========================================
 # デプロイしたGASのウェブアプリURL
 GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyzKEPfj0bYcRyEdizwQXcduIOQFt2_njtFQSyGP9jBjrhR8pyVKwDol6VN7bLPrktq/exec"
 
 def load_df_from_gas(filename, **kwargs):
-    """GASからCSVデータをダウンロードしてDataFrameとして返す"""
+    """GASからCSVデータをダウンロードしてDataFrameとして返す（強力なデバッグとBOM除去付き）"""
     print(f"[GAS] Loading {filename}...")
     try:
-        # タイムアウトを少し長めに設定
         response = requests.get(GAS_WEB_APP_URL, params={'filename': filename}, timeout=60)
         
         if response.status_code == 200:
-            content = response.text
-            if content and content.strip():
-                # GASからのレスポンスはUTF-8文字列なのでStringIOでラップしてpandasで読む
-                try:
-                    return pd.read_csv(io.StringIO(content), **kwargs)
-                except pd.errors.EmptyDataError:
-                    print(f"[GAS] File {filename} is empty.")
-                    return pd.DataFrame()
-            else:
-                print(f"[GAS] File {filename} is empty or not found.")
+            content_bytes = response.content
+            if not content_bytes:
+                print(f"[GAS] ALERT: File {filename} is empty (0 bytes).")
                 return pd.DataFrame()
+
+            # --- デバッグ情報: 何が返ってきているか確認 ---
+            try:
+                # 先頭100文字だけ表示して、中身がCSVかHTMLエラーか確認する
+                preview = content_bytes[:200].decode('utf-8', errors='ignore').replace('\n', ' ')
+                print(f"[GAS] Content Preview: {preview}...")
+            except:
+                pass
+            # ------------------------------------------
+
+            # 複数の文字コードで読み込みを試行
+            # BOM付きUTF-8 (utf-8-sig) を最優先
+            encodings = ['utf-8-sig', 'utf-8', 'cp932', 'shift_jis']
+            
+            for enc in encodings:
+                try:
+                    # engine='python' を指定してパースを堅牢にする
+                    df = pd.read_csv(io.BytesIO(content_bytes), encoding=enc, engine='python', **kwargs)
+                    
+                    # ★重要: カラム名のクリーニング
+                    # BOM (\ufeff) や前後の空白がカラム名に残ると判定に失敗するため除去する
+                    if not df.empty:
+                        df.columns = df.columns.astype(str).str.replace('\ufeff', '').str.strip()
+                    
+                    print(f"[GAS] Success: Loaded {filename} ({enc}). Columns: {list(df.columns)}")
+                    return df
+                except Exception:
+                    continue
+            
+            print(f"[GAS] Failed to decode {filename}. (Tried: {encodings})")
+            return pd.DataFrame()
+            
         else:
             print(f"[GAS] Error fetching {filename}: Status {response.status_code}")
             return pd.DataFrame()
@@ -61,7 +85,7 @@ def save_df_to_gas(filename, df):
         print(f"[GAS] Upload error: {e}")
 
 # ==========================================
-# 以下、ご提示いただいた元のコード (I/O部分のみ置換)
+# メイン処理
 # ==========================================
 
 # --- 時刻設定 ---
@@ -160,9 +184,8 @@ def check_match(target_text, source_series):
         return source_series.str.contains(safe_target, case=False, na=False)
 
 
-# --- 1. 過去データ読み込み (修正箇所: GASから読み込み) ---
+# --- 1. 過去データ読み込み ---
 history_file = "history.csv"
-# ローカルファイル確認ロジックをGAS読み込みに置換
 history_df = load_df_from_gas(history_file)
 
 if not history_df.empty:
@@ -219,8 +242,7 @@ if new_data_frames:
         cols.insert(0, cols.pop(cols.index('部屋主')))
         final_df = final_df[cols]
 
-    # 修正箇所: to_csvではなくGASへのアップロードに変更
-    # final_df.to_csv(history_file, index=False, encoding='utf-8-sig')
+    # GASへのアップロード
     save_df_to_gas(history_file, final_df)
     print("履歴ファイルをGAS上で更新しました。")
 else:
@@ -232,8 +254,8 @@ else:
 # ★集計処理
 # ==========================================
 analysis_html_content = "" 
-ranking_count_html_content = "" # 変更: 歌唱数ランキング用
-ranking_user_html_content = ""  # 変更: 歌唱人数ランキング用
+ranking_count_html_content = "" 
+ranking_user_html_content = "" 
 
 cool_data_exists = False
 ranking_data_list = [] 
@@ -247,27 +269,29 @@ uncreated_lists_html = ""
 
 cool_file = "cool_analysis.csv" 
 
-# --- オフラインリスト読み込み (修正箇所: GAS対応) ---
-# GAS上のファイル名は "offline_list.csv" 一つに統合されている前提
+# --- オフラインリスト読み込み ---
+# 一本化されたファイル
 offline_files = ["offline_list.csv"] 
 offline_targets = []
 
 for file_path in offline_files:
-    # GASから読み込み
+    # GASから読み込み（強化版）
     offline_df = load_df_from_gas(file_path)
     
     if not offline_df.empty:
         offline_df = offline_df.fillna("")
         
+        # '曲名'カラムがあるか確認 (BOM除去済みなので単純な文字列比較でOKなはず)
         if '曲名' in offline_df.columns:
             targets = [normalize_offline_text(str(x)) for x in offline_df['曲名'].tolist()]
             offline_targets.extend(targets)
             print(f"オフラインリスト({file_path})をGASから読み込みました。追加件数: {len(targets)}")
         else:
             print(f"オフラインリスト({file_path})に'曲名'カラムが見つかりません。")
+            print(f"検出されたカラム: {list(offline_df.columns)}") # デバッグ用
             
     else:
-        print(f"オフラインリスト({file_path})がGASに見つかりません。")
+        print(f"オフラインリスト({file_path})が読み込めないか、空です。")
 
 print(f"オフラインリスト合計件数: {len(offline_targets)}")
 
@@ -277,7 +301,6 @@ def generate_category_html_block(category_name, item_list):
     if not item_list:
         return ""
     
-    # アニメ名でソート
     item_list.sort(key=lambda x: x['anime'])
     
     html = f"""
@@ -325,9 +348,7 @@ def generate_category_html_block(category_name, item_list):
     return html
 
 
-# --- Cool Analysis読み込み (修正箇所: GAS対応) ---
-# ローカルファイルチェックをGAS読み込みに置換
-# cool_analysis.csv はヘッダーが無い場合が多いので header=None を指定
+# --- Cool Analysis読み込み ---
 raw_df = load_df_from_gas(cool_file, header=None)
 
 if not raw_df.empty:
@@ -337,10 +358,8 @@ if not raw_df.empty:
         print("CSV内の重複行を削除中...")
         raw_df = raw_df.drop_duplicates(keep='last')
         
-        # --- グラフ用と集計用のデータ準備 ---
         analysis_source_df = final_df.copy()
         analysis_source_df['dt_obj'] = pd.to_datetime(analysis_source_df['取得日'], errors='coerce')
-        # 日付なしは除外
         analysis_source_df = analysis_source_df.dropna(subset=['dt_obj'])
         
         analysis_source_df['norm_filename'] = analysis_source_df['曲名（ファイル名）'].apply(normalize_text)
@@ -361,12 +380,10 @@ if not raw_df.empty:
 
         exclude_keywords = ['test', 'テスト', 'システム', 'admin', 'System']
         
-        # 全期間の履歴（グラフ用）
         full_history = analysis_source_df[
             (~analysis_source_df['歌った人'].astype(str).apply(lambda x: any(k in x for k in exclude_keywords)))
         ].sort_values('dt_obj')
         
-        # 集計表示用の期間 (2026/01/01 - 2026/03/31)
         start_date = pd.to_datetime("2026/01/01")
         end_date = pd.to_datetime("2026/03/31")
         target_history = full_history[
@@ -404,16 +421,12 @@ if not raw_df.empty:
                 "anime": anime, "type": type_, "artist": artist, "song": song
             })
 
-        # ==========================================
-        # ★ グラフデータ計算 (全期間日次ランキング)
-        # ==========================================
         print("グラフデータ計算中...")
         graph_target_cat = "2026年冬アニメ"
         
         if graph_target_cat in categorized_data:
             winter_items = categorized_data[graph_target_cat]
             
-            # アイテムの正規化情報を事前作成
             items_with_norm = []
             for item in winter_items:
                 items_with_norm.append({
@@ -423,7 +436,6 @@ if not raw_df.empty:
                     "name": f"{item['anime']} {item['song']}"
                 })
 
-            # 全履歴に対するマッチング情報を事前計算
             matched_records = []
             for idx, item in enumerate(items_with_norm):
                 song_pat = item["song_norm"]
@@ -454,20 +466,18 @@ if not raw_df.empty:
                             "user": row['歌った人']
                         })
             
-            # 日付順にソート
             matched_records.sort(key=lambda x: x['date'])
             
             if matched_records:
                 unique_dates = sorted(list(set(r['date'] for r in matched_records)))
-                current_counts = {} # item_idx -> count
-                current_users = {}  # item_idx -> set(users)
+                current_counts = {}
+                current_users = {}
                 rec_ptr = 0
                 total_recs = len(matched_records)
                 
                 for current_dt in unique_dates:
                     dt_str = current_dt.strftime("%Y-%m-%d")
                     
-                    # その日までのデータを累積
                     while rec_ptr < total_recs and matched_records[rec_ptr]['date'] <= current_dt:
                         rec = matched_records[rec_ptr]
                         idx = rec['item_idx']
@@ -479,7 +489,6 @@ if not raw_df.empty:
                         current_users[idx].add(user)
                         rec_ptr += 1
                     
-                    # --- 歌唱数ランキング ---
                     ranking_src_count = []
                     for idx, cnt in current_counts.items():
                         ranking_src_count.append({"name": items_with_norm[idx]["name"], "val": cnt})
@@ -494,7 +503,6 @@ if not raw_df.empty:
                             if d['name'] not in graph_series_data_count: graph_series_data_count[d['name']] = []
                             graph_series_data_count[d['name']].append({"x": dt_str, "y": rank})
 
-                    # --- 人数ランキング ---
                     ranking_src_user = []
                     for idx, u_set in current_users.items():
                         if len(u_set) > 0:
@@ -512,13 +520,11 @@ if not raw_df.empty:
 
         print("グラフデータ計算完了。")
 
-        # --- クール集計HTML生成 & リスト生成 ---
         for category, items in categorized_data.items():
             
             cat_created_items = []
             cat_uncreated_items = []
 
-            # メイン集計用HTMLヘッダー (人数カラムを追加)
             analysis_html_content += f"""
             <div class="category-block">
                 <div class="category-header" onclick="toggleCategory(this)">
@@ -551,7 +557,6 @@ if not raw_df.empty:
                     target_song_norm = normalize_text(item["song"])
                     target_anime_norm = normalize_text(item["anime"])
                     
-                    # --- 歌唱数集計 (target_history を使用) ---
                     song_match_mask = check_match(target_song_norm, target_history['norm_filename'])
                     anime_match_mask = (
                         target_history['norm_filename'].str.contains(re.escape(target_anime_norm), case=False, na=False) |
@@ -569,34 +574,26 @@ if not raw_df.empty:
 
                     matched_data = target_history[final_mask]
                     count = len(matched_data)
-                    # ★追加: 人数（ユニーク）カウント
                     user_count = matched_data['歌った人'].nunique() if count > 0 else 0
                     
-                    # --- 作成数集計 ---
                     creation_count = 0
                     
-                    # ★追加: カッコの中身を温存した検索用文字列を作る
-                    # (normalize_offline_textはカッコを消さない関数です)
                     target_song_raw_norm = normalize_offline_text(item["song"])
 
                     if target_song_norm:
                         for offline_str in offline_targets:
-                            # ★変更: 「カッコ削除版」または「カッコ温存版」のどちらかが含まれていればOKにする
                             if (target_song_norm in offline_str) or (target_song_raw_norm in offline_str):
-                                
                                 if target_anime_norm:
                                     if target_anime_norm in offline_str:
                                         creation_count += 1
-                                    else:
-                                        creation_count += 1
+                                else:
+                                    creation_count += 1
 
-                    # --- リストへの振り分け ---
                     if creation_count >= 1:
                         cat_created_items.append(item)
                     else:
                         cat_uncreated_items.append(item)
 
-                    # ランキング用データ追加
                     ranking_data_list.append({
                         "category": category,
                         "anime": item["anime"],
@@ -604,16 +601,14 @@ if not raw_df.empty:
                         "artist": item["artist"],
                         "type": item["type"],
                         "count": count,
-                        "user_count": user_count # 人数を追加
+                        "user_count": user_count
                     })
 
-                    # 行スタイル判定 (全て黒字)
                     row_class = "has-count"
                     
                     bar_width = min(count * 20, 150)
                     bar_html = f'<div class="bar-chart" style="width:{bar_width}px;"></div>' if count > 0 else ""
                     
-                    # ★追加: ユーザー数グラフ
                     user_bar_width = min(user_count * 20, 100)
                     user_bar_html = f'<div class="bar-chart-user" style="width:{user_bar_width}px;"></div>' if user_count > 0 else ""
 
@@ -626,14 +621,12 @@ if not raw_df.empty:
                     if i == 0:
                         analysis_html_content += f'<td rowspan="{rowspan}">{item["anime"]}</td>'
                     
-                    # 作成数カラム
                     analysis_html_content += f'<td align="center">{creation_count}</td>'
 
                     analysis_html_content += f'<td align="center">{link_tag_start}{item["type"]}</a></td>'
                     analysis_html_content += f'<td>{link_tag_start}{item["artist"]}</a></td>'
                     analysis_html_content += f'<td>{link_tag_start}{item["song"]}</a></td>'
                     
-                    # ★追加: 人数カラム (グラフ付き・フォント統一)
                     analysis_html_content += f'<td class="count-cell"><div class="count-wrapper"><span class="count-num">{user_count}</span>{user_bar_html}</div></td>'
 
                     analysis_html_content += f'<td class="count-cell"><div class="count-wrapper"><span class="count-num">{count}</span>{bar_html}</div></td>'
@@ -643,16 +636,12 @@ if not raw_df.empty:
             
             analysis_html_content += "</table></div></div>"
 
-            # --- カテゴリごとのリストHTMLを生成して蓄積 ---
             created_lists_html += generate_category_html_block(category, cat_created_items)
             uncreated_lists_html += generate_category_html_block(category, cat_uncreated_items)
 
         cool_data_exists = True
         print("クール集計処理完了。")
         
-        # ==========================================
-        # ★ランキング生成 (歌唱数 & 歌唱人数 の2パターン)
-        # ==========================================
         print("ランキング生成処理開始...")
         
         def generate_ranking_html(mode="count"):
@@ -663,14 +652,11 @@ if not raw_df.empty:
                     
                 cat_items = [d for d in ranking_data_list if d["category"] == target_cat and d["count"] > 0]
                 
-                # ソートロジック
                 if mode == "count":
-                    # 歌唱数順 (歌唱数 -> 人数)
                     cat_items.sort(key=lambda x: (x["count"], x["user_count"]), reverse=True)
                     rank_title = f"{target_cat} 歌唱数ランキング (TOP 20)"
                     val_key = "count"
-                else: # user
-                    # 人数順 (人数 -> 歌唱数)
+                else: 
                     cat_items.sort(key=lambda x: (x["user_count"], x["count"]), reverse=True)
                     rank_title = f"{target_cat} 歌唱人数ランキング (TOP 20)"
                     val_key = "user_count"
@@ -702,7 +688,7 @@ if not raw_df.empty:
                     current_rank = 0
                     
                     for i, item in enumerate(cat_items):
-                        current_val = item[val_key] # 比較対象の値
+                        current_val = item[val_key] 
                         
                         if current_val != previous_val:
                             current_rank = i + 1
@@ -714,7 +700,6 @@ if not raw_df.empty:
                         
                         rank_class = f"rank-{current_rank}" if current_rank <= 3 else "rank-normal"
                         
-                        # ★ランキング行の色付け
                         row_rank_class = f"rank-row-{current_rank}" if current_rank <= 3 else ""
 
                         rank_display = f'<span class="rank-badge {rank_class}">{current_rank}</span>'
@@ -729,14 +714,12 @@ if not raw_df.empty:
                         bar_width = min(item["count"] * 20, 150)
                         bar_html = f'<div class="bar-chart" style="width:{bar_width}px;"></div>'
 
-                        # ★人数グラフ
                         user_bar_width = min(item["user_count"] * 20, 100)
                         user_bar_html = f'<div class="bar-chart-user" style="width:{user_bar_width}px;"></div>' if item["user_count"] > 0 else ""
 
                         clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
                         search_word = f"{clean_anime} {item['song']}"
                         
-                        # 修正: onclickを削除し、data-hrefのみとする
                         html_out += f"""
                         <tr class="has-count ranking-row {row_rank_class}" data-href="#host/search.php?searchword={search_word}">
                             <td align="center" style="font-weight:bold; font-size:1.1rem;">{rank_display}</td>
@@ -750,7 +733,6 @@ if not raw_df.empty:
                 html_out += "</tbody></table></div></div>"
             return html_out
 
-        # ★2種類のランキングを生成
         ranking_count_html_content = generate_ranking_html("count")
         ranking_user_html_content = generate_ranking_html("user")
         
@@ -786,7 +768,6 @@ setlist_headers = ""
 for col in html_df.columns:
     setlist_headers += f'<th onclick="sortTable({list(html_df.columns).index(col)})">{col} <i class="fas fa-sort"></i></th>'
 
-# グラフ用データをJSON形式に変換
 graph_json_count = json.dumps(graph_series_data_count, ensure_ascii=False)
 graph_json_user = json.dumps(graph_series_data_user, ensure_ascii=False)
 
@@ -939,7 +920,7 @@ html_content = f"""
             background-color: #fff;
             border-right: 1px solid #eee;
             vertical-align: middle;
-            font-weight: normal; color: inherit;        
+            font-weight: normal; color: inherit;       
         }}
 
         .rank-badge {{
@@ -1555,4 +1536,3 @@ html_content = f"""
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
     print("HTML生成完了: index.html")
-
