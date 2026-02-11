@@ -9,13 +9,52 @@ import io
 from itertools import groupby
 
 # ==========================================
-# ★ GAS連携用設定・関数
+# ★ GAS連携・Drive直接読み込み用設定
 # ==========================================
 # デプロイしたGASのウェブアプリURL
 GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyzKEPfj0bYcRyEdizwQXcduIOQFt2_njtFQSyGP9jBjrhR8pyVKwDol6VN7bLPrktq/exec"
 
+# ★追加: Googleドライブから直接ダウンロードする関数
+def load_df_from_drive_direct(file_id, **kwargs):
+    """Googleドライブの公開リンクから直接CSVを読み込む（GASを経由しない）"""
+    print(f"[Drive] Loading from Drive Direct (ID: {file_id})...")
+    url = f"https://drive.google.com/uc?export=download&id={file_id}"
+    
+    try:
+        response = requests.get(url, timeout=60)
+        
+        if response.status_code == 200:
+            content_bytes = response.content
+            
+            # 複数の文字コードで読み込みを試行
+            encodings = ['utf-8-sig', 'utf-8', 'cp932', 'shift_jis']
+            
+            for enc in encodings:
+                try:
+                    df = pd.read_csv(io.BytesIO(content_bytes), encoding=enc, engine='python', **kwargs)
+                    
+                    # カラム名のクリーニング
+                    if not df.empty:
+                        df.columns = df.columns.astype(str).str.replace('\ufeff', '').str.strip()
+                    
+                    print(f"[Drive] Success: Loaded (Encoding: {enc}). Columns: {list(df.columns)}")
+                    return df
+                except Exception:
+                    continue
+            
+            print(f"[Drive] Failed to decode file. (Tried: {encodings})")
+            return pd.DataFrame()
+        else:
+            print(f"[Drive] Error fetching file: Status {response.status_code}")
+            return pd.DataFrame()
+            
+    except Exception as e:
+        print(f"[Drive] Connection error: {e}")
+        return pd.DataFrame()
+
+
 def load_df_from_gas(filename, **kwargs):
-    """GASからCSVデータをダウンロードしてDataFrameとして返す（強力なデバッグとBOM除去付き）"""
+    """GASからCSVデータをダウンロードしてDataFrameとして返す（既存機能）"""
     print(f"[GAS] Loading {filename}...")
     try:
         response = requests.get(GAS_WEB_APP_URL, params={'filename': filename}, timeout=60)
@@ -26,35 +65,27 @@ def load_df_from_gas(filename, **kwargs):
                 print(f"[GAS] ALERT: File {filename} is empty (0 bytes).")
                 return pd.DataFrame()
 
-            # --- デバッグ情報: 何が返ってきているか確認 ---
+            # --- デバッグ情報 ---
             try:
-                # 先頭100文字だけ表示して、中身がCSVかHTMLエラーか確認する
                 preview = content_bytes[:200].decode('utf-8', errors='ignore').replace('\n', ' ')
-                print(f"[GAS] Content Preview: {preview}...")
+                # print(f"[GAS] Content Preview: {preview}...") 
             except:
                 pass
-            # ------------------------------------------
+            # ------------------
 
-            # 複数の文字コードで読み込みを試行
-            # BOM付きUTF-8 (utf-8-sig) を最優先
             encodings = ['utf-8-sig', 'utf-8', 'cp932', 'shift_jis']
             
             for enc in encodings:
                 try:
-                    # engine='python' を指定してパースを堅牢にする
                     df = pd.read_csv(io.BytesIO(content_bytes), encoding=enc, engine='python', **kwargs)
-                    
-                    # ★重要: カラム名のクリーニング
-                    # BOM (\ufeff) や前後の空白がカラム名に残ると判定に失敗するため除去する
                     if not df.empty:
                         df.columns = df.columns.astype(str).str.replace('\ufeff', '').str.strip()
-                    
-                    print(f"[GAS] Success: Loaded {filename} ({enc}). Columns: {list(df.columns)}")
+                    print(f"[GAS] Success: Loaded {filename} ({enc}).")
                     return df
                 except Exception:
                     continue
             
-            print(f"[GAS] Failed to decode {filename}. (Tried: {encodings})")
+            print(f"[GAS] Failed to decode {filename}.")
             return pd.DataFrame()
             
         else:
@@ -270,28 +301,33 @@ uncreated_lists_html = ""
 cool_file = "cool_analysis.csv" 
 
 # --- オフラインリスト読み込み ---
-# 一本化されたファイル
-offline_files = ["offline_list.csv"] 
+# ★修正: GAS経由ではなくDriveから直接読み込む設定に変更
+# ユーザーURL: https://drive.google.com/file/d/1IUuQHdd3a949YYA_TAiQoXSPGJtt8KeF/view?usp=drive_link
+# ファイルID: 1IUuQHdd3a949YYA_TAiQoXSPGJtt8KeF
+
+offline_files_config = [
+    {"name": "offline_list.csv", "id": "1IUuQHdd3a949YYA_TAiQoXSPGJtt8KeF"}
+]
 offline_targets = []
 
-for file_path in offline_files:
-    # GASから読み込み（強化版）
-    offline_df = load_df_from_gas(file_path)
+for conf in offline_files_config:
+    # ★ Drive直接読み込み関数を使用
+    offline_df = load_df_from_drive_direct(conf["id"])
     
     if not offline_df.empty:
         offline_df = offline_df.fillna("")
         
-        # '曲名'カラムがあるか確認 (BOM除去済みなので単純な文字列比較でOKなはず)
+        # '曲名'カラムがあるか確認
         if '曲名' in offline_df.columns:
             targets = [normalize_offline_text(str(x)) for x in offline_df['曲名'].tolist()]
             offline_targets.extend(targets)
-            print(f"オフラインリスト({file_path})をGASから読み込みました。追加件数: {len(targets)}")
+            print(f"オフラインリスト({conf['name']})をDriveから読み込みました。追加件数: {len(targets)}")
         else:
-            print(f"オフラインリスト({file_path})に'曲名'カラムが見つかりません。")
-            print(f"検出されたカラム: {list(offline_df.columns)}") # デバッグ用
+            print(f"オフラインリスト({conf['name']})に'曲名'カラムが見つかりません。")
+            print(f"検出されたカラム: {list(offline_df.columns)}") 
             
     else:
-        print(f"オフラインリスト({file_path})が読み込めないか、空です。")
+        print(f"オフラインリスト({conf['name']})が読み込めないか、空です。")
 
 print(f"オフラインリスト合計件数: {len(offline_targets)}")
 
@@ -1531,8 +1567,3 @@ html_content = f"""
 </script>
 </body>
 </html>
-"""
-
-with open("index.html", "w", encoding="utf-8") as f:
-    f.write(html_content)
-    print("HTML生成完了: index.html")
