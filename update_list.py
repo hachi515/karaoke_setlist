@@ -9,19 +9,34 @@ import io
 from itertools import groupby
 
 # ==========================================
-# ★ GAS連携・Drive直接読み込み用設定
+# ★ 設定: GitHubリポジトリ情報
 # ==========================================
-# デプロイしたGASのウェブアプリURL
+# ここにファイルをアップロードしたGitHubのアカウント名とリポジトリ名を入力してください
+GITHUB_USER = "hachi515"  # 例: "kenshin"
+GITHUB_REPO = "karaoke_setlist"   # 例: "karaoke_list"
+GITHUB_BRANCH = "main"                 # 通常は "main" または "master"
+
+# 読み込むオフラインリストのファイル名（新しい順に並べるのを推奨）
+OFFLINE_FILES = [
+    "offline_list_2026_1st.csv",
+    "offline_list_2025_2nd.csv",
+    "offline_list_2025_1st.csv"
+]
+
+# ==========================================
+# ★ GAS連携・GitHub読み込み用設定
+# ==========================================
+# デプロイしたGASのウェブアプリURL (履歴保存やCool解析の取得に使用)
 GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyzKEPfj0bYcRyEdizwQXcduIOQFt2_njtFQSyGP9jBjrhR8pyVKwDol6VN7bLPrktq/exec"
 
-# ★追加: Googleドライブから直接ダウンロードする関数
-def load_df_from_drive_direct(file_id, **kwargs):
-    """Googleドライブの公開リンクから直接CSVを読み込む（GASを経由しない）"""
-    print(f"[Drive] Loading from Drive Direct (ID: {file_id})...")
-    url = f"https://drive.google.com/uc?export=download&id={file_id}"
+def load_df_from_github(filename, **kwargs):
+    """GitHubのRawデータからCSVを読み込む"""
+    # URLを構築
+    url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/{GITHUB_BRANCH}/{filename}"
+    print(f"[GitHub] Loading {filename} from {url}...")
     
     try:
-        response = requests.get(url, timeout=60)
+        response = requests.get(url, timeout=30)
         
         if response.status_code == 200:
             content_bytes = response.content
@@ -37,24 +52,27 @@ def load_df_from_drive_direct(file_id, **kwargs):
                     if not df.empty:
                         df.columns = df.columns.astype(str).str.replace('\ufeff', '').str.strip()
                     
-                    print(f"[Drive] Success: Loaded (Encoding: {enc}). Columns: {list(df.columns)}")
+                    print(f"[GitHub] Success: Loaded {filename} (Encoding: {enc}). Rows: {len(df)}")
                     return df
                 except Exception:
                     continue
             
-            print(f"[Drive] Failed to decode file. (Tried: {encodings})")
+            print(f"[GitHub] Failed to decode {filename}.")
             return pd.DataFrame()
+        elif response.status_code == 404:
+             print(f"[GitHub] File not found: {filename} (404). Check user/repo/filename.")
+             return pd.DataFrame()
         else:
-            print(f"[Drive] Error fetching file: Status {response.status_code}")
+            print(f"[GitHub] Error fetching {filename}: Status {response.status_code}")
             return pd.DataFrame()
             
     except Exception as e:
-        print(f"[Drive] Connection error: {e}")
+        print(f"[GitHub] Connection error for {filename}: {e}")
         return pd.DataFrame()
 
 
 def load_df_from_gas(filename, **kwargs):
-    """GASからCSVデータをダウンロードしてDataFrameとして返す（既存機能）"""
+    """GASからCSVデータをダウンロードしてDataFrameとして返す（既存機能：履歴用）"""
     print(f"[GAS] Loading {filename}...")
     try:
         response = requests.get(GAS_WEB_APP_URL, params={'filename': filename}, timeout=60)
@@ -62,16 +80,7 @@ def load_df_from_gas(filename, **kwargs):
         if response.status_code == 200:
             content_bytes = response.content
             if not content_bytes:
-                print(f"[GAS] ALERT: File {filename} is empty (0 bytes).")
                 return pd.DataFrame()
-
-            # --- デバッグ情報 ---
-            try:
-                preview = content_bytes[:200].decode('utf-8', errors='ignore').replace('\n', ' ')
-                # print(f"[GAS] Content Preview: {preview}...") 
-            except:
-                pass
-            # ------------------
 
             encodings = ['utf-8-sig', 'utf-8', 'cp932', 'shift_jis']
             
@@ -84,15 +93,12 @@ def load_df_from_gas(filename, **kwargs):
                     return df
                 except Exception:
                     continue
-            
-            print(f"[GAS] Failed to decode {filename}.")
             return pd.DataFrame()
-            
         else:
-            print(f"[GAS] Error fetching {filename}: Status {response.status_code}")
+            print(f"[GAS] Error: {response.status_code}")
             return pd.DataFrame()
     except Exception as e:
-        print(f"[GAS] Connection error for {filename}: {e}")
+        print(f"[GAS] Connection error: {e}")
         return pd.DataFrame()
 
 def save_df_to_gas(filename, df):
@@ -111,7 +117,7 @@ def save_df_to_gas(filename, df):
         if response.status_code == 200:
             print(f"[GAS] Upload success: {response.text}")
         else:
-            print(f"[GAS] Upload failed: {response.status_code} - {response.text}")
+            print(f"[GAS] Upload failed: {response.status_code}")
     except Exception as e:
         print(f"[GAS] Upload error: {e}")
 
@@ -172,11 +178,10 @@ room_map = {
     11109: "姫部屋"
 }
 
-# --- 関数: テキスト正規化 (検索キー用・履歴データ用) ---
+# --- 関数: テキスト正規化 ---
 def normalize_text(text):
     if not isinstance(text, str):
         return str(text)
-    
     text = unicodedata.normalize('NFKC', text)
     text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
     text = re.sub(r'[\[\(\{【].*?[\]\)\}】]', ' ', text)
@@ -185,14 +190,11 @@ def normalize_text(text):
     text = re.sub(r'(キー)?変更[:：]?', ' ', text)
     text = re.sub(r'[~〜～\-_=,.]', ' ', text)
     text = re.sub(r'\s+', ' ', text).strip()
-    
     return text.upper()
 
-# --- 関数: オフラインリスト用正規化 ---
 def normalize_offline_text(text):
     if not isinstance(text, str):
         return str(text)
-    
     text = unicodedata.normalize('NFKC', text)
     text = re.sub(r'\.[a-zA-Z0-9]{3,4}$', '', text)
     text = re.sub(r'(key|KEY)?\s*[\+\-]\s*[0-9]+', ' ', text)
@@ -200,10 +202,8 @@ def normalize_offline_text(text):
     text = re.sub(r'(キー)?変更[:：]?', ' ', text)
     text = re.sub(r'[~〜～\-_=,.]', ' ', text)
     text = re.sub(r'\s+', ' ', text).strip()
-    
     return text.upper()
 
-# --- 関数: マッチング判定 (グラフ用に追加) ---
 def check_match(target_text, source_series):
     if not target_text:
         return pd.Series([False] * len(source_series))
@@ -215,7 +215,7 @@ def check_match(target_text, source_series):
         return source_series.str.contains(safe_target, case=False, na=False)
 
 
-# --- 1. 過去データ読み込み ---
+# --- 1. 過去データ読み込み (history.csvはGASから) ---
 history_file = "history.csv"
 history_df = load_df_from_gas(history_file)
 
@@ -233,7 +233,7 @@ print("データを取得中...")
 for port in target_ports:
     url = f"http://Ykr.moe:{port}/simplelist.php"
     try:
-        response = requests.get(url, timeout=60)
+        response = requests.get(url, timeout=30)
         response.raise_for_status()
         
         dfs = pd.read_html(response.content)
@@ -290,8 +290,6 @@ ranking_user_html_content = ""
 
 cool_data_exists = False
 ranking_data_list = [] 
-
-# ★追加: グラフ用データ
 graph_series_data_count = {}
 graph_series_data_user = {}
 
@@ -300,19 +298,14 @@ uncreated_lists_html = ""
 
 cool_file = "cool_analysis.csv" 
 
-# --- オフラインリスト読み込み ---
-# ★修正: GAS経由ではなくDriveから直接読み込む設定に変更
-# ユーザーURL: https://drive.google.com/file/d/1IUuQHdd3a949YYA_TAiQoXSPGJtt8KeF/view?usp=drive_link
-# ファイルID: 1IUuQHdd3a949YYA_TAiQoXSPGJtt8KeF
-
-offline_files_config = [
-    {"name": "offline_list.csv", "id": "1IUuQHdd3a949YYA_TAiQoXSPGJtt8KeF"}
-]
+# --- オフラインリスト読み込み (GitHubから) ---
 offline_targets = []
 
-for conf in offline_files_config:
-    # ★ Drive直接読み込み関数を使用
-    offline_df = load_df_from_drive_direct(conf["id"])
+print(f"GitHubからオフラインリストを読み込みます... (User: {GITHUB_USER}, Repo: {GITHUB_REPO})")
+
+for filename in OFFLINE_FILES:
+    # ★ GitHub読み込み関数を使用
+    offline_df = load_df_from_github(filename)
     
     if not offline_df.empty:
         offline_df = offline_df.fillna("")
@@ -321,13 +314,12 @@ for conf in offline_files_config:
         if '曲名' in offline_df.columns:
             targets = [normalize_offline_text(str(x)) for x in offline_df['曲名'].tolist()]
             offline_targets.extend(targets)
-            print(f"オフラインリスト({conf['name']})をDriveから読み込みました。追加件数: {len(targets)}")
+            print(f"  -> {filename}: {len(targets)} 件追加")
         else:
-            print(f"オフラインリスト({conf['name']})に'曲名'カラムが見つかりません。")
-            print(f"検出されたカラム: {list(offline_df.columns)}") 
+            print(f"  -> {filename}: '曲名'カラムが見つかりません。")
             
     else:
-        print(f"オフラインリスト({conf['name']})が読み込めないか、空です。")
+        print(f"  -> {filename}: 読み込み失敗または空です。")
 
 print(f"オフラインリスト合計件数: {len(offline_targets)}")
 
@@ -384,14 +376,13 @@ def generate_category_html_block(category_name, item_list):
     return html
 
 
-# --- Cool Analysis読み込み ---
+# --- Cool Analysis読み込み (GASから) ---
+# ※ここもGitHubにある場合は load_df_from_github に変更してください
 raw_df = load_df_from_gas(cool_file, header=None)
 
 if not raw_df.empty:
     try:
         raw_df = raw_df.fillna("")
-        
-        print("CSV内の重複行を削除中...")
         raw_df = raw_df.drop_duplicates(keep='last')
         
         analysis_source_df = final_df.copy()
