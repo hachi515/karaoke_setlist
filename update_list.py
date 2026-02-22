@@ -354,15 +354,18 @@ def generate_category_html_block(category_name, item_list):
         for i, item in enumerate(group_items):
             clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
             search_word = f"{clean_anime} {item['song']}"
-            link_tag_start = f'<a href="#host/search.php?searchword={search_word}" class="export-link">'
+            
+            # ★ 修正: ゆかりすたー用とEverything用のリンクを別々に生成
+            link_ykr = f'<a href="#host/search_listerdb_filelist.php?anyword={search_word}" class="export-link link-ykr">ゆ</a>'
+            link_eve = f'<a href="#host/search.php?searchword={search_word}" class="export-link link-eve">E</a>'
             
             html += '<tr>'
             if i == 0:
                 html += f'<td rowspan="{rowspan}">{item["anime"]}</td>'
             
-            html += f'<td align="center">{link_tag_start}{item["type"]}</a></td>'
-            html += f'<td>{link_tag_start}{item["artist"]}</a></td>'
-            html += f'<td>{link_tag_start}{item["song"]}</a></td>'
+            html += f'<td align="center">{item["type"]}</td>'
+            html += f'<td>{item["artist"]}</td>'
+            html += f'<td>{item["song"]} {link_ykr}{link_eve}</td>'
             html += '</tr>'
         
         html += '</tbody>'
@@ -637,7 +640,9 @@ if not raw_df.empty:
                     clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
                     search_word = f"{clean_anime} {item['song']}"
                     
-                    link_tag_start = f'<a href="#host/search.php?searchword={search_word}" class="export-link">'
+                    # ★ 修正: クール集計の2つのリンク生成
+                    link_ykr = f'<a href="#host/search_listerdb_filelist.php?anyword={search_word}" class="export-link link-ykr">ゆ</a>'
+                    link_eve = f'<a href="#host/search.php?searchword={search_word}" class="export-link link-eve">E</a>'
                     
                     analysis_html_content += f'<tr class="{row_class}">'
                     if i == 0:
@@ -645,9 +650,9 @@ if not raw_df.empty:
                     
                     analysis_html_content += f'<td align="center">{creation_count}</td>'
 
-                    analysis_html_content += f'<td align="center">{link_tag_start}{item["type"]}</a></td>'
-                    analysis_html_content += f'<td>{link_tag_start}{item["artist"]}</a></td>'
-                    analysis_html_content += f'<td>{link_tag_start}{item["song"]}</a></td>'
+                    analysis_html_content += f'<td align="center">{item["type"]}</td>'
+                    analysis_html_content += f'<td>{item["artist"]}</td>'
+                    analysis_html_content += f'<td>{item["song"]} {link_ykr}{link_eve}</td>'
                     
                     analysis_html_content += f'<td class="count-cell"><div class="count-wrapper"><span class="count-num">{user_count}</span>{user_bar_html}</div></td>'
 
@@ -742,11 +747,15 @@ if not raw_df.empty:
                         clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
                         search_word = f"{clean_anime} {item['song']}"
                         
+                        # ★ 修正: ランキングの2つのリンク生成
+                        link_ykr = f'<a href="#host/search_listerdb_filelist.php?anyword={search_word}" class="export-link link-ykr">ゆ</a>'
+                        link_eve = f'<a href="#host/search.php?searchword={search_word}" class="export-link link-eve">E</a>'
+                        
                         html_out += f"""
-                        <tr class="has-count ranking-row {row_rank_class}" data-href="#host/search.php?searchword={search_word}">
+                        <tr class="has-count ranking-row {row_rank_class}">
                             <td align="center" style="font-weight:bold; font-size:1.1rem;">{rank_display}</td>
                             <td>{item["anime"]} <span style="font-size:0.8em; color:#777;">({item["type"]})</span></td>
-                            <td>{item["song"]}</td> <td>{item["artist"]}</td>
+                            <td>{item["song"]} {link_ykr}{link_eve}</td> <td>{item["artist"]}</td>
                             <td class="count-cell"><div class="count-wrapper"><span class="count-num">{item["user_count"]}</span>{user_bar_html}</div></td>
                             <td class="count-cell"><div class="count-wrapper"><span class="count-num">{item["count"]}</span>{bar_html}</div></td>
                         </tr>
@@ -824,11 +833,19 @@ html_content = f"""
         }}
 
         a.export-link {{
-            color: inherit;
             text-decoration: none;
-            pointer-events: none;
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            color: #fff !important;
+            font-size: 0.85em;
+            margin-left: 5px;
+            font-weight: bold;
             cursor: default;
+            pointer-events: none; /* ダッシュボードではクリック無効 */
         }}
+        .link-ykr {{ background-color: #9b59b6; }}
+        .link-eve {{ background-color: #3498db; }}
 
         tr.ranking-row {{
             cursor: default; 
@@ -854,6 +871,25 @@ html_content = f"""
         }}
         h1 {{ margin: 0; font-size: 1.2rem; color: var(--primary-color); }}
         .update-time {{ font-size: 0.8rem; color: #7f8c8d; }}
+
+        /* ★ 修正: ポート番号入力欄のデザイン */
+        .port-input-wrapper {{
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            margin-left: 15px;
+            font-size: 13px;
+            font-weight: bold;
+            color: var(--primary-color);
+        }}
+        .port-input-wrapper input {{
+            width: 70px;
+            padding: 3px 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            text-align: center;
+            font-family: monospace;
+        }}
 
         .tabs {{
             display: flex; padding: 0 15px; border-bottom: 1px solid var(--border-color); overflow-x: auto;
@@ -1030,7 +1066,13 @@ html_content = f"""
 <body>
     <div class="top-section">
         <div class="header-inner">
-            <h1>Karaoke Dashboard</h1>
+            <div style="display:flex; align-items:center;">
+                <h1>Karaoke Dashboard</h1>
+                <div class="port-input-wrapper">
+                    <label for="exportPort"><i class="fas fa-network-wired"></i> 保存時ポート:</label>
+                    <input type="number" id="exportPort" value="11058" title="HTML保存時のURLポート番号を指定">
+                </div>
+            </div>
             <div class="update-time">{current_datetime_str} 更新</div>
         </div>
         <div class="tabs">
@@ -1264,15 +1306,6 @@ html_content = f"""
 
     // --- 以下、既存機能 ---
 
-    function onRankingClick(row) {{
-        if (window.getSelection().toString().length > 0) return;
-        const rawHref = row.getAttribute('data-href');
-        if (rawHref && rawHref.startsWith('#host')) {{
-            const url = rawHref.replace('#host', host);
-            window.location.href = url;
-        }}
-    }}
-
     function openTab(tabName) {{
         document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
         document.getElementById(tabName).classList.add('active');
@@ -1360,7 +1393,10 @@ html_content = f"""
         }}
     }}
 
+    // ★ 修正: ポート番号を読み込み、展開したままのHTML生成コード
     function generateDownload(content, filename, title) {{
+        const portValue = document.getElementById('exportPort').value || '11058';
+        
         const fullHtml = `
 <!DOCTYPE html>
 <html lang="ja">
@@ -1369,66 +1405,70 @@ html_content = f"""
     <title>${{title}}</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        body {{ font-family: "Helvetica Neue", Arial, sans-serif; font-size: 13px; color: #333; }}
-        table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; }}
-        th, td {{ border: 1px solid #ccc; padding: 5px 8px; text-align: left; vertical-align: middle; }}
-        th {{ background-color: #2c3e50; color: #fff; }}
-        td[rowspan] {{ background-color: #fff; }}
+        body { font-family: "Helvetica Neue", Arial, sans-serif; font-size: 13px; color: #333; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        th, td { border: 1px solid #ccc; padding: 5px 8px; text-align: left; vertical-align: middle; }
+        th { background-color: #2c3e50; color: #fff; }
+        td[rowspan] { background-color: #fff; }
         
-        .category-header {{ 
+        .category-header { 
             background: #667eea; color: white; padding: 10px; margin-top: 20px; 
             font-weight: bold; border-radius: 4px; cursor: pointer; user-select: none;
-        }}
-        .category-content {{ display: block; }}
-        .category-content.collapsed {{ display: none; }}
+        }
+        .category-content { display: block; }
+        .category-content.collapsed { display: none; }
         
-        a.export-link {{
-            display: block; 
-            margin: -5px -8px; 
-            padding: 5px 8px;  
-            color: #333; 
+        a.export-link {
+            display: inline-block; 
+            margin-left: 5px; 
+            padding: 2px 6px;  
+            color: #fff !important; 
             text-decoration: none; 
-            box-sizing: border-box;
+            border-radius: 3px;
+            font-size: 0.85em;
+            font-weight: bold;
             cursor: pointer;
-        }}
-        a.export-link:hover {{ background-color: #eef2f7; color: #3498db; }}
+        }
+        .link-ykr { background-color: #9b59b6; }
+        .link-eve { background-color: #3498db; }
+        a.export-link:hover { opacity: 0.8; }
         
-        tr.ranking-row {{ cursor: pointer; }}
-        tr.ranking-row:hover {{ background-color: #dbeafe; }}
+        tr.ranking-row { cursor: default; }
+        tr.ranking-row:hover { background-color: #dbeafe; }
         
-        .count-wrapper {{ display: flex; align-items: center; gap: 8px; }}
-        .count-num {{ width: 25px; text-align: right; }}
-        .bar-chart {{ height: 10px; background: #3498db; border-radius: 5px; }}
-        .bar-chart-user {{ height: 10px; background: #2ecc71; border-radius: 5px; }}
+        .count-wrapper { display: flex; align-items: center; gap: 8px; }
+        .count-num { width: 25px; text-align: right; }
+        .bar-chart { height: 10px; background: #3498db; border-radius: 5px; }
+        .bar-chart-user { height: 10px; background: #2ecc71; border-radius: 5px; }
         
-        .rank-badge {{
+        .rank-badge {
             display: inline-block; width: 24px; height: 24px; line-height: 24px;
             border-radius: 50%; text-align: center; color: #fff; font-weight: bold; font-size: 12px;
             background-color: #95a5a6;
-        }}
-        .rank-1 {{ background-color: #f1c40f; width: 28px; height: 28px; line-height: 28px; }}
-        .rank-2 {{ background-color: #bdc3c7; }}
-        .rank-3 {{ background-color: #d35400; }}
+        }
+        .rank-1 { background-color: #f1c40f; width: 28px; height: 28px; line-height: 28px; }
+        .rank-2 { background-color: #bdc3c7; }
+        .rank-3 { background-color: #d35400; }
         
-        tr.rank-row-1 td {{ background-color: #fff8e1 !important; }}
-        tr.rank-row-2 td {{ background-color: #f5f5f5 !important; }}
-        tr.rank-row-3 td {{ background-color: #fff0e6 !important; }}
+        tr.rank-row-1 td { background-color: #fff8e1 !important; }
+        tr.rank-row-2 td { background-color: #f5f5f5 !important; }
+        tr.rank-row-3 td { background-color: #fff0e6 !important; }
 
-        .chart-wrapper {{
+        .chart-wrapper {
             background: #fff; padding: 10px; border-radius: 8px; border: 1px solid #ccc;
-        }}
+        }
 
-        @media print {{
-            * {{
+        @media print {
+            * {
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
                 color-adjust: exact !important;
-            }}
-            .category-content {{ display: block !important; }}
-            tbody.anime-group {{ break-inside: avoid; page-break-inside: avoid; }}
-            .category-header {{ page-break-after: avoid; }}
-            thead {{ display: table-header-group; }}
-        }}
+            }
+            .category-content { display: block !important; }
+            tbody.anime-group { break-inside: avoid; page-break-inside: avoid; }
+            .category-header { page-break-after: avoid; }
+            thead { display: table-header-group; }
+        }
     </style>
 </head>
 <body>
@@ -1437,38 +1477,28 @@ html_content = f"""
     ${{content}}
 
     <script>
-        const host = 'http://ykr.moe:11059';
+        // ダッシュボード画面上の入力値を展開
+        const host = 'http://ykr.moe:${{portValue}}';
 
-        document.addEventListener('DOMContentLoaded', () => {{
-            // クール集計リンク有効化
-            document.querySelectorAll('a.export-link').forEach(link => {{
+        document.addEventListener('DOMContentLoaded', () => {
+            // 各種リンクを有効化し、動的なポート番号を置換
+            document.querySelectorAll('a.export-link').forEach(link => {
                 const rawHref = link.getAttribute('href');
-                if (rawHref && rawHref.startsWith('#host')) {{
+                if (rawHref && rawHref.startsWith('#host')) {
                     link.href = rawHref.replace('#host', host);
-                }}
-            }});
+                }
+            });
+        });
 
-            // 修正: ランキング行クリック有効化 (ダッシュボードでは無効だが保存ファイルでは有効)
-            document.querySelectorAll('tr[data-href]').forEach(row => {{
-                row.addEventListener('click', () => {{
-                    if (window.getSelection().toString().length > 0) return;
-                    const rawHref = row.getAttribute('data-href');
-                    if (rawHref && rawHref.startsWith('#host')) {{
-                        window.location.href = rawHref.replace('#host', host);
-                    }}
-                }});
-            }});
-        }});
-
-        function toggleCategory(header) {{
+        function toggleCategory(header) {
             const content = header.nextElementSibling;
             content.classList.toggle('collapsed');
             const icon = header.querySelector('i');
-            if(icon) {{
+            if(icon) {
                 icon.className = content.classList.contains('collapsed') ? 'fas fa-chevron-right' : 'fas fa-chevron-down';
                 icon.style.float = 'right';
-            }}
-        }}
+            }
+        }
     <\/script>
 </body>
 </html>`;
@@ -1558,4 +1588,3 @@ html_content = f"""
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
     print("HTML生成完了: index.html")
-
