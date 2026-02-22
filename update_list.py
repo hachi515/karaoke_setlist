@@ -355,17 +355,16 @@ def generate_category_html_block(category_name, item_list):
             clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
             search_word = f"{clean_anime} {item['song']}"
             
-            # ★ ゆかりすたー用とEverything用の2つのリンクを生成
-            link_ykr = f'<a href="#host/search_listerdb_filelist.php?anyword={search_word}" class="export-link link-ykr" target="_blank" rel="noopener noreferrer">ゆ</a>'
-            link_eve = f'<a href="#host/search.php?searchword={search_word}" class="export-link link-eve" target="_blank" rel="noopener noreferrer">E</a>'
+            # JSで動的に置換するためのプレースホルダーURL
+            link_tag_start = f'<a href="#search_link/{search_word}" class="export-link">'
             
             html += '<tr>'
             if i == 0:
                 html += f'<td rowspan="{rowspan}">{item["anime"]}</td>'
             
-            html += f'<td align="center">{item["type"]}</td>'
-            html += f'<td>{item["artist"]}</td>'
-            html += f'<td>{item["song"]} {link_ykr}{link_eve}</td>'
+            html += f'<td align="center">{link_tag_start}{item["type"]}</a></td>'
+            html += f'<td>{link_tag_start}{item["artist"]}</a></td>'
+            html += f'<td>{link_tag_start}{item["song"]}</a></td>'
             html += '</tr>'
         
         html += '</tbody>'
@@ -640,9 +639,8 @@ if not raw_df.empty:
                     clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
                     search_word = f"{clean_anime} {item['song']}"
                     
-                    # ★ クール集計の2つのリンク生成
-                    link_ykr = f'<a href="#host/search_listerdb_filelist.php?anyword={search_word}" class="export-link link-ykr" target="_blank" rel="noopener noreferrer">ゆ</a>'
-                    link_eve = f'<a href="#host/search.php?searchword={search_word}" class="export-link link-eve" target="_blank" rel="noopener noreferrer">E</a>'
+                    # プレースホルダーURL
+                    link_tag_start = f'<a href="#search_link/{search_word}" class="export-link">'
                     
                     analysis_html_content += f'<tr class="{row_class}">'
                     if i == 0:
@@ -650,9 +648,9 @@ if not raw_df.empty:
                     
                     analysis_html_content += f'<td align="center">{creation_count}</td>'
 
-                    analysis_html_content += f'<td align="center">{item["type"]}</td>'
-                    analysis_html_content += f'<td>{item["artist"]}</td>'
-                    analysis_html_content += f'<td>{item["song"]} {link_ykr}{link_eve}</td>'
+                    analysis_html_content += f'<td align="center">{link_tag_start}{item["type"]}</a></td>'
+                    analysis_html_content += f'<td>{link_tag_start}{item["artist"]}</a></td>'
+                    analysis_html_content += f'<td>{link_tag_start}{item["song"]}</a></td>'
                     
                     analysis_html_content += f'<td class="count-cell"><div class="count-wrapper"><span class="count-num">{user_count}</span>{user_bar_html}</div></td>'
 
@@ -747,15 +745,11 @@ if not raw_df.empty:
                         clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
                         search_word = f"{clean_anime} {item['song']}"
                         
-                        # ★ ランキングの2つのリンク生成
-                        link_ykr = f'<a href="#host/search_listerdb_filelist.php?anyword={search_word}" class="export-link link-ykr" target="_blank" rel="noopener noreferrer">ゆ</a>'
-                        link_eve = f'<a href="#host/search.php?searchword={search_word}" class="export-link link-eve" target="_blank" rel="noopener noreferrer">E</a>'
-                        
                         html_out += f"""
-                        <tr class="has-count ranking-row {row_rank_class}">
+                        <tr class="has-count ranking-row {row_rank_class}" data-href="#search_link/{search_word}">
                             <td align="center" style="font-weight:bold; font-size:1.1rem;">{rank_display}</td>
                             <td>{item["anime"]} <span style="font-size:0.8em; color:#777;">({item["type"]})</span></td>
-                            <td>{item["song"]} {link_ykr}{link_eve}</td> <td>{item["artist"]}</td>
+                            <td>{item["song"]}</td> <td>{item["artist"]}</td>
                             <td class="count-cell"><div class="count-wrapper"><span class="count-num">{item["user_count"]}</span>{user_bar_html}</div></td>
                             <td class="count-cell"><div class="count-wrapper"><span class="count-num">{item["count"]}</span>{bar_html}</div></td>
                         </tr>
@@ -833,19 +827,11 @@ html_content = f"""
         }}
 
         a.export-link {{
+            color: inherit;
             text-decoration: none;
-            display: inline-block;
-            padding: 2px 6px;
-            border-radius: 3px;
-            color: #fff !important;
-            font-size: 0.85em;
-            margin-left: 5px;
-            font-weight: bold;
+            pointer-events: none;
             cursor: default;
-            pointer-events: none; /* ダッシュボードではクリック無効 */
         }}
-        .link-ykr {{ background-color: #9b59b6; }}
-        .link-eve {{ background-color: #3498db; }}
 
         tr.ranking-row {{
             cursor: default; 
@@ -872,7 +858,7 @@ html_content = f"""
         h1 {{ margin: 0; font-size: 1.2rem; color: var(--primary-color); }}
         .update-time {{ font-size: 0.8rem; color: #7f8c8d; }}
 
-        /* ★ ポート番号入力欄のデザイン */
+        /* ポート番号・リンク設定欄のデザイン */
         .port-input-wrapper {{
             display: inline-flex;
             align-items: center;
@@ -882,13 +868,15 @@ html_content = f"""
             font-weight: bold;
             color: var(--primary-color);
         }}
-        .port-input-wrapper input {{
-            width: 70px;
+        .port-input-wrapper input, .port-input-wrapper select {{
             padding: 3px 5px;
             border: 1px solid #ccc;
             border-radius: 4px;
-            text-align: center;
             font-family: monospace;
+        }}
+        .port-input-wrapper input {{
+            width: 70px;
+            text-align: center;
         }}
 
         .tabs {{
@@ -1070,6 +1058,13 @@ html_content = f"""
                 <div class="port-input-wrapper">
                     <label for="exportPort"><i class="fas fa-network-wired"></i> 保存時ポート:</label>
                     <input type="number" id="exportPort" value="11059" title="HTML保存時のURLポート番号を指定">
+                </div>
+                <div class="port-input-wrapper" style="margin-left:20px;">
+                    <label for="exportLinkType"><i class="fas fa-link"></i> 検索リンク:</label>
+                    <select id="exportLinkType">
+                        <option value="eve">Everything</option>
+                        <option value="ykr">ゆかりすたー</option>
+                    </select>
                 </div>
             </div>
             <div class="update-time">{current_datetime_str} 更新</div>
@@ -1378,10 +1373,11 @@ html_content = f"""
         }}
     }}
 
-    // ★ ポート番号を読み込み、展開したままのHTML生成コード
+    // HTML生成時に選択したリンク・ポート情報を埋め込む
     function generateDownload(content, filename, title) {{
-        // 入力欄からポート番号を取得（デフォルト11059）
         const portValue = document.getElementById('exportPort').value || '11059';
+        const linkType = document.getElementById('exportLinkType').value;
+        const searchPath = linkType === 'ykr' ? 'search_listerdb_filelist.php?anyword=' : 'search.php?searchword=';
         
         const fullHtml = `
 <!DOCTYPE html>
@@ -1404,22 +1400,19 @@ html_content = f"""
         .category-content {{ display: block; }}
         .category-content.collapsed {{ display: none; }}
         
+        /* プレーンなリンクスタイル */
         a.export-link {{
-            display: inline-block; 
-            margin-left: 5px; 
-            padding: 2px 6px;  
-            color: #fff !important; 
+            display: block; 
+            margin: -5px -8px; 
+            padding: 5px 8px;  
+            color: #333; 
             text-decoration: none; 
-            border-radius: 3px;
-            font-size: 0.85em;
-            font-weight: bold;
+            box-sizing: border-box;
             cursor: pointer;
         }}
-        .link-ykr {{ background-color: #9b59b6; }}
-        .link-eve {{ background-color: #3498db; }}
-        a.export-link:hover {{ opacity: 0.8; }}
+        a.export-link:hover {{ background-color: #eef2f7; color: #3498db; }}
         
-        tr.ranking-row {{ cursor: default; }}
+        tr.ranking-row {{ cursor: pointer; }}
         tr.ranking-row:hover {{ background-color: #dbeafe; }}
         
         .count-wrapper {{ display: flex; align-items: center; gap: 8px; }}
@@ -1463,16 +1456,29 @@ html_content = f"""
     ${{content}}
 
     <script>
-        // ダッシュボード画面上の入力値を展開
         const host = 'http://ykr.moe:${{portValue}}';
+        const searchPath = '${{searchPath}}';
 
         document.addEventListener('DOMContentLoaded', () => {{
-            // 各種リンクを有効化し、動的なポート番号を置換
+            // クール集計・リスト類のリンク設定
             document.querySelectorAll('a.export-link').forEach(link => {{
                 const rawHref = link.getAttribute('href');
-                if (rawHref && rawHref.startsWith('#host')) {{
-                    link.href = rawHref.replace('#host', host);
+                if (rawHref && rawHref.startsWith('#search_link/')) {{
+                    const word = rawHref.split('#search_link/')[1];
+                    link.href = host + '/' + searchPath + word;
                 }}
+            }});
+            
+            // ランキング等の行クリック設定
+            document.querySelectorAll('tr[data-href]').forEach(row => {{
+                row.addEventListener('click', () => {{
+                    if (window.getSelection().toString().length > 0) return;
+                    const rawHref = row.getAttribute('data-href');
+                    if (rawHref && rawHref.startsWith('#search_link/')) {{
+                        const word = rawHref.split('#search_link/')[1];
+                        window.location.href = host + '/' + searchPath + word;
+                    }}
+                }});
             }});
         }});
 
