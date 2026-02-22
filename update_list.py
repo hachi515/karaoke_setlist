@@ -355,9 +355,9 @@ def generate_category_html_block(category_name, item_list):
             clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
             search_word = f"{clean_anime} {item['song']}"
             
-            # ★ 修正: ゆかりすたー用とEverything用のリンクを別々に生成
-            link_ykr = f'<a href="#host/search_listerdb_filelist.php?anyword={search_word}" class="export-link link-ykr">ゆ</a>'
-            link_eve = f'<a href="#host/search.php?searchword={search_word}" class="export-link link-eve">E</a>'
+            # ★ 修正: ゆかりすたー用とEverything用の2つのリンクを生成
+            link_ykr = f'<a href="#host/search_listerdb_filelist.php?anyword={search_word}" class="export-link link-ykr" target="_blank" rel="noopener noreferrer">ゆ</a>'
+            link_eve = f'<a href="#host/search.php?searchword={search_word}" class="export-link link-eve" target="_blank" rel="noopener noreferrer">E</a>'
             
             html += '<tr>'
             if i == 0:
@@ -641,8 +641,8 @@ if not raw_df.empty:
                     search_word = f"{clean_anime} {item['song']}"
                     
                     # ★ 修正: クール集計の2つのリンク生成
-                    link_ykr = f'<a href="#host/search_listerdb_filelist.php?anyword={search_word}" class="export-link link-ykr">ゆ</a>'
-                    link_eve = f'<a href="#host/search.php?searchword={search_word}" class="export-link link-eve">E</a>'
+                    link_ykr = f'<a href="#host/search_listerdb_filelist.php?anyword={search_word}" class="export-link link-ykr" target="_blank" rel="noopener noreferrer">ゆ</a>'
+                    link_eve = f'<a href="#host/search.php?searchword={search_word}" class="export-link link-eve" target="_blank" rel="noopener noreferrer">E</a>'
                     
                     analysis_html_content += f'<tr class="{row_class}">'
                     if i == 0:
@@ -748,8 +748,8 @@ if not raw_df.empty:
                         search_word = f"{clean_anime} {item['song']}"
                         
                         # ★ 修正: ランキングの2つのリンク生成
-                        link_ykr = f'<a href="#host/search_listerdb_filelist.php?anyword={search_word}" class="export-link link-ykr">ゆ</a>'
-                        link_eve = f'<a href="#host/search.php?searchword={search_word}" class="export-link link-eve">E</a>'
+                        link_ykr = f'<a href="#host/search_listerdb_filelist.php?anyword={search_word}" class="export-link link-ykr" target="_blank" rel="noopener noreferrer">ゆ</a>'
+                        link_eve = f'<a href="#host/search.php?searchword={search_word}" class="export-link link-eve" target="_blank" rel="noopener noreferrer">E</a>'
                         
                         html_out += f"""
                         <tr class="has-count ranking-row {row_rank_class}">
@@ -1008,7 +1008,6 @@ html_content = f"""
             flex-direction: column;
         }}
         /* 詳細情報固定表示エリア */
-        /* 修正: 折り返しと高さ自動調整 */
         .chart-info {{
             min-height: 35px;
             height: auto;
@@ -1070,7 +1069,7 @@ html_content = f"""
                 <h1>Karaoke Dashboard</h1>
                 <div class="port-input-wrapper">
                     <label for="exportPort"><i class="fas fa-network-wired"></i> 保存時ポート:</label>
-                    <input type="number" id="exportPort" value="11058" title="HTML保存時のURLポート番号を指定">
+                    <input type="number" id="exportPort" value="11059" title="HTML保存時のURLポート番号を指定">
                 </div>
             </div>
             <div class="update-time">{current_datetime_str} 更新</div>
@@ -1277,7 +1276,6 @@ html_content = f"""
         }});
     }}
 
-    // 修正: グラフを画像として保存するためのHTML生成
     function downloadGraphHTML() {{
         const isCount = document.getElementById('graph_view_count').classList.contains('active');
         const canvasId = isCount ? 'rankingChartCount' : 'rankingChartUser';
@@ -1395,7 +1393,8 @@ html_content = f"""
 
     // ★ 修正: ポート番号を読み込み、展開したままのHTML生成コード
     function generateDownload(content, filename, title) {{
-        const portValue = document.getElementById('exportPort').value || '11058';
+        // 入力欄からポート番号を取得（デフォルト11059）
+        const portValue = document.getElementById('exportPort').value || '11059';
         
         const fullHtml = `
 <!DOCTYPE html>
