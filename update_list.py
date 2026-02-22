@@ -355,7 +355,7 @@ def generate_category_html_block(category_name, item_list):
             clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
             search_word = f"{clean_anime} {item['song']}"
             
-            # ★ 修正: ゆかりすたー用とEverything用の2つのリンクを生成
+            # ★ ゆかりすたー用とEverything用の2つのリンクを生成
             link_ykr = f'<a href="#host/search_listerdb_filelist.php?anyword={search_word}" class="export-link link-ykr" target="_blank" rel="noopener noreferrer">ゆ</a>'
             link_eve = f'<a href="#host/search.php?searchword={search_word}" class="export-link link-eve" target="_blank" rel="noopener noreferrer">E</a>'
             
@@ -640,7 +640,7 @@ if not raw_df.empty:
                     clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
                     search_word = f"{clean_anime} {item['song']}"
                     
-                    # ★ 修正: クール集計の2つのリンク生成
+                    # ★ クール集計の2つのリンク生成
                     link_ykr = f'<a href="#host/search_listerdb_filelist.php?anyword={search_word}" class="export-link link-ykr" target="_blank" rel="noopener noreferrer">ゆ</a>'
                     link_eve = f'<a href="#host/search.php?searchword={search_word}" class="export-link link-eve" target="_blank" rel="noopener noreferrer">E</a>'
                     
@@ -747,7 +747,7 @@ if not raw_df.empty:
                         clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
                         search_word = f"{clean_anime} {item['song']}"
                         
-                        # ★ 修正: ランキングの2つのリンク生成
+                        # ★ ランキングの2つのリンク生成
                         link_ykr = f'<a href="#host/search_listerdb_filelist.php?anyword={search_word}" class="export-link link-ykr" target="_blank" rel="noopener noreferrer">ゆ</a>'
                         link_eve = f'<a href="#host/search.php?searchword={search_word}" class="export-link link-eve" target="_blank" rel="noopener noreferrer">E</a>'
                         
@@ -872,7 +872,7 @@ html_content = f"""
         h1 {{ margin: 0; font-size: 1.2rem; color: var(--primary-color); }}
         .update-time {{ font-size: 0.8rem; color: #7f8c8d; }}
 
-        /* ★ 修正: ポート番号入力欄のデザイン */
+        /* ★ ポート番号入力欄のデザイン */
         .port-input-wrapper {{
             display: inline-flex;
             align-items: center;
@@ -1200,7 +1200,7 @@ html_content = f"""
                 tension: 0.1, 
                 fill: false, 
                 borderWidth: 2,
-                hidden: !isTop5 // TOP5以外は初期非表示（凡例で取り消し線）
+                hidden: !isTop5 // TOP5以外は初期非表示
             }};
         }});
 
@@ -1217,20 +1217,16 @@ html_content = f"""
                 }},
                 plugins: {{
                     tooltip: {{
-                        enabled: false, // ツールチップを無効化
+                        enabled: false,
                         external: function(context) {{
-                            // ツールチップの内容を上部のdivに表示
                             const tooltip = context.tooltip;
                             const infoDiv = document.getElementById(infoDivId);
                             if (tooltip.opacity === 0) return;
                             
                             if (tooltip.body) {{
                                 const dataPoint = tooltip.dataPoints[0];
-                                // 日付の整形 (Jan 28, 2026 -> 1/28)
                                 const dateObj = new Date(dataPoint.label);
                                 const dateStr = (dateObj.getMonth() + 1) + '/' + dateObj.getDate();
-                                
-                                // 指定のフォーマット: 作品名 曲名　1/28（1位）
                                 infoDiv.innerHTML = `<span style="color:${{dataPoint.dataset.borderColor}}">●</span> ${{dataPoint.dataset.label}}　${{dateStr}}（${{dataPoint.parsed.y}}位）`;
                             }}
                         }}
@@ -1254,9 +1250,8 @@ html_content = f"""
                 scales: {{
                     y: {{ 
                         reverse: true, 
-                        min: 0.5, // 1位の上に少し余白
+                        min: 0.5, 
                         max: 20.5, 
-                        // 修正: 整数のみ表示
                         ticks: {{ 
                             stepSize: 1, 
                             callback: function(val) {{ 
@@ -1283,15 +1278,12 @@ html_content = f"""
         const filename = 'graph.html';
 
         const canvas = document.getElementById(canvasId);
-        // Canvasの状態を画像データURLとして取得
         const imgData = canvas.toDataURL('image/png');
         
-        // ヘッダーテキスト取得
         const headerText = isCount ? 
             '2026年冬アニメ 歌唱数ランキング推移 (Top 20)' : 
             '2026年冬アニメ 歌唱人数ランキング推移 (Top 20)';
             
-        // 画像を埋め込んだHTMLコンテンツを作成
         const content = `
             <div class="category-header">${{headerText}}</div>
             <div class="chart-wrapper">
@@ -1302,15 +1294,12 @@ html_content = f"""
         generateDownload(content, filename, title);
     }}
 
-    // --- 以下、既存機能 ---
-
     function openTab(tabName) {{
         document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
         document.getElementById(tabName).classList.add('active');
         
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         
-        // タブボタンのアクティブ化ロジック
         let btns = document.querySelectorAll('.tab-btn');
         for(let i=0; i<btns.length; i++) {{
             if(btns[i].innerText.includes("セットリスト") && tabName === 'setlist') btns[i].classList.add('active');
@@ -1321,7 +1310,6 @@ html_content = f"""
             else if(btns[i].innerText.includes("推移(人)") && tabName === 'graph_view_user') btns[i].classList.add('active');
         }}
         
-        // コントロール表示切り替え
         document.getElementById('ctrl-setlist').style.display = 'none';
         document.getElementById('ctrl-analysis').style.display = 'none';
         document.getElementById('ctrl-ranking-count').style.display = 'none';
@@ -1353,7 +1341,6 @@ html_content = f"""
     }}
 
     function downloadHTML(elementId, filename, title) {{
-        // 引数が省略された場合のデフォルト動作（全体のHTML保存）
         if (!elementId) {{
             elementId = 'print-target';
             filename = 'karaoke_analysis.html';
@@ -1391,7 +1378,7 @@ html_content = f"""
         }}
     }}
 
-    // ★ 修正: ポート番号を読み込み、展開したままのHTML生成コード
+    // ★ ポート番号を読み込み、展開したままのHTML生成コード
     function generateDownload(content, filename, title) {{
         // 入力欄からポート番号を取得（デフォルト11059）
         const portValue = document.getElementById('exportPort').value || '11059';
@@ -1404,20 +1391,20 @@ html_content = f"""
     <title>${{title}}</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        body { font-family: "Helvetica Neue", Arial, sans-serif; font-size: 13px; color: #333; }
-        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-        th, td { border: 1px solid #ccc; padding: 5px 8px; text-align: left; vertical-align: middle; }
-        th { background-color: #2c3e50; color: #fff; }
-        td[rowspan] { background-color: #fff; }
+        body {{ font-family: "Helvetica Neue", Arial, sans-serif; font-size: 13px; color: #333; }}
+        table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; }}
+        th, td {{ border: 1px solid #ccc; padding: 5px 8px; text-align: left; vertical-align: middle; }}
+        th {{ background-color: #2c3e50; color: #fff; }}
+        td[rowspan] {{ background-color: #fff; }}
         
-        .category-header { 
+        .category-header {{ 
             background: #667eea; color: white; padding: 10px; margin-top: 20px; 
             font-weight: bold; border-radius: 4px; cursor: pointer; user-select: none;
-        }
-        .category-content { display: block; }
-        .category-content.collapsed { display: none; }
+        }}
+        .category-content {{ display: block; }}
+        .category-content.collapsed {{ display: none; }}
         
-        a.export-link {
+        a.export-link {{
             display: inline-block; 
             margin-left: 5px; 
             padding: 2px 6px;  
@@ -1427,47 +1414,47 @@ html_content = f"""
             font-size: 0.85em;
             font-weight: bold;
             cursor: pointer;
-        }
-        .link-ykr { background-color: #9b59b6; }
-        .link-eve { background-color: #3498db; }
-        a.export-link:hover { opacity: 0.8; }
+        }}
+        .link-ykr {{ background-color: #9b59b6; }}
+        .link-eve {{ background-color: #3498db; }}
+        a.export-link:hover {{ opacity: 0.8; }}
         
-        tr.ranking-row { cursor: default; }
-        tr.ranking-row:hover { background-color: #dbeafe; }
+        tr.ranking-row {{ cursor: default; }}
+        tr.ranking-row:hover {{ background-color: #dbeafe; }}
         
-        .count-wrapper { display: flex; align-items: center; gap: 8px; }
-        .count-num { width: 25px; text-align: right; }
-        .bar-chart { height: 10px; background: #3498db; border-radius: 5px; }
-        .bar-chart-user { height: 10px; background: #2ecc71; border-radius: 5px; }
+        .count-wrapper {{ display: flex; align-items: center; gap: 8px; }}
+        .count-num {{ width: 25px; text-align: right; }}
+        .bar-chart {{ height: 10px; background: #3498db; border-radius: 5px; }}
+        .bar-chart-user {{ height: 10px; background: #2ecc71; border-radius: 5px; }}
         
-        .rank-badge {
+        .rank-badge {{
             display: inline-block; width: 24px; height: 24px; line-height: 24px;
             border-radius: 50%; text-align: center; color: #fff; font-weight: bold; font-size: 12px;
             background-color: #95a5a6;
-        }
-        .rank-1 { background-color: #f1c40f; width: 28px; height: 28px; line-height: 28px; }
-        .rank-2 { background-color: #bdc3c7; }
-        .rank-3 { background-color: #d35400; }
+        }}
+        .rank-1 {{ background-color: #f1c40f; width: 28px; height: 28px; line-height: 28px; }}
+        .rank-2 {{ background-color: #bdc3c7; }}
+        .rank-3 {{ background-color: #d35400; }}
         
-        tr.rank-row-1 td { background-color: #fff8e1 !important; }
-        tr.rank-row-2 td { background-color: #f5f5f5 !important; }
-        tr.rank-row-3 td { background-color: #fff0e6 !important; }
+        tr.rank-row-1 td {{ background-color: #fff8e1 !important; }}
+        tr.rank-row-2 td {{ background-color: #f5f5f5 !important; }}
+        tr.rank-row-3 td {{ background-color: #fff0e6 !important; }}
 
-        .chart-wrapper {
+        .chart-wrapper {{
             background: #fff; padding: 10px; border-radius: 8px; border: 1px solid #ccc;
-        }
+        }}
 
-        @media print {
-            * {
+        @media print {{
+            * {{
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
                 color-adjust: exact !important;
-            }
-            .category-content { display: block !important; }
-            tbody.anime-group { break-inside: avoid; page-break-inside: avoid; }
-            .category-header { page-break-after: avoid; }
-            thead { display: table-header-group; }
-        }
+            }}
+            .category-content {{ display: block !important; }}
+            tbody.anime-group {{ break-inside: avoid; page-break-inside: avoid; }}
+            .category-header {{ page-break-after: avoid; }}
+            thead {{ display: table-header-group; }}
+        }}
     </style>
 </head>
 <body>
@@ -1479,25 +1466,25 @@ html_content = f"""
         // ダッシュボード画面上の入力値を展開
         const host = 'http://ykr.moe:${{portValue}}';
 
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', () => {{
             // 各種リンクを有効化し、動的なポート番号を置換
-            document.querySelectorAll('a.export-link').forEach(link => {
+            document.querySelectorAll('a.export-link').forEach(link => {{
                 const rawHref = link.getAttribute('href');
-                if (rawHref && rawHref.startsWith('#host')) {
+                if (rawHref && rawHref.startsWith('#host')) {{
                     link.href = rawHref.replace('#host', host);
-                }
-            });
-        });
+                }}
+            }});
+        }});
 
-        function toggleCategory(header) {
+        function toggleCategory(header) {{
             const content = header.nextElementSibling;
             content.classList.toggle('collapsed');
             const icon = header.querySelector('i');
-            if(icon) {
+            if(icon) {{
                 icon.className = content.classList.contains('collapsed') ? 'fas fa-chevron-right' : 'fas fa-chevron-down';
                 icon.style.float = 'right';
-            }
-        }
+            }}
+        }}
     <\/script>
 </body>
 </html>`;
