@@ -214,6 +214,9 @@ def check_match(target_text, source_series):
 
 
 # --- 1. 過去データ読み込み (history.csvはGASから) ---
+HISTORY_MAX_ROWS = 9500   # この行数を超えたらアーカイブを作成する
+HISTORY_KEEP_ROWS = 8000  # アーカイブ後にhistory.csvに残す行数
+
 history_file = "history.csv"
 history_df = load_df_from_gas(history_file)
 
@@ -222,6 +225,24 @@ if not history_df.empty:
 else:
     print("履歴ファイルがGASに存在しないか、読み込みに失敗しました。新規作成します。")
     history_df = pd.DataFrame()
+
+# --- アーカイブファイルの読み込み (history_2.csv, history_3.csv ...) ---
+archive_dfs = []
+archive_num = 2
+while True:
+    archive_file = f"history_{archive_num}.csv"
+    archive_df = load_df_from_gas(archive_file)
+    if archive_df.empty:
+        break
+    archive_df = archive_df.fillna("")
+    archive_dfs.append(archive_df)
+    archive_num += 1
+
+next_archive_num = archive_num
+if archive_num > 2:
+    print(f"アーカイブファイル history_2.csv 〜 history_{archive_num - 1}.csv を読み込みました。")
+else:
+    print("アーカイブファイルなし。")
 
 # --- 2. 新しいデータ取得 ---
 target_ports = list(room_map.keys())
@@ -271,12 +292,31 @@ if new_data_frames:
         cols.insert(0, cols.pop(cols.index('部屋主')))
         final_df = final_df[cols]
 
+    # 行数が上限に達した場合、古い行をアーカイブファイルへ切り出す
+    if len(final_df) >= HISTORY_MAX_ROWS:
+        rows_to_keep = final_df.iloc[:HISTORY_KEEP_ROWS]
+        rows_to_archive = final_df.iloc[HISTORY_KEEP_ROWS:]
+        archive_filename = f"history_{next_archive_num}.csv"
+        save_df_to_gas(archive_filename, rows_to_archive)
+        print(f"[Archive] {len(rows_to_archive)} 行を {archive_filename} にアーカイブしました。")
+        archive_dfs.append(rows_to_archive.fillna(""))
+        next_archive_num += 1
+        final_df = rows_to_keep
+
     # GASへのアップロード
     save_df_to_gas(history_file, final_df)
     print("履歴ファイルをGAS上で更新しました。")
 else:
     final_df = history_df
     print("新しいデータなし。過去データを使用。")
+
+# --- 全履歴データの結合（アーカイブ含む）---
+if archive_dfs:
+    full_df = pd.concat([final_df] + archive_dfs, ignore_index=True)
+    full_df = full_df.fillna("")
+    print(f"全履歴データ合計: {len(full_df)} 行（history.csv + アーカイブ {len(archive_dfs)} ファイル）")
+else:
+    full_df = final_df
 
 
 # ==========================================
@@ -385,7 +425,7 @@ if not raw_df.empty:
         raw_df = raw_df.fillna("")
         raw_df = raw_df.drop_duplicates(keep='last')
         
-        analysis_source_df = final_df.copy()
+        analysis_source_df = full_df.copy()
         analysis_source_df['dt_obj'] = pd.to_datetime(analysis_source_df['取得日'], errors='coerce')
         analysis_source_df = analysis_source_df.dropna(subset=['dt_obj'])
         
@@ -780,8 +820,8 @@ else:
 # ==========================================
 
 columns_to_hide = ['コメント'] 
-if not final_df.empty:
-    html_df = final_df.drop(columns=columns_to_hide, errors='ignore')
+if not full_df.empty:
+    html_df = full_df.drop(columns=columns_to_hide, errors='ignore')
 else:
     html_df = pd.DataFrame()
 
