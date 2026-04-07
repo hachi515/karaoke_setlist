@@ -89,7 +89,7 @@ def load_df_from_gas_with_status(filename, **kwargs):
         return pd.DataFrame(), "error"
 
     content_bytes = response.content
-    if not content_bytes or all(chr(b).isspace() for b in content_bytes):
+    if not content_bytes or content_bytes.lstrip(b'\xef\xbb\xbf\r\n\t ') == b'':
         print(f"[GAS] Empty file: {filename}")
         return pd.DataFrame(), "empty"
 
@@ -232,6 +232,7 @@ def check_match(target_text, source_series):
 # --- 1. 過去データ読み込み (history.csvはGASから) ---
 HISTORY_MAX_ROWS = 9500   # この行数を超えたらアーカイブを作成する
 HISTORY_KEEP_ROWS = 8000  # アーカイブ後にhistory.csvに残す行数
+HISTORY_ARCHIVE_MISS_LIMIT = 3  # 欠番があっても一定数先まで探索する
 
 history_file = "history.csv"
 history_df, history_status = load_df_from_gas_with_status(history_file)
@@ -251,22 +252,30 @@ else:
 # --- アーカイブファイルの読み込み (history_2.csv, history_3.csv ...) ---
 archive_dfs = []
 archive_num = 2
-while True:
+loaded_archive_files = []
+missing_archive_count = 0
+max_archive_num = 1
+while missing_archive_count < HISTORY_ARCHIVE_MISS_LIMIT:
     archive_file = f"history_{archive_num}.csv"
     archive_df, archive_status = load_df_from_gas_with_status(archive_file)
     if archive_status in ("not_found", "empty"):
-        break
+        missing_archive_count += 1
+        archive_num += 1
+        continue
     if archive_status != "ok":
         print(f"{archive_file} の読み込みに失敗したため、history.csv の更新をスキップします。")
         history_update_allowed = False
         break
     archive_df = archive_df.fillna("")
     archive_dfs.append(archive_df)
+    loaded_archive_files.append(archive_file)
+    max_archive_num = archive_num
+    missing_archive_count = 0
     archive_num += 1
 
-next_archive_num = archive_num
-if archive_num > 2:
-    print(f"アーカイブファイル history_2.csv 〜 history_{archive_num - 1}.csv を読み込みました。")
+next_archive_num = max_archive_num + 1
+if loaded_archive_files:
+    print(f"アーカイブファイルを読み込みました: {', '.join(loaded_archive_files)}")
 else:
     print("アーカイブファイルなし。")
 
