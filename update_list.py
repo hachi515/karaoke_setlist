@@ -89,7 +89,7 @@ def load_df_from_gas_with_status(filename, **kwargs):
         return pd.DataFrame(), "error"
 
     content_bytes = response.content
-    if not content_bytes or len(content_bytes.strip()) == 0:
+    if not content_bytes or all(chr(b).isspace() for b in content_bytes):
         print(f"[GAS] Empty file: {filename}")
         return pd.DataFrame(), "empty"
 
@@ -98,7 +98,7 @@ def load_df_from_gas_with_status(filename, **kwargs):
     for enc in encodings:
         try:
             df = pd.read_csv(io.BytesIO(content_bytes), encoding=enc, engine='python', **kwargs)
-            if len(df.columns) > 0:
+            if len(df.columns) != 0:
                 df.columns = df.columns.astype(str).str.replace('\ufeff', '').str.strip()
             print(f"[GAS] Success: Loaded {filename} ({enc}). Rows: {len(df)}")
             return df, "ok"
