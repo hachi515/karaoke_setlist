@@ -28,6 +28,7 @@ OFFLINE_FILES = [
 # ==========================================
 # デプロイしたGASのウェブアプリURL (履歴保存やCool解析の取得に使用)
 GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyzKEPfj0bYcRyEdizwQXcduIOQFt2_njtFQSyGP9jBjrhR8pyVKwDol6VN7bLPrktq/exec"
+CSV_EMPTY_PREFIX_BYTES = b'\xef\xbb\xbf\r\n\t '  # BOMと空白のみのCSVレスポンス判定に使う
 
 def load_df_from_github(filename, **kwargs):
     """GitHubのRawデータからCSVを読み込む"""
@@ -89,7 +90,7 @@ def load_df_from_gas_with_status(filename, **kwargs):
         return pd.DataFrame(), "error"
 
     content_bytes = response.content
-    if not content_bytes or content_bytes.lstrip(b'\xef\xbb\xbf\r\n\t ') == b'':
+    if not content_bytes or content_bytes.lstrip(CSV_EMPTY_PREFIX_BYTES) == b'':
         print(f"[GAS] Empty file: {filename}")
         return pd.DataFrame(), "empty"
 
@@ -98,7 +99,7 @@ def load_df_from_gas_with_status(filename, **kwargs):
     for enc in encodings:
         try:
             df = pd.read_csv(io.BytesIO(content_bytes), encoding=enc, engine='python', **kwargs)
-            if len(df.columns) != 0:
+            if len(df.columns) > 0:
                 df.columns = df.columns.astype(str).str.replace('\ufeff', '').str.strip()
             print(f"[GAS] Success: Loaded {filename} ({enc}). Rows: {len(df)}")
             return df, "ok"
@@ -232,7 +233,7 @@ def check_match(target_text, source_series):
 # --- 1. 過去データ読み込み (history.csvはGASから) ---
 HISTORY_MAX_ROWS = 9500   # この行数を超えたらアーカイブを作成する
 HISTORY_KEEP_ROWS = 8000  # アーカイブ後にhistory.csvに残す行数
-HISTORY_ARCHIVE_MISS_LIMIT = 3  # 欠番があっても一定数先まで探索する
+HISTORY_ARCHIVE_MISS_LIMIT = 3  # 欠番があっても後続アーカイブを拾えるように3件連続で未検出になるまで探索する
 
 history_file = "history.csv"
 history_df, history_status = load_df_from_gas_with_status(history_file)
