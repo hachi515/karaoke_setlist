@@ -89,7 +89,7 @@ def load_df_from_gas_with_status(filename, **kwargs):
         return pd.DataFrame(), "error"
 
     content_bytes = response.content
-    if not content_bytes or not content_bytes.strip():
+    if not content_bytes or len(content_bytes.strip()) == 0:
         print(f"[GAS] Empty file: {filename}")
         return pd.DataFrame(), "empty"
 
@@ -235,13 +235,14 @@ HISTORY_KEEP_ROWS = 8000  # アーカイブ後にhistory.csvに残す行数
 
 history_file = "history.csv"
 history_df, history_status = load_df_from_gas_with_status(history_file)
-history_update_allowed = history_status in ("ok", "not_found", "empty")
 
 if history_status == "ok":
     history_df = history_df.fillna("")
+    history_update_allowed = True
 elif history_status in ("not_found", "empty"):
     print("履歴ファイルがGASに存在しないか、空のため新規作成します。")
     history_df = pd.DataFrame()
+    history_update_allowed = True
 else:
     print("履歴ファイルの読み込みに失敗したため、history.csv の更新をスキップします。")
     history_df = pd.DataFrame()
