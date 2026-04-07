@@ -71,35 +71,47 @@ def load_df_from_github(filename, **kwargs):
         return pd.DataFrame()
 
 
-def load_df_from_gas(filename, **kwargs):
-    """GASからCSVデータをダウンロードしてDataFrameとして返す（既存機能：履歴用）"""
+def load_df_from_gas_with_status(filename, **kwargs):
+    """GASからCSVデータをダウンロードしてDataFrameと読み込み状態を返す"""
     print(f"[GAS] Loading {filename}...")
     try:
         response = requests.get(GAS_WEB_APP_URL, params={'filename': filename}, timeout=60)
-        
-        if response.status_code == 200:
-            content_bytes = response.content
-            if not content_bytes:
-                return pd.DataFrame()
-
-            encodings = ['utf-8-sig', 'utf-8', 'cp932', 'shift_jis']
-            
-            for enc in encodings:
-                try:
-                    df = pd.read_csv(io.BytesIO(content_bytes), encoding=enc, engine='python', **kwargs)
-                    if not df.empty:
-                        df.columns = df.columns.astype(str).str.replace('\ufeff', '').str.strip()
-                    print(f"[GAS] Success: Loaded {filename} ({enc}).")
-                    return df
-                except Exception:
-                    continue
-            return pd.DataFrame()
-        else:
-            print(f"[GAS] Error: {response.status_code}")
-            return pd.DataFrame()
     except Exception as e:
         print(f"[GAS] Connection error: {e}")
-        return pd.DataFrame()
+        return pd.DataFrame(), "error"
+
+    if response.status_code == 404:
+        print(f"[GAS] File not found: {filename}")
+        return pd.DataFrame(), "not_found"
+
+    if response.status_code != 200:
+        print(f"[GAS] Error: {response.status_code}")
+        return pd.DataFrame(), "error"
+
+    content_bytes = response.content
+    if not content_bytes or not content_bytes.strip():
+        print(f"[GAS] Empty file: {filename}")
+        return pd.DataFrame(), "empty"
+
+    encodings = ['utf-8-sig', 'utf-8', 'cp932', 'shift_jis']
+
+    for enc in encodings:
+        try:
+            df = pd.read_csv(io.BytesIO(content_bytes), encoding=enc, engine='python', **kwargs)
+            df.columns = df.columns.astype(str).str.replace('\ufeff', '').str.strip()
+            print(f"[GAS] Success: Loaded {filename} ({enc}). Rows: {len(df)}")
+            return df, "ok"
+        except Exception:
+            continue
+
+    print(f"[GAS] Failed to decode {filename}.")
+    return pd.DataFrame(), "error"
+
+
+def load_df_from_gas(filename, **kwargs):
+    """GASからCSVデータをダウンロードしてDataFrameとして返す（既存機能：履歴用）"""
+    df, _ = load_df_from_gas_with_status(filename, **kwargs)
+    return df
 
 def save_df_to_gas(filename, df):
     """DataFrameをCSV文字列に変換してGASへアップロードする"""
@@ -116,10 +128,13 @@ def save_df_to_gas(filename, df):
         response = requests.post(GAS_WEB_APP_URL, json=payload, timeout=60)
         if response.status_code == 200:
             print(f"[GAS] Upload success: {response.text}")
+            return True
         else:
             print(f"[GAS] Upload failed: {response.status_code}")
+            return False
     except Exception as e:
         print(f"[GAS] Upload error: {e}")
+        return False
 
 # ==========================================
 # メイン処理
@@ -218,21 +233,30 @@ HISTORY_MAX_ROWS = 9500   # この行数を超えたらアーカイブを作成�
 HISTORY_KEEP_ROWS = 8000  # アーカイブ後にhistory.csvに残す行数
 
 history_file = "history.csv"
-history_df = load_df_from_gas(history_file)
+history_df, history_status = load_df_from_gas_with_status(history_file)
+history_update_allowed = True
 
-if not history_df.empty:
+if history_status == "ok":
     history_df = history_df.fillna("")
-else:
-    print("履歴ファイルがGASに存在しないか、読み込みに失敗しました。新規作成します。")
+elif history_status in ("not_found", "empty"):
+    print("履歴ファイルがGASに存在しないか、空のため新規作成します。")
     history_df = pd.DataFrame()
+else:
+    print("履歴ファイルの読み込みに失敗したため、history.csv の更新をスキップします。")
+    history_df = pd.DataFrame()
+    history_update_allowed = False
 
 # --- アーカイブファイルの読み込み (history_2.csv, history_3.csv ...) ---
 archive_dfs = []
 archive_num = 2
 while True:
     archive_file = f"history_{archive_num}.csv"
-    archive_df = load_df_from_gas(archive_file)
-    if archive_df.empty:
+    archive_df, archive_status = load_df_from_gas_with_status(archive_file)
+    if archive_status in ("not_found", "empty"):
+        break
+    if archive_status != "ok":
+        print(f"{archive_file} の読み込みに失敗したため、history.csv の更新をスキップします。")
+        history_update_allowed = False
         break
     archive_df = archive_df.fillna("")
     archive_dfs.append(archive_df)
@@ -292,20 +316,27 @@ if new_data_frames:
         cols.insert(0, cols.pop(cols.index('部屋主')))
         final_df = final_df[cols]
 
-    # 行数が上限に達した場合、古い行をアーカイブファイルへ切り出す
-    if len(final_df) >= HISTORY_MAX_ROWS:
-        rows_to_keep = final_df.iloc[:HISTORY_KEEP_ROWS]
-        rows_to_archive = final_df.iloc[HISTORY_KEEP_ROWS:]
-        archive_filename = f"history_{next_archive_num}.csv"
-        save_df_to_gas(archive_filename, rows_to_archive)
-        print(f"[Archive] {len(rows_to_archive)} 行を {archive_filename} にアーカイブしました。")
-        archive_dfs.append(rows_to_archive.fillna(""))
-        next_archive_num += 1
-        final_df = rows_to_keep
+    if history_update_allowed:
+        # 行数が上限に達した場合、古い行をアーカイブファイルへ切り出す
+        if len(final_df) >= HISTORY_MAX_ROWS:
+            rows_to_keep = final_df.iloc[:HISTORY_KEEP_ROWS]
+            rows_to_archive = final_df.iloc[HISTORY_KEEP_ROWS:]
+            archive_filename = f"history_{next_archive_num}.csv"
+            if save_df_to_gas(archive_filename, rows_to_archive):
+                print(f"[Archive] {len(rows_to_archive)} 行を {archive_filename} にアーカイブしました。")
+                archive_dfs.append(rows_to_archive.fillna(""))
+                next_archive_num += 1
+                final_df = rows_to_keep
+            else:
+                print(f"[Archive] {archive_filename} への退避に失敗したため、history.csv は切り詰めずに保持します。")
 
-    # GASへのアップロード
-    save_df_to_gas(history_file, final_df)
-    print("履歴ファイルをGAS上で更新しました。")
+        # GASへのアップロード
+        if save_df_to_gas(history_file, final_df):
+            print("履歴ファイルをGAS上で更新しました。")
+        else:
+            print("履歴ファイルの更新に失敗しました。")
+    else:
+        print("履歴の保全を優先し、history.csv の更新をスキップしました。")
 else:
     final_df = history_df
     print("新しいデータなし。過去データを使用。")
