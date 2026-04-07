@@ -98,7 +98,8 @@ def load_df_from_gas_with_status(filename, **kwargs):
     for enc in encodings:
         try:
             df = pd.read_csv(io.BytesIO(content_bytes), encoding=enc, engine='python', **kwargs)
-            df.columns = df.columns.astype(str).str.replace('\ufeff', '').str.strip()
+            if len(df.columns) > 0:
+                df.columns = df.columns.astype(str).str.replace('\ufeff', '').str.strip()
             print(f"[GAS] Success: Loaded {filename} ({enc}). Rows: {len(df)}")
             return df, "ok"
         except Exception:
@@ -234,7 +235,7 @@ HISTORY_KEEP_ROWS = 8000  # アーカイブ後にhistory.csvに残す行数
 
 history_file = "history.csv"
 history_df, history_status = load_df_from_gas_with_status(history_file)
-history_update_allowed = True
+history_update_allowed = history_status in ("ok", "not_found", "empty")
 
 if history_status == "ok":
     history_df = history_df.fillna("")
