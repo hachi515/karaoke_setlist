@@ -291,13 +291,14 @@ for port in target_ports:
         response = requests.get(url, timeout=30)
         response.raise_for_status()
         
-dfs = pd.read_html(response.content)
+        # ↓この行の先頭の半角スペースの数が上の response = ... と同じか確認！
+        dfs = pd.read_html(response.content)
+        
         if dfs:
             df = dfs[0]
             df = df.fillna("") 
             
             # === 追加: 不要な文字列「詳細を見る ▼」を削除 ===
-            # \s* をつけることで、直前にある半角/全角スペースも一緒に消去します
             df = df.replace(r'\s*詳細を見る ▼', '', regex=True)
             # ================================================
             
@@ -306,7 +307,7 @@ dfs = pd.read_html(response.content)
             new_data_frames.append(df)
             
     except Exception as e:
-        pass 
+        pass
 
 if new_data_frames:
     new_df = pd.concat(new_data_frames, ignore_index=True)
