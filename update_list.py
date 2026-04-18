@@ -291,10 +291,16 @@ for port in target_ports:
         response = requests.get(url, timeout=30)
         response.raise_for_status()
         
-        dfs = pd.read_html(response.content)
+dfs = pd.read_html(response.content)
         if dfs:
             df = dfs[0]
             df = df.fillna("") 
+            
+            # === 追加: 不要な文字列「詳細を見る ▼」を削除 ===
+            # \s* をつけることで、直前にある半角/全角スペースも一緒に消去します
+            df = df.replace(r'\s*詳細を見る ▼', '', regex=True)
+            # ================================================
+            
             df['部屋主'] = room_map[port]
             df['取得日'] = current_date_str
             new_data_frames.append(df)
