@@ -502,14 +502,14 @@ if not raw_df.empty:
         ].sort_values('dt_obj')
         
         start_date = pd.to_datetime("2026/01/01")
-        end_date = pd.to_datetime("2026/03/31")
+        end_date = pd.to_datetime("2026/06/30")
         target_history = full_history[
             (full_history['dt_obj'] >= start_date) & 
             (full_history['dt_obj'] <= end_date)
         ]
 
         categorized_data = {}
-        ALLOWED_CATEGORIES = ["2026年冬アニメ", "2025年秋アニメ"]
+        ALLOWED_CATEGORIES = ["2026年春アニメ", "2026年冬アニメ", "2025年秋アニメ"]
         current_category = None
         
         for idx, row in raw_df.iterrows():
@@ -539,7 +539,7 @@ if not raw_df.empty:
             })
 
         print("グラフデータ計算中...")
-        graph_target_cat = "2026年冬アニメ"
+        graph_target_cat = "2026年春アニメ"
         
         if graph_target_cat in categorized_data:
             winter_items = categorized_data[graph_target_cat]
@@ -1204,35 +1204,35 @@ html_content = f"""
         </div>
 
         <div id="analysis" class="tab-content">
-            <div style="margin-top:15px; font-size:0.9rem; color:#7f8c8d; text-align:right;">集計対象: 2026/01/01 - 2026/03/31</div>
+            <div style="margin-top:15px; font-size:0.9rem; color:#7f8c8d; text-align:right;">集計対象: 2026/01/01 - 2026/06/30</div>
             <div id="print-target">
                 {analysis_html_content if cool_data_exists else '<div style="padding:20px;text-align:center;color:#e74c3c;">集計データがありません</div>'}
             </div>
         </div>
 
         <div id="ranking_count" class="tab-content">
-            <div style="margin-top:15px; font-size:0.9rem; color:#7f8c8d; text-align:right;">集計対象: 2026/01/01 - 2026/03/31</div>
+            <div style="margin-top:15px; font-size:0.9rem; color:#7f8c8d; text-align:right;">集計対象: 2026/01/01 - 2026/06/30</div>
             <div id="ranking-count-print-target">
                 {ranking_count_html_content if ranking_count_html_content else '<div style="padding:20px;text-align:center;color:#e74c3c;">ランキング対象データがありません</div>'}
             </div>
         </div>
         
         <div id="ranking_user" class="tab-content">
-            <div style="margin-top:15px; font-size:0.9rem; color:#7f8c8d; text-align:right;">集計対象: 2026/01/01 - 2026/03/31</div>
+            <div style="margin-top:15px; font-size:0.9rem; color:#7f8c8d; text-align:right;">集計対象: 2026/01/01 - 2026/06/30</div>
             <div id="ranking-user-print-target">
                 {ranking_user_html_content if ranking_user_html_content else '<div style="padding:20px;text-align:center;color:#e74c3c;">ランキング対象データがありません</div>'}
             </div>
         </div>
 
         <div id="graph_view_count" class="tab-content">
-            <div class="category-header">2026年冬アニメ 歌唱数ランキング推移 (Top 20)</div>
+            <div class="category-header">2026年春アニメ 歌唱数ランキング推移 (Top 20)</div>
             <div class="chart-wrapper">
                 <div id="chart-info-count" class="chart-info">グラフの点をタップ・ホバーで詳細を表示</div>
                 <div class="canvas-container"><canvas id="rankingChartCount"></canvas></div>
             </div>
         </div>
         <div id="graph_view_user" class="tab-content">
-            <div class="category-header">2026年冬アニメ 歌唱人数ランキング推移 (Top 20)</div>
+            <div class="category-header">2026年春アニメ 歌唱人数ランキング推移 (Top 20)</div>
             <div class="chart-wrapper">
                 <div id="chart-info-user" class="chart-info">グラフの点をタップ・ホバーで詳細を表示</div>
                 <div class="canvas-container"><canvas id="rankingChartUser"></canvas></div>
@@ -1369,8 +1369,8 @@ html_content = f"""
         const imgData = canvas.toDataURL('image/png');
         
         const headerText = isCount ? 
-            '2026年冬アニメ 歌唱数ランキング推移 (Top 20)' : 
-            '2026年冬アニメ 歌唱人数ランキング推移 (Top 20)';
+            '2026年春アニメ 歌唱数ランキング推移 (Top 20)' : 
+            '2026年春アニメ 歌唱人数ランキング推移 (Top 20)';
             
         const content = `
             <div class="category-header">${{headerText}}</div>
@@ -1673,4 +1673,3 @@ html_content = f"""
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
     print("HTML生成完了: index.html")
-
