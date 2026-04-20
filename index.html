@@ -60,7 +60,6 @@
         h1 { margin: 0; font-size: 1.2rem; color: var(--primary-color); }
         .update-time { font-size: 0.8rem; color: #7f8c8d; }
 
-        /* ポート番号・リンク設定欄のデザイン */
         .port-input-wrapper {
             display: inline-flex;
             align-items: center;
@@ -114,8 +113,7 @@
 
         .ctrl-setlist { display: flex; width: 100%; align-items: center; gap:8px; }
         .ctrl-analysis { display: none; width: 100%; align-items: center; justify-content: flex-end; gap:5px; }
-        .ctrl-ranking { display: none; width: 100%; align-items: center; justify-content: flex-end; }
-        /* ★グラフ用コントロール */
+        .ctrl-ranking { display: none; width: 100%; align-items: center; justify-content: flex-end; gap:5px; }
         .ctrl-graph { display: none; width: 100%; align-items: center; justify-content: flex-end; }
 
         .content-area {
@@ -186,7 +184,6 @@
 
         .rankingTable tr:nth-child(1) th { background-color: var(--primary-color) !important; color: #fff !important; }
 
-        /* ★グラフ用スタイル */
         .chart-wrapper {
             background: #fff;
             padding: 10px;
@@ -197,7 +194,6 @@
             display: flex;
             flex-direction: column;
         }
-        /* 詳細情報固定表示エリア */
         .chart-info {
             min-height: 35px;
             height: auto;
@@ -269,7 +265,7 @@
                     </select>
                 </div>
             </div>
-            <div class="update-time">2026/04/20 16:22 更新</div>
+            <div class="update-time">2026/04/20 16:46 更新</div>
         </div>
         <div class="tabs">
             <button class="tab-btn active" onclick="openTab('setlist')">セットリスト</button>
@@ -287,15 +283,36 @@
                 <div class="count-display" id="countDisplay">読み込み中...</div>
             </div>
             <div id="ctrl-analysis" class="ctrl-analysis">
-                <button onclick="downloadList('list-created-content', 'created_list.html', '作成済みリスト')" class="btn btn-list">作成リスト保存</button>
-                <button onclick="downloadList('list-uncreated-content', 'uncreated_list.html', '未作成リスト')" class="btn btn-list" style="background-color:#e74c3c;">未作成リスト保存</button>
-                <button onclick="downloadHTML()" class="btn btn-dl" style="margin-left:10px;"><i class="fas fa-file-code"></i> HTML保存</button>
+                <select id="exportTargetCategory" style="margin-right:10px; padding:4px; border-radius:4px; font-size:13px; border: 1px solid #ccc;">
+                    <option value="ALL">すべて保存</option>
+<option value="2026年春アニメ">2026年春アニメ</option>
+<option value="2026年冬アニメ">2026年冬アニメ</option>
+<option value="2025年秋アニメ">2025年秋アニメ</option>
+
+                </select>
+                <button onclick="downloadListWithCategory('list-created-content', 'created_list.html', '作成済みリスト')" class="btn btn-list">作成リスト保存</button>
+                <button onclick="downloadListWithCategory('list-uncreated-content', 'uncreated_list.html', '未作成リスト')" class="btn btn-list" style="background-color:#e74c3c;">未作成リスト保存</button>
+                <button onclick="downloadHTMLWithCategory()" class="btn btn-dl" style="margin-left:10px;"><i class="fas fa-file-code"></i> HTML保存</button>
             </div>
             <div id="ctrl-ranking-count" class="ctrl-ranking">
-                <button onclick="downloadRanking('count')" class="btn btn-dl"><i class="fas fa-trophy"></i> 歌唱数ランキング保存</button>
+                <select id="exportTargetRankingCount" style="margin-right:10px; padding:4px; border-radius:4px; font-size:13px; border: 1px solid #ccc;">
+                    <option value="ALL">すべて保存</option>
+<option value="2026年春アニメ">2026年春アニメ</option>
+<option value="2026年冬アニメ">2026年冬アニメ</option>
+<option value="2025年秋アニメ">2025年秋アニメ</option>
+
+                </select>
+                <button onclick="downloadRankingWithCategory('count')" class="btn btn-dl"><i class="fas fa-trophy"></i> 歌唱数ランキング保存</button>
             </div>
             <div id="ctrl-ranking-user" class="ctrl-ranking">
-                <button onclick="downloadRanking('user')" class="btn btn-dl"><i class="fas fa-users"></i> 歌唱人数ランキング保存</button>
+                <select id="exportTargetRankingUser" style="margin-right:10px; padding:4px; border-radius:4px; font-size:13px; border: 1px solid #ccc;">
+                    <option value="ALL">すべて保存</option>
+<option value="2026年春アニメ">2026年春アニメ</option>
+<option value="2026年冬アニメ">2026年冬アニメ</option>
+<option value="2025年秋アニメ">2025年秋アニメ</option>
+
+                </select>
+                <button onclick="downloadRankingWithCategory('user')" class="btn btn-dl"><i class="fas fa-users"></i> 歌唱人数ランキング保存</button>
             </div>
             <div id="ctrl-graph" class="ctrl-graph">
                 <button onclick="downloadGraphHTML()" class="btn btn-dl" style="background-color:#e67e22;"><i class="fas fa-file-code"></i> HTML保存</button>
@@ -1846,13 +1863,8 @@
         }
     }
 
+    // --- HTML出力用関数群 ---
     function downloadHTML(elementId, filename, title) {
-        if (!elementId) {
-            elementId = 'print-target';
-            filename = 'karaoke_analysis.html';
-            title = 'クール集計結果';
-        }
-        
         const element = document.getElementById(elementId);
         if(element) {
             const htmlContent = element.innerHTML;
@@ -1860,27 +1872,67 @@
         }
     }
 
-    function downloadRanking(mode) {
-        let elementId = 'ranking-count-print-target';
-        let filename = 'karaoke_ranking_count.html';
-        let title = 'カラオケ歌唱数ランキング';
-        
-        if (mode === 'user') {
-            elementId = 'ranking-user-print-target';
-            filename = 'karaoke_ranking_user.html';
-            title = 'カラオケ歌唱人数ランキング';
-        }
-        
-        const element = document.getElementById(elementId);
-        const htmlContent = element.innerHTML;
-        generateDownload(htmlContent, filename, title);
+    function extractCategoryHTML(containerId, targetCat) {
+        const container = document.getElementById(containerId);
+        if (!container) return "";
+        const blocks = container.querySelectorAll('.category-block');
+        let content = "";
+        blocks.forEach(block => {
+            const header = block.querySelector('.category-header');
+            if (header && header.innerText.includes(targetCat)) {
+                // 出力時にcollapsedを解除して表示させる
+                const clone = block.cloneNode(true);
+                const catContent = clone.querySelector('.category-content');
+                if (catContent) catContent.classList.remove('collapsed');
+                
+                const icon = clone.querySelector('i.fa-chevron-right');
+                if (icon) icon.className = 'fas fa-chevron-down';
+
+                content += clone.outerHTML;
+            }
+        });
+        return content;
     }
 
-    function downloadList(elementId, filename, title) {
-        const element = document.getElementById(elementId);
-        if(element) {
-            const htmlContent = element.innerHTML;
-            generateDownload(htmlContent, filename, title);
+    function downloadHTMLWithCategory() {
+        const targetCat = document.getElementById('exportTargetCategory').value;
+        if (targetCat === "ALL") {
+            downloadHTML('print-target', 'karaoke_analysis.html', 'クール集計結果');
+        } else {
+            let content = extractCategoryHTML('print-target', targetCat);
+            if (!content) content = `<div style="padding:20px;text-align:center;">${targetCat} のデータがありません</div>`;
+            generateDownload(content, `karaoke_analysis_${targetCat}.html`, `${targetCat} 集計結果`);
+        }
+    }
+
+    function downloadRankingWithCategory(mode) {
+        const targetCat = mode === 'count' 
+            ? document.getElementById('exportTargetRankingCount').value 
+            : document.getElementById('exportTargetRankingUser').value;
+        const elementId = mode === 'count' ? 'ranking-count-print-target' : 'ranking-user-print-target';
+        const baseTitle = mode === 'count' ? 'カラオケ歌唱数ランキング' : 'カラオケ歌唱人数ランキング';
+        const baseFilename = mode === 'count' ? 'karaoke_ranking_count' : 'karaoke_ranking_user';
+        
+        if (targetCat === "ALL") {
+            downloadHTML(elementId, `${baseFilename}.html`, baseTitle);
+        } else {
+            let content = extractCategoryHTML(elementId, targetCat);
+            if (!content) content = `<div style="padding:20px;text-align:center;">${targetCat} のデータがありません</div>`;
+            generateDownload(content, `${baseFilename}_${targetCat}.html`, `${targetCat} ${baseTitle}`);
+        }
+    }
+
+    function downloadListWithCategory(elementId, baseFilename, baseTitle) {
+        const targetCat = document.getElementById('exportTargetCategory').value;
+        if (targetCat === "ALL") {
+            downloadHTML(elementId, baseFilename, baseTitle);
+        } else {
+            let content = extractCategoryHTML(elementId, targetCat);
+            if (!content) content = `<div style="padding:20px;text-align:center;">${targetCat} のデータがありません</div>`;
+            
+            const ext = baseFilename.split('.').pop();
+            const name = baseFilename.replace('.' + ext, '');
+            generateDownload(content, `${name}_${targetCat}.${ext}`, `${targetCat} ${baseTitle}`);
         }
     }
 
