@@ -291,16 +291,13 @@ for port in target_ports:
         response = requests.get(url, timeout=30)
         response.raise_for_status()
         
-        # ↓この行の先頭の半角スペースの数が上の response = ... と同じか確認！
         dfs = pd.read_html(response.content)
         
         if dfs:
             df = dfs[0]
             df = df.fillna("") 
             
-            # === 追加: 不要な文字列「詳細を見る ▼」を削除 ===
             df = df.replace(r'\s*詳細を見る ▼', '', regex=True)
-            # ================================================
             
             df['部屋主'] = room_map[port]
             df['取得日'] = current_date_str
@@ -336,7 +333,6 @@ if new_data_frames:
         final_df = final_df[cols]
 
     if history_update_allowed:
-        # 行数が上限に達した場合、古い行をアーカイブファイルへ切り出す
         if len(final_df) >= HISTORY_MAX_ROWS:
             rows_to_keep = final_df.iloc[:HISTORY_KEEP_ROWS]
             rows_to_archive = final_df.iloc[HISTORY_KEEP_ROWS:]
@@ -349,7 +345,6 @@ if new_data_frames:
             else:
                 print(f"[Archive] {archive_filename} への退避に失敗したため、history.csv は切り詰めずに保持します。")
 
-        # GASへのアップロード
         if save_df_to_gas(history_file, final_df):
             print("履歴ファイルをGAS上で更新しました。")
         else:
@@ -386,26 +381,29 @@ uncreated_lists_html = ""
 
 cool_file = "cool_analysis.csv" 
 
+# 集計対象カテゴリの定義
+ALLOWED_CATEGORIES = ["2026年春アニメ", "2026年冬アニメ", "2025年秋アニメ"]
+
+# --- HTMLコントロール用 プルダウン生成 ---
+category_options = '<option value="ALL">すべて保存</option>\n'
+for cat in ALLOWED_CATEGORIES:
+    category_options += f'<option value="{cat}">{cat}</option>\n'
+
 # --- オフラインリスト読み込み (GitHubから) ---
 offline_targets = []
 
 print(f"GitHubからオフラインリストを読み込みます... (User: {GITHUB_USER}, Repo: {GITHUB_REPO})")
 
 for filename in OFFLINE_FILES:
-    # ★ GitHub読み込み関数を使用
     offline_df = load_df_from_github(filename)
-    
     if not offline_df.empty:
         offline_df = offline_df.fillna("")
-        
-        # '曲名'カラムがあるか確認
         if '曲名' in offline_df.columns:
             targets = [normalize_offline_text(str(x)) for x in offline_df['曲名'].tolist()]
             offline_targets.extend(targets)
             print(f"  -> {filename}: {len(targets)} 件追加")
         else:
             print(f"  -> {filename}: '曲名'カラムが見つかりません。")
-            
     else:
         print(f"  -> {filename}: 読み込み失敗または空です。")
 
@@ -448,7 +446,6 @@ def generate_category_html_block(category_name, item_list):
             clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
             search_word = f"{clean_anime} {item['song']}"
             
-            # JSで動的に置換するためのプレースホルダーURL
             link_tag_start = f'<a href="#search_link/{search_word}" class="export-link">'
             
             html += '<tr>'
@@ -466,8 +463,7 @@ def generate_category_html_block(category_name, item_list):
     return html
 
 
-# --- Cool Analysis読み込み (GASから) ---
-# ※ここもGitHubにある場合は load_df_from_github に変更してください
+# --- Cool Analysis読み込み ---
 raw_df = load_df_from_gas(cool_file, header=None)
 
 if not raw_df.empty:
@@ -509,7 +505,6 @@ if not raw_df.empty:
         ]
 
         categorized_data = {}
-        ALLOWED_CATEGORIES = ["2026年春アニメ", "2026年冬アニメ", "2025年秋アニメ"]
         current_category = None
         
         for idx, row in raw_df.iterrows():
@@ -732,7 +727,6 @@ if not raw_df.empty:
                     clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
                     search_word = f"{clean_anime} {item['song']}"
                     
-                    # プレースホルダーURL
                     link_tag_start = f'<a href="#search_link/{search_word}" class="export-link">'
                     
                     analysis_html_content += f'<tr class="{row_class}">'
@@ -740,13 +734,10 @@ if not raw_df.empty:
                         analysis_html_content += f'<td rowspan="{rowspan}">{item["anime"]}</td>'
                     
                     analysis_html_content += f'<td align="center">{creation_count}</td>'
-
                     analysis_html_content += f'<td align="center">{link_tag_start}{item["type"]}</a></td>'
                     analysis_html_content += f'<td>{link_tag_start}{item["artist"]}</a></td>'
                     analysis_html_content += f'<td>{link_tag_start}{item["song"]}</a></td>'
-                    
                     analysis_html_content += f'<td class="count-cell"><div class="count-wrapper"><span class="count-num">{user_count}</span>{user_bar_html}</div></td>'
-
                     analysis_html_content += f'<td class="count-cell"><div class="count-wrapper"><span class="count-num">{count}</span>{bar_html}</div></td>'
                     analysis_html_content += '</tr>'
                 
@@ -817,7 +808,6 @@ if not raw_df.empty:
                         previous_val = current_val
                         
                         rank_class = f"rank-{current_rank}" if current_rank <= 3 else "rank-normal"
-                        
                         row_rank_class = f"rank-row-{current_rank}" if current_rank <= 3 else ""
 
                         rank_display = f'<span class="rank-badge {rank_class}">{current_rank}</span>'
@@ -951,7 +941,6 @@ html_content = f"""
         h1 {{ margin: 0; font-size: 1.2rem; color: var(--primary-color); }}
         .update-time {{ font-size: 0.8rem; color: #7f8c8d; }}
 
-        /* ポート番号・リンク設定欄のデザイン */
         .port-input-wrapper {{
             display: inline-flex;
             align-items: center;
@@ -1005,8 +994,7 @@ html_content = f"""
 
         .ctrl-setlist {{ display: flex; width: 100%; align-items: center; gap:8px; }}
         .ctrl-analysis {{ display: none; width: 100%; align-items: center; justify-content: flex-end; gap:5px; }}
-        .ctrl-ranking {{ display: none; width: 100%; align-items: center; justify-content: flex-end; }}
-        /* ★グラフ用コントロール */
+        .ctrl-ranking {{ display: none; width: 100%; align-items: center; justify-content: flex-end; gap:5px; }}
         .ctrl-graph {{ display: none; width: 100%; align-items: center; justify-content: flex-end; }}
 
         .content-area {{
@@ -1077,7 +1065,6 @@ html_content = f"""
 
         .rankingTable tr:nth-child(1) th {{ background-color: var(--primary-color) !important; color: #fff !important; }}
 
-        /* ★グラフ用スタイル */
         .chart-wrapper {{
             background: #fff;
             padding: 10px;
@@ -1088,7 +1075,6 @@ html_content = f"""
             display: flex;
             flex-direction: column;
         }}
-        /* 詳細情報固定表示エリア */
         .chart-info {{
             min-height: 35px;
             height: auto;
@@ -1178,15 +1164,24 @@ html_content = f"""
                 <div class="count-display" id="countDisplay">読み込み中...</div>
             </div>
             <div id="ctrl-analysis" class="ctrl-analysis">
-                <button onclick="downloadList('list-created-content', 'created_list.html', '作成済みリスト')" class="btn btn-list">作成リスト保存</button>
-                <button onclick="downloadList('list-uncreated-content', 'uncreated_list.html', '未作成リスト')" class="btn btn-list" style="background-color:#e74c3c;">未作成リスト保存</button>
-                <button onclick="downloadHTML()" class="btn btn-dl" style="margin-left:10px;"><i class="fas fa-file-code"></i> HTML保存</button>
+                <select id="exportTargetCategory" style="margin-right:10px; padding:4px; border-radius:4px; font-size:13px; border: 1px solid #ccc;">
+                    {category_options}
+                </select>
+                <button onclick="downloadListWithCategory('list-created-content', 'created_list.html', '作成済みリスト')" class="btn btn-list">作成リスト保存</button>
+                <button onclick="downloadListWithCategory('list-uncreated-content', 'uncreated_list.html', '未作成リスト')" class="btn btn-list" style="background-color:#e74c3c;">未作成リスト保存</button>
+                <button onclick="downloadHTMLWithCategory()" class="btn btn-dl" style="margin-left:10px;"><i class="fas fa-file-code"></i> HTML保存</button>
             </div>
             <div id="ctrl-ranking-count" class="ctrl-ranking">
-                <button onclick="downloadRanking('count')" class="btn btn-dl"><i class="fas fa-trophy"></i> 歌唱数ランキング保存</button>
+                <select id="exportTargetRankingCount" style="margin-right:10px; padding:4px; border-radius:4px; font-size:13px; border: 1px solid #ccc;">
+                    {category_options}
+                </select>
+                <button onclick="downloadRankingWithCategory('count')" class="btn btn-dl"><i class="fas fa-trophy"></i> 歌唱数ランキング保存</button>
             </div>
             <div id="ctrl-ranking-user" class="ctrl-ranking">
-                <button onclick="downloadRanking('user')" class="btn btn-dl"><i class="fas fa-users"></i> 歌唱人数ランキング保存</button>
+                <select id="exportTargetRankingUser" style="margin-right:10px; padding:4px; border-radius:4px; font-size:13px; border: 1px solid #ccc;">
+                    {category_options}
+                </select>
+                <button onclick="downloadRankingWithCategory('user')" class="btn btn-dl"><i class="fas fa-users"></i> 歌唱人数ランキング保存</button>
             </div>
             <div id="ctrl-graph" class="ctrl-graph">
                 <button onclick="downloadGraphHTML()" class="btn btn-dl" style="background-color:#e67e22;"><i class="fas fa-file-code"></i> HTML保存</button>
@@ -1428,13 +1423,8 @@ html_content = f"""
         }}
     }}
 
+    // --- HTML出力用関数群 ---
     function downloadHTML(elementId, filename, title) {{
-        if (!elementId) {{
-            elementId = 'print-target';
-            filename = 'karaoke_analysis.html';
-            title = 'クール集計結果';
-        }}
-        
         const element = document.getElementById(elementId);
         if(element) {{
             const htmlContent = element.innerHTML;
@@ -1442,27 +1432,67 @@ html_content = f"""
         }}
     }}
 
-    function downloadRanking(mode) {{
-        let elementId = 'ranking-count-print-target';
-        let filename = 'karaoke_ranking_count.html';
-        let title = 'カラオケ歌唱数ランキング';
-        
-        if (mode === 'user') {{
-            elementId = 'ranking-user-print-target';
-            filename = 'karaoke_ranking_user.html';
-            title = 'カラオケ歌唱人数ランキング';
-        }}
-        
-        const element = document.getElementById(elementId);
-        const htmlContent = element.innerHTML;
-        generateDownload(htmlContent, filename, title);
+    function extractCategoryHTML(containerId, targetCat) {{
+        const container = document.getElementById(containerId);
+        if (!container) return "";
+        const blocks = container.querySelectorAll('.category-block');
+        let content = "";
+        blocks.forEach(block => {{
+            const header = block.querySelector('.category-header');
+            if (header && header.innerText.includes(targetCat)) {{
+                // 出力時にcollapsedを解除して表示させる
+                const clone = block.cloneNode(true);
+                const catContent = clone.querySelector('.category-content');
+                if (catContent) catContent.classList.remove('collapsed');
+                
+                const icon = clone.querySelector('i.fa-chevron-right');
+                if (icon) icon.className = 'fas fa-chevron-down';
+
+                content += clone.outerHTML;
+            }}
+        }});
+        return content;
     }}
 
-    function downloadList(elementId, filename, title) {{
-        const element = document.getElementById(elementId);
-        if(element) {{
-            const htmlContent = element.innerHTML;
-            generateDownload(htmlContent, filename, title);
+    function downloadHTMLWithCategory() {{
+        const targetCat = document.getElementById('exportTargetCategory').value;
+        if (targetCat === "ALL") {{
+            downloadHTML('print-target', 'karaoke_analysis.html', 'クール集計結果');
+        }} else {{
+            let content = extractCategoryHTML('print-target', targetCat);
+            if (!content) content = `<div style="padding:20px;text-align:center;">${{targetCat}} のデータがありません</div>`;
+            generateDownload(content, `karaoke_analysis_${{targetCat}}.html`, `${{targetCat}} 集計結果`);
+        }}
+    }}
+
+    function downloadRankingWithCategory(mode) {{
+        const targetCat = mode === 'count' 
+            ? document.getElementById('exportTargetRankingCount').value 
+            : document.getElementById('exportTargetRankingUser').value;
+        const elementId = mode === 'count' ? 'ranking-count-print-target' : 'ranking-user-print-target';
+        const baseTitle = mode === 'count' ? 'カラオケ歌唱数ランキング' : 'カラオケ歌唱人数ランキング';
+        const baseFilename = mode === 'count' ? 'karaoke_ranking_count' : 'karaoke_ranking_user';
+        
+        if (targetCat === "ALL") {{
+            downloadHTML(elementId, `${{baseFilename}}.html`, baseTitle);
+        }} else {{
+            let content = extractCategoryHTML(elementId, targetCat);
+            if (!content) content = `<div style="padding:20px;text-align:center;">${{targetCat}} のデータがありません</div>`;
+            generateDownload(content, `${{baseFilename}}_${{targetCat}}.html`, `${{targetCat}} ${{baseTitle}}`);
+        }}
+    }}
+
+    function downloadListWithCategory(elementId, baseFilename, baseTitle) {{
+        const targetCat = document.getElementById('exportTargetCategory').value;
+        if (targetCat === "ALL") {{
+            downloadHTML(elementId, baseFilename, baseTitle);
+        }} else {{
+            let content = extractCategoryHTML(elementId, targetCat);
+            if (!content) content = `<div style="padding:20px;text-align:center;">${{targetCat}} のデータがありません</div>`;
+            
+            const ext = baseFilename.split('.').pop();
+            const name = baseFilename.replace('.' + ext, '');
+            generateDownload(content, `${{name}}_${{targetCat}}.${{ext}}`, `${{targetCat}} ${{baseTitle}}`);
         }}
     }}
 
