@@ -425,7 +425,6 @@ for port in target_ports:
 
             df['部屋主'] = room_map[port]
             df['取得日'] = current_date_str
-            df['取得日時'] = current_datetime_str
             new_data_frames.append(df)
 
     except Exception as e:
@@ -470,21 +469,20 @@ if new_data_frames:
     if '順番' in final_df.columns:
         final_df['順番'] = pd.to_numeric(final_df['順番'], errors='coerce')
 
-    # 日時がある新データを優先しつつ、古いhistory.csvに取得日時が無くても並べられるようにする。
-    if '取得日時' not in final_df.columns:
-        final_df['取得日時'] = ""
+    # 余計な保存列を作らず、取得日と順番だけで並べる。
+    # 以前の版で作られた history.csv に「取得日時」が残っている場合も、ここで削除する。
+    final_df = final_df.drop(columns=['取得日時'], errors='ignore')
 
-    final_df['temp_datetime'] = pd.to_datetime(final_df['取得日時'], errors='coerce')
     final_df['temp_date'] = pd.to_datetime(final_df['取得日'], errors='coerce') if '取得日' in final_df.columns else pd.NaT
 
-    sort_cols = ['temp_datetime', 'temp_date']
-    ascending = [False, False]
+    sort_cols = ['temp_date']
+    ascending = [False]
     if '順番' in final_df.columns:
         sort_cols.append('順番')
         ascending.append(False)
 
     final_df = final_df.sort_values(by=sort_cols, ascending=ascending, na_position='last')
-    final_df = final_df.drop(columns=['temp_datetime', 'temp_date'], errors='ignore')
+    final_df = final_df.drop(columns=['temp_date'], errors='ignore')
 
     cols = list(final_df.columns)
     if '部屋主' in cols:
