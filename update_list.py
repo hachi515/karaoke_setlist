@@ -6,6 +6,7 @@ import re
 import unicodedata
 import json
 import io
+import hashlib
 from itertools import groupby
 
 # ==========================================
@@ -138,6 +139,87 @@ def save_df_to_gas(filename, df):
         print(f"[GAS] Upload error: {e}")
         return False
 
+
+def normalize_df_for_compare(df):
+    """保存後検証用にDataFrameを文字列化して比較しやすくする"""
+    if df is None:
+        return pd.DataFrame()
+    check_df = df.copy().fillna("")
+    check_df.columns = check_df.columns.astype(str).str.replace('\ufeff', '').str.strip()
+    check_df = check_df.astype(str)
+
+    # pandasのCSV再読込で "1.0" と "1" のように揺れやすい値を軽く正規化
+    def clean_value(v):
+        v = v.strip()
+        if re.fullmatch(r'-?\d+\.0', v):
+            return v[:-2]
+        return v
+
+    for col in check_df.columns:
+        check_df[col] = check_df[col].map(clean_value)
+    return check_df
+
+
+def df_content_hash(df):
+    """DataFrameの行順・列順を含めた内容ハッシュを作る"""
+    check_df = normalize_df_for_compare(df)
+    csv_text = check_df.to_csv(index=False, lineterminator="\n")
+    return hashlib.sha256(csv_text.encode("utf-8")).hexdigest()
+
+
+def save_df_to_gas_verified(filename, df, allow_empty=False):
+    """
+    GASへ保存したあと、同じファイルを読み戻して行数と内容を検証する。
+    検証NGの場合は False を返し、呼び出し側で history.csv の切り詰め・上書きを止める。
+    """
+    df_to_save = df.copy().fillna("") if df is not None else pd.DataFrame()
+
+    if df_to_save.empty and not allow_empty:
+        print(f"[Verify] {filename} は空DataFrameのため保存を中止しました。")
+        return False
+
+    if not save_df_to_gas(filename, df_to_save):
+        return False
+
+    read_df, status = load_df_from_gas_with_status(filename)
+    if status != "ok":
+        print(f"[Verify] {filename} の読み戻しに失敗しました: {status}")
+        return False
+
+    read_df = read_df.fillna("")
+
+    if len(read_df) != len(df_to_save):
+        print(f"[Verify] {filename} 行数不一致: save={len(df_to_save)}, read={len(read_df)}")
+        return False
+
+    save_norm = normalize_df_for_compare(df_to_save)
+    read_norm = normalize_df_for_compare(read_df)
+
+    if list(read_norm.columns) != list(save_norm.columns):
+        print(f"[Verify] {filename} カラム不一致")
+        print(f"  save columns: {list(save_norm.columns)}")
+        print(f"  read columns: {list(read_norm.columns)}")
+        return False
+
+    if df_content_hash(read_norm) != df_content_hash(save_norm):
+        print(f"[Verify] {filename} 内容ハッシュ不一致")
+        return False
+
+    print(f"[Verify] {filename} 保存検証OK: {len(df_to_save)} rows")
+    return True
+
+
+def make_timestamp_filename(prefix, ext="csv"):
+    """バックアップ・退避用のタイムスタンプ付きファイル名を作る"""
+    ts = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).strftime("%Y%m%d_%H%M%S")
+    return f"{prefix}_{ts}.{ext}"
+
+
+def dataframe_has_required_columns(df, required_cols):
+    """必要カラムが存在するか確認する"""
+    return all(col in df.columns for col in required_cols)
+
+
 # ==========================================
 # メイン処理
 # ==========================================
@@ -231,24 +313,55 @@ def check_match(target_text, source_series):
 
 
 # --- 1. 過去データ読み込み (history.csvはGASから) ---
-HISTORY_MAX_ROWS = 9500   # この行数を超えたらアーカイブを作成する
-HISTORY_KEEP_ROWS = 8000  # アーカイブ後にhistory.csvに残す行数
+# 安全方針:
+# - history.csv / history_*.csv が「空」で読めた場合は、保存中・通信異常・Drive反映遅延の可能性があるため更新しない
+# - アーカイブ保存後は必ず読み戻し検証して、検証OKのときだけ history.csv を切り詰める
+# - history.csv 上書き前にバックアップを作成する
+# - 新規取得データも inbox として先に保存し、取り込み途中の消失に備える
+
+HISTORY_MAX_ROWS = 9500   # この行数以上になったらアーカイブを作成する
+HISTORY_KEEP_ROWS = 8000  # アーカイブ後にhistory.csvに残す新しい行数
 HISTORY_ARCHIVE_MISS_LIMIT = 3  # 欠番があっても後続アーカイブを拾えるように3件連続で未検出になるまで探索する
 
+# 初回作成を許可する場合だけ True にする。通常運用では False 推奨。
+ALLOW_INITIAL_HISTORY_CREATE = False
+
+# 安全用バックアップ。不要なら False にできるが、データ消失対策として True 推奨。
+HISTORY_BACKUP_ENABLED = True
+HISTORY_INBOX_BACKUP_ENABLED = True
+
+# バックアップ作成に失敗した場合、history.csv の上書きを止める。
+REQUIRE_BACKUP_BEFORE_HISTORY_OVERWRITE = True
+
 history_file = "history.csv"
+history_update_allowed = False
+
 history_df, history_status = load_df_from_gas_with_status(history_file)
 
 if history_status == "ok":
     history_df = history_df.fillna("")
     history_update_allowed = True
-elif history_status in ("not_found", "empty"):
-    print("履歴ファイルがGASに存在しないか、空のため新規作成します。")
-    history_df = pd.DataFrame()
-    history_update_allowed = True
-else:
-    print("履歴ファイルの読み込みに失敗したため、history.csv の更新をスキップします。")
+
+elif history_status == "not_found":
+    if ALLOW_INITIAL_HISTORY_CREATE:
+        print("history.csv が存在しないため、初回作成モードで新規作成します。")
+        history_df = pd.DataFrame()
+        history_update_allowed = True
+    else:
+        print("history.csv が存在しません。誤初期化防止のため更新を停止します。")
+        history_df = pd.DataFrame()
+        history_update_allowed = False
+
+elif history_status == "empty":
+    print("history.csv が空で読まれました。保存中または異常の可能性があるため、更新を停止します。")
     history_df = pd.DataFrame()
     history_update_allowed = False
+
+else:
+    print("history.csv の読み込みに失敗したため、更新を停止します。")
+    history_df = pd.DataFrame()
+    history_update_allowed = False
+
 
 # --- アーカイブファイルの読み込み (history_2.csv, history_3.csv ...) ---
 archive_dfs = []
@@ -256,17 +369,27 @@ archive_num = 2
 loaded_archive_files = []
 missing_archive_count = 0
 max_archive_num = 1
+
 while missing_archive_count < HISTORY_ARCHIVE_MISS_LIMIT:
     archive_file = f"history_{archive_num}.csv"
     archive_df, archive_status = load_df_from_gas_with_status(archive_file)
-    if archive_status in ("not_found", "empty"):
+
+    if archive_status == "not_found":
         missing_archive_count += 1
         archive_num += 1
         continue
-    if archive_status != "ok":
-        print(f"{archive_file} の読み込みに失敗したため、history.csv の更新をスキップします。")
+
+    # empty は「存在しない」扱いにしない。既存アーカイブを上書きして壊す危険があるため停止。
+    if archive_status == "empty":
+        print(f"{archive_file} が空で読まれました。既存アーカイブ保護のため更新を停止します。")
         history_update_allowed = False
         break
+
+    if archive_status != "ok":
+        print(f"{archive_file} の読み込みに失敗しました。既存アーカイブ保護のため更新を停止します。")
+        history_update_allowed = False
+        break
+
     archive_df = archive_df.fillna("")
     archive_dfs.append(archive_df)
     loaded_archive_files.append(archive_file)
@@ -275,10 +398,12 @@ while missing_archive_count < HISTORY_ARCHIVE_MISS_LIMIT:
     archive_num += 1
 
 next_archive_num = max_archive_num + 1
+
 if loaded_archive_files:
     print(f"アーカイブファイルを読み込みました: {', '.join(loaded_archive_files)}")
 else:
     print("アーカイブファイルなし。")
+
 
 # --- 2. 新しいデータ取得 ---
 target_ports = list(room_map.keys())
@@ -290,70 +415,133 @@ for port in target_ports:
     try:
         response = requests.get(url, timeout=30)
         response.raise_for_status()
-        
+
         dfs = pd.read_html(response.content)
-        
+
         if dfs:
             df = dfs[0]
-            df = df.fillna("") 
-            
+            df = df.fillna("")
             df = df.replace(r'\s*詳細を見る ▼', '', regex=True)
-            
+
             df['部屋主'] = room_map[port]
             df['取得日'] = current_date_str
+            df['取得日時'] = current_datetime_str
             new_data_frames.append(df)
-            
+
     except Exception as e:
-        pass
+        print(f"[Fetch] port {port} 取得失敗: {e}")
+
 
 if new_data_frames:
-    new_df = pd.concat(new_data_frames, ignore_index=True)
+    new_df = pd.concat(new_data_frames, ignore_index=True).fillna("")
+    print(f"新規取得データ: {len(new_df)} 行")
+
+    # 新規取得データを先に退避。history.csv の更新に失敗しても、取り込みデータを復旧できる。
+    if HISTORY_INBOX_BACKUP_ENABLED:
+        inbox_filename = make_timestamp_filename("history_inbox")
+        if save_df_to_gas_verified(inbox_filename, new_df):
+            print(f"[Inbox] 新規取得データを {inbox_filename} に退避しました。")
+        else:
+            print(f"[Inbox] {inbox_filename} への退避に失敗しました。履歴保全のため history.csv の更新を停止します。")
+            history_update_allowed = False
+
     combined_df = pd.concat([history_df, new_df], ignore_index=True)
+    combined_df = combined_df.fillna("")
 
     clean_check_cols = ['部屋主', '曲名（ファイル名）', '作品名', '歌手名']
     for col in clean_check_cols:
         if col in combined_df.columns:
             combined_df = combined_df[combined_df[col] != col]
 
-    subset_cols = ['部屋主', '順番', '曲名（ファイル名）', '歌った人']
-    existing_cols = [c for c in subset_cols if c in combined_df.columns]
-    final_df = combined_df.drop_duplicates(subset=existing_cols, keep='first')
+    # 別日に同じ部屋・同じ順番・同じ曲・同じ人が歌った履歴を消さないため、取得日を重複キーに含める。
+    subset_cols = ['取得日', '部屋主', '順番', '曲名（ファイル名）', '歌った人']
+
+    if dataframe_has_required_columns(combined_df, subset_cols):
+        before_dedup = len(combined_df)
+        final_df = combined_df.drop_duplicates(subset=subset_cols, keep='first')
+        print(f"重複除去: {before_dedup} -> {len(final_df)} 行")
+    else:
+        missing_cols = [c for c in subset_cols if c not in combined_df.columns]
+        print(f"[Dedup] 必要カラム不足のため、キー指定重複除去を行いません: {missing_cols}")
+        final_df = combined_df.drop_duplicates(keep='first')
+
     final_df = final_df.fillna("")
 
     if '順番' in final_df.columns:
         final_df['順番'] = pd.to_numeric(final_df['順番'], errors='coerce')
-        
-    final_df['temp_date'] = pd.to_datetime(final_df['取得日'], errors='coerce')
-    final_df = final_df.sort_values(by=['temp_date', '順番'], ascending=[False, False])
-    final_df = final_df.drop(columns=['temp_date'])
-    
+
+    # 日時がある新データを優先しつつ、古いhistory.csvに取得日時が無くても並べられるようにする。
+    if '取得日時' not in final_df.columns:
+        final_df['取得日時'] = ""
+
+    final_df['temp_datetime'] = pd.to_datetime(final_df['取得日時'], errors='coerce')
+    final_df['temp_date'] = pd.to_datetime(final_df['取得日'], errors='coerce') if '取得日' in final_df.columns else pd.NaT
+
+    sort_cols = ['temp_datetime', 'temp_date']
+    ascending = [False, False]
+    if '順番' in final_df.columns:
+        sort_cols.append('順番')
+        ascending.append(False)
+
+    final_df = final_df.sort_values(by=sort_cols, ascending=ascending, na_position='last')
+    final_df = final_df.drop(columns=['temp_datetime', 'temp_date'], errors='ignore')
+
     cols = list(final_df.columns)
     if '部屋主' in cols:
         cols.insert(0, cols.pop(cols.index('部屋主')))
         final_df = final_df[cols]
 
     if history_update_allowed:
+        # history.csv 上書き前に、現在のhistory.csvをバックアップする。
+        if HISTORY_BACKUP_ENABLED and not history_df.empty:
+            backup_filename = make_timestamp_filename("history_backup")
+            backup_ok = save_df_to_gas_verified(backup_filename, history_df)
+
+            if backup_ok:
+                print(f"[Backup] 現在の history.csv を {backup_filename} に退避しました。")
+            else:
+                print(f"[Backup] {backup_filename} の作成に失敗しました。")
+
+            if REQUIRE_BACKUP_BEFORE_HISTORY_OVERWRITE and not backup_ok:
+                print("[Backup] バックアップ必須設定のため、history.csv の更新を停止します。")
+                history_update_allowed = False
+
+    if history_update_allowed:
         if len(final_df) >= HISTORY_MAX_ROWS:
-            rows_to_keep = final_df.iloc[:HISTORY_KEEP_ROWS]
-            rows_to_archive = final_df.iloc[HISTORY_KEEP_ROWS:]
+            rows_to_keep = final_df.iloc[:HISTORY_KEEP_ROWS].copy()
+            rows_to_archive = final_df.iloc[HISTORY_KEEP_ROWS:].copy()
             archive_filename = f"history_{next_archive_num}.csv"
-            if save_df_to_gas(archive_filename, rows_to_archive):
-                print(f"[Archive] {len(rows_to_archive)} 行を {archive_filename} にアーカイブしました。")
+
+            # 誤上書き防止: 保存予定のアーカイブ名が本当に未使用か確認。
+            _, existing_archive_status = load_df_from_gas_with_status(archive_filename)
+
+            if existing_archive_status != "not_found":
+                print(f"[Archive] {archive_filename} は未使用ではありません。状態={existing_archive_status}。上書き防止のため更新を停止します。")
+                history_update_allowed = False
+
+            elif save_df_to_gas_verified(archive_filename, rows_to_archive):
+                print(f"[Archive] {len(rows_to_archive)} 行を {archive_filename} に検証付きでアーカイブしました。")
                 archive_dfs.append(rows_to_archive.fillna(""))
+                loaded_archive_files.append(archive_filename)
                 next_archive_num += 1
                 final_df = rows_to_keep
-            else:
-                print(f"[Archive] {archive_filename} への退避に失敗したため、history.csv は切り詰めずに保持します。")
 
-        if save_df_to_gas(history_file, final_df):
-            print("履歴ファイルをGAS上で更新しました。")
+            else:
+                print(f"[Archive] {archive_filename} への退避または検証に失敗しました。history.csv は切り詰めません。")
+                history_update_allowed = False
+
+    if history_update_allowed:
+        if save_df_to_gas_verified(history_file, final_df):
+            print("history.csv を検証付きで更新しました。")
         else:
-            print("履歴ファイルの更新に失敗しました。")
+            print("history.csv の更新または検証に失敗しました。")
     else:
         print("履歴の保全を優先し、history.csv の更新をスキップしました。")
+
 else:
     final_df = history_df
-    print("新しいデータなし。過去データを使用。")
+    print("新しいデータなし。過去データを使用します。history.csv は更新しません。")
+
 
 # --- 全履歴データの結合（アーカイブ含む）---
 if archive_dfs:
