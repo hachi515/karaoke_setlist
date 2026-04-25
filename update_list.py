@@ -6,7 +6,6 @@ import re
 import unicodedata
 import json
 import io
-import hashlib
 from itertools import groupby
 
 # ==========================================
@@ -139,87 +138,6 @@ def save_df_to_gas(filename, df):
         print(f"[GAS] Upload error: {e}")
         return False
 
-
-def normalize_df_for_compare(df):
-    """保存後検証用にDataFrameを文字列化して比較しやすくする"""
-    if df is None:
-        return pd.DataFrame()
-    check_df = df.copy().fillna("")
-    check_df.columns = check_df.columns.astype(str).str.replace('\ufeff', '').str.strip()
-    check_df = check_df.astype(str)
-
-    # pandasのCSV再読込で "1.0" と "1" のように揺れやすい値を軽く正規化
-    def clean_value(v):
-        v = v.strip()
-        if re.fullmatch(r'-?\d+\.0', v):
-            return v[:-2]
-        return v
-
-    for col in check_df.columns:
-        check_df[col] = check_df[col].map(clean_value)
-    return check_df
-
-
-def df_content_hash(df):
-    """DataFrameの行順・列順を含めた内容ハッシュを作る"""
-    check_df = normalize_df_for_compare(df)
-    csv_text = check_df.to_csv(index=False, lineterminator="\n")
-    return hashlib.sha256(csv_text.encode("utf-8")).hexdigest()
-
-
-def save_df_to_gas_verified(filename, df, allow_empty=False):
-    """
-    GASへ保存したあと、同じファイルを読み戻して行数と内容を検証する。
-    検証NGの場合は False を返し、呼び出し側で history.csv の切り詰め・上書きを止める。
-    """
-    df_to_save = df.copy().fillna("") if df is not None else pd.DataFrame()
-
-    if df_to_save.empty and not allow_empty:
-        print(f"[Verify] {filename} は空DataFrameのため保存を中止しました。")
-        return False
-
-    if not save_df_to_gas(filename, df_to_save):
-        return False
-
-    read_df, status = load_df_from_gas_with_status(filename)
-    if status != "ok":
-        print(f"[Verify] {filename} の読み戻しに失敗しました: {status}")
-        return False
-
-    read_df = read_df.fillna("")
-
-    if len(read_df) != len(df_to_save):
-        print(f"[Verify] {filename} 行数不一致: save={len(df_to_save)}, read={len(read_df)}")
-        return False
-
-    save_norm = normalize_df_for_compare(df_to_save)
-    read_norm = normalize_df_for_compare(read_df)
-
-    if list(read_norm.columns) != list(save_norm.columns):
-        print(f"[Verify] {filename} カラム不一致")
-        print(f"  save columns: {list(save_norm.columns)}")
-        print(f"  read columns: {list(read_norm.columns)}")
-        return False
-
-    if df_content_hash(read_norm) != df_content_hash(save_norm):
-        print(f"[Verify] {filename} 内容ハッシュ不一致")
-        return False
-
-    print(f"[Verify] {filename} 保存検証OK: {len(df_to_save)} rows")
-    return True
-
-
-def make_timestamp_filename(prefix, ext="csv"):
-    """バックアップ・退避用のタイムスタンプ付きファイル名を作る"""
-    ts = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).strftime("%Y%m%d_%H%M%S")
-    return f"{prefix}_{ts}.{ext}"
-
-
-def dataframe_has_required_columns(df, required_cols):
-    """必要カラムが存在するか確認する"""
-    return all(col in df.columns for col in required_cols)
-
-
 # ==========================================
 # メイン処理
 # ==========================================
@@ -312,354 +230,280 @@ def check_match(target_text, source_series):
         return source_series.str.contains(safe_target, case=False, na=False)
 
 
-# --- 1. 過去データ読み込み (history.csvはGASから) ---
-# 安全方針:
-# - history.csv / history_*.csv が「空」で読めた場合は、保存中・通信異常・Drive反映遅延の可能性があるため更新しない
-# - アーカイブ保存後は必ず読み戻し検証して、検証OKのときだけ history.csv を切り詰める
-# - history_backup_日時.csv / history_inbox_日時.csv のような一時退避ファイルは作成しない
-# - 収集先サーバーが切断・空応答になった部屋は、履歴から前回値を表示用に補完し、削除されたように見せない
-# - 補完した前回値は表示用だけに使い、history.csv へ「今日の取得分」として再保存しない
+# --- 1. 過去データ読み込み・安全な履歴ローテーション ---
+# 方針:
+# 1) 1つでも取得失敗したら、その時点で収集を止め、history 系CSVは一切更新しない
+# 2) 履歴は日付込みで重複判定し、別日の同じ曲・同じ順番を消さない
+# 3) 一定行数に達したら history_2.csv, history_3.csv ... へ移行し、以後は最新ファイルへ追記する
+# 4) ローカル一時ファイルは作らず、GASへCSV文字列として直接保存する
 
-HISTORY_MAX_ROWS = 9500   # この行数以上になったらアーカイブを作成する
-HISTORY_KEEP_ROWS = 8000  # アーカイブ後にhistory.csvに残す新しい行数
-HISTORY_ARCHIVE_MISS_LIMIT = 3  # 欠番があっても後続アーカイブを拾えるように3件連続で未検出になるまで探索する
+HISTORY_MAX_ROWS = 9500   # 1ファイルあたりの最大行数。この行数に達したら次の history_N.csv へ移行
+HISTORY_ARCHIVE_MISS_LIMIT = 3  # 欠番があっても後続アーカイブを拾えるよう、3件連続未検出まで探索
+REQUIRE_ALL_PORTS_SUCCESS = True  # True: 1部屋でも取得失敗したら履歴更新を止める
 
-# 初回作成を許可する場合だけ True にする。通常運用では False 推奨。
-ALLOW_INITIAL_HISTORY_CREATE = False
-
-# 一時ファイルを作成しない設定。
-# history_2.csv, history_3.csv... は一時ファイルではなく、行数超過時の正式アーカイブとして残す。
-HISTORY_BACKUP_ENABLED = False
-HISTORY_INBOX_BACKUP_ENABLED = False
-REQUIRE_BACKUP_BEFORE_HISTORY_OVERWRITE = False
-
-# 表示保護:
-# 取得失敗した部屋がある場合、その部屋の最新履歴をセットリスト表示へ補完する。
-# 補完データは history.csv には保存しない。
-KEEP_PREVIOUS_LIST_ON_FETCH_FAILURE = True
-
-history_file = "history.csv"
-history_update_allowed = False
-setlist_display_df = pd.DataFrame()
-
-history_df, history_status = load_df_from_gas_with_status(history_file)
-
-if history_status == "ok":
-    history_df = history_df.fillna("")
-    history_update_allowed = True
-
-elif history_status == "not_found":
-    if ALLOW_INITIAL_HISTORY_CREATE:
-        print("history.csv が存在しないため、初回作成モードで新規作成します。")
-        history_df = pd.DataFrame()
-        history_update_allowed = True
-    else:
-        print("history.csv が存在しません。誤初期化防止のため更新を停止します。")
-        history_df = pd.DataFrame()
-        history_update_allowed = False
-
-elif history_status == "empty":
-    print("history.csv が空で読まれました。保存中または異常の可能性があるため、更新を停止します。")
-    history_df = pd.DataFrame()
-    history_update_allowed = False
-
-else:
-    print("history.csv の読み込みに失敗したため、更新を停止します。")
-    history_df = pd.DataFrame()
-    history_update_allowed = False
+# 「別日分が消える」事故を防ぐため、取得日を必ず重複キーに含める
+HISTORY_DEDUP_COLS = ['取得日', '部屋主', '順番', '曲名（ファイル名）', '歌った人']
 
 
-def get_latest_rows_for_rooms(source_df, room_names):
-    """
-    取得失敗時の表示補完用。
-    指定された部屋主の最新取得日の行だけを history から取り出す。
-    これは表示用であり、history.csv に再保存しない。
-    """
-    if source_df is None or source_df.empty or not room_names:
-        return pd.DataFrame()
-
-    required_cols = ['部屋主', '取得日']
-    if not dataframe_has_required_columns(source_df, required_cols):
-        print("[Fallback] 履歴に必要カラムがないため、前回値補完をスキップします。")
-        return pd.DataFrame()
-
-    fallback_df = source_df[source_df['部屋主'].isin(room_names)].copy()
-    if fallback_df.empty:
-        return pd.DataFrame()
-
-    fallback_df['temp_date'] = pd.to_datetime(fallback_df['取得日'], errors='coerce')
-    fallback_df = fallback_df.dropna(subset=['temp_date'])
-    if fallback_df.empty:
-        return pd.DataFrame()
-
-    latest_dates = fallback_df.groupby('部屋主')['temp_date'].transform('max')
-    fallback_df = fallback_df[fallback_df['temp_date'].eq(latest_dates)].copy()
-    fallback_df = fallback_df.drop(columns=['temp_date'], errors='ignore')
-    fallback_df['取得状態'] = '前回値（取得失敗のため保持）'
-    return fallback_df.fillna("")
+def get_history_filename(num):
+    """num=1 は history.csv、num>=2 は history_2.csv ..."""
+    return "history.csv" if num == 1 else f"history_{num}.csv"
 
 
-def sort_setlist_display(df):
-    """セットリスト表示用に、部屋主・順番で見やすく並べる。"""
+def sort_history_df(df):
+    """履歴を表示・保存しやすい順に整える。元データは削らない。"""
     if df is None or df.empty:
-        return pd.DataFrame()
+        return pd.DataFrame() if df is None else df.fillna("")
 
-    out = df.copy().fillna("")
-    sort_cols = []
-    ascending = []
+    df = df.copy().fillna("")
 
-    if '部屋主' in out.columns:
-        sort_cols.append('部屋主')
-        ascending.append(True)
+    if '順番' in df.columns:
+        df['順番'] = pd.to_numeric(df['順番'], errors='coerce')
 
-    if '順番' in out.columns:
-        out['順番'] = pd.to_numeric(out['順番'], errors='coerce')
-        sort_cols.append('順番')
-        ascending.append(True)
+    if '取得日' in df.columns:
+        df['_temp_date'] = pd.to_datetime(df['取得日'], errors='coerce')
+        sort_cols = ['_temp_date']
+        ascending = [False]
+        if '順番' in df.columns:
+            sort_cols.append('順番')
+            ascending.append(False)
+        df = df.sort_values(by=sort_cols, ascending=ascending, kind='mergesort')
+        df = df.drop(columns=['_temp_date'])
 
-    if sort_cols:
-        out = out.sort_values(by=sort_cols, ascending=ascending, na_position='last')
+    cols = list(df.columns)
+    if '部屋主' in cols:
+        cols.insert(0, cols.pop(cols.index('部屋主')))
+        df = df[cols]
 
-    return out.fillna("")
+    return df.fillna("")
 
 
-# --- アーカイブファイルの読み込み (history_2.csv, history_3.csv ...) ---
-archive_dfs = []
-archive_num = 2
-loaded_archive_files = []
-missing_archive_count = 0
-max_archive_num = 1
+def cleanup_history_df(df):
+    """CSVヘッダー行の混入などを除去。"""
+    if df is None or df.empty:
+        return pd.DataFrame() if df is None else df.fillna("")
 
-while missing_archive_count < HISTORY_ARCHIVE_MISS_LIMIT:
-    archive_file = f"history_{archive_num}.csv"
-    archive_df, archive_status = load_df_from_gas_with_status(archive_file)
+    df = df.copy().fillna("")
+    clean_check_cols = ['部屋主', '曲名（ファイル名）', '作品名', '歌手名']
+    for col in clean_check_cols:
+        if col in df.columns:
+            df = df[df[col].astype(str) != col]
 
-    if archive_status == "not_found":
-        missing_archive_count += 1
-        archive_num += 1
-        continue
+    return sort_history_df(df)
 
-    # empty は「存在しない」扱いにしない。既存アーカイブを上書きして壊す危険があるため停止。
-    if archive_status == "empty":
-        print(f"{archive_file} が空で読まれました。既存アーカイブ保護のため更新を停止します。")
-        history_update_allowed = False
-        break
 
-    if archive_status != "ok":
-        print(f"{archive_file} の読み込みに失敗しました。既存アーカイブ保護のため更新を停止します。")
-        history_update_allowed = False
-        break
+def make_dedup_key(df):
+    """存在しない列は空文字として扱い、履歴比較用キーを作る。"""
+    if df is None or df.empty:
+        return pd.Series([], dtype=str)
 
-    archive_df = archive_df.fillna("")
-    archive_dfs.append(archive_df)
-    loaded_archive_files.append(archive_file)
-    max_archive_num = archive_num
-    missing_archive_count = 0
-    archive_num += 1
+    work = df.copy().fillna("")
+    for col in HISTORY_DEDUP_COLS:
+        if col not in work.columns:
+            work[col] = ""
+    return work[HISTORY_DEDUP_COLS].astype(str).agg("\u241f".join, axis=1)
 
-next_archive_num = max_archive_num + 1
 
-if loaded_archive_files:
-    print(f"アーカイブファイルを読み込みました: {', '.join(loaded_archive_files)}")
+def save_df_to_gas_checked(filename, df, min_existing_rows=0, allow_empty=False):
+    """空保存・異常な行数減少を防ぎ、保存後に再読込で確認する。"""
+    if df is None:
+        print(f"[Guard] {filename}: 保存対象が None のため中止します。")
+        return False
+
+    df = cleanup_history_df(df)
+
+    if df.empty and not allow_empty:
+        print(f"[Guard] {filename}: 空データでの上書きを拒否しました。")
+        return False
+
+    if len(df) < min_existing_rows:
+        print(f"[Guard] {filename}: 行数が {min_existing_rows} -> {len(df)} に減るため保存を拒否しました。")
+        return False
+
+    if not save_df_to_gas(filename, df):
+        return False
+
+    # 保存後チェック。ここで失敗しても既存ファイル削除はしていないため、履歴消失リスクは抑えられる。
+    verify_df, verify_status = load_df_from_gas_with_status(filename)
+    if verify_status != "ok":
+        print(f"[Guard] {filename}: 保存後の再読込に失敗しました。")
+        return False
+
+    verify_df = cleanup_history_df(verify_df)
+    if len(verify_df) < len(df):
+        print(f"[Guard] {filename}: 保存後の行数が不足しています。expected={len(df)}, actual={len(verify_df)}")
+        return False
+
+    return True
+
+
+def load_all_history_files():
+    """history.csv, history_2.csv, history_3.csv ... を読み込む。読み込みエラー時は更新禁止。"""
+    histories = []
+    loaded_files = []
+    missing_count = 0
+    num = 1
+
+    while missing_count < HISTORY_ARCHIVE_MISS_LIMIT:
+        filename = get_history_filename(num)
+        df, status = load_df_from_gas_with_status(filename)
+
+        if status == "ok":
+            df = cleanup_history_df(df)
+            histories.append({"num": num, "filename": filename, "df": df})
+            loaded_files.append(filename)
+            missing_count = 0
+        elif status in ("not_found", "empty"):
+            missing_count += 1
+        else:
+            print(f"[STOP] {filename} の読み込みに失敗したため、履歴更新を禁止します。")
+            return histories, loaded_files, False
+
+        num += 1
+
+    return histories, loaded_files, True
+
+
+def fetch_room_df(port):
+    """1部屋分のHTMLテーブルを取得。失敗時は例外を投げ、呼び出し側で収集停止する。"""
+    url = f"http://Ykr.moe:{port}/simplelist.php"
+    response = requests.get(url, timeout=30)
+    response.raise_for_status()
+
+    dfs = pd.read_html(io.BytesIO(response.content))
+    if not dfs:
+        raise ValueError("HTML内にテーブルが見つかりません")
+
+    df = dfs[0].fillna("")
+    if df.empty:
+        raise ValueError("取得テーブルが空です")
+
+    df = df.replace(r'\s*詳細を見る ▼', '', regex=True)
+    df['部屋主'] = room_map[port]
+    df['取得日'] = current_date_str
+    return df
+
+
+# --- 既存履歴の読み込み ---
+history_records, loaded_history_files, history_load_ok = load_all_history_files()
+if loaded_history_files:
+    print(f"履歴ファイルを読み込みました: {', '.join(loaded_history_files)}")
 else:
-    print("アーカイブファイルなし。")
+    print("履歴ファイルなし。取得成功時のみ history.csv を新規作成します。")
 
+history_dfs = [h['df'] for h in history_records]
+full_history_before_update = cleanup_history_df(pd.concat(history_dfs, ignore_index=True)) if history_dfs else pd.DataFrame()
+
+# 後続処理との互換用。final_df は最新の履歴ファイル相当として扱う。
+final_df = history_records[-1]['df'] if history_records else pd.DataFrame()
+archive_dfs = [h['df'] for h in history_records[:-1]] if len(history_records) > 1 else []
 
 # --- 2. 新しいデータ取得 ---
 target_ports = list(room_map.keys())
 new_data_frames = []
-fetch_status = {}
+failed_ports = []
+collection_ok = history_load_ok
 
-print("データを取得中...")
-for port in target_ports:
-    room_name = room_map[port]
-    fetch_status[port] = {"room": room_name, "status": "pending", "rows": 0}
-    url = f"http://Ykr.moe:{port}/simplelist.php"
+if not history_load_ok:
+    print("[STOP] 履歴の読み込みが不完全なため、データ収集と履歴更新を停止します。")
+else:
+    print("データを取得中...")
+    for port in target_ports:
+        try:
+            new_data_frames.append(fetch_room_df(port))
+        except Exception as e:
+            failed_ports.append((port, str(e)))
+            collection_ok = False
+            print(f"[STOP] {port} ({room_map.get(port, '不明')}) の取得に失敗: {e}")
+            if REQUIRE_ALL_PORTS_SUCCESS:
+                break
 
-    try:
-        response = requests.get(url, timeout=30)
-        response.raise_for_status()
+if not collection_ok:
+    # ここが重要: 失敗時は history.csv / history_N.csv を一切保存しない
+    print("[STOP] 取得失敗があったため収集を停止し、履歴ファイルは更新しません。")
+    if failed_ports:
+        print("失敗ポート: " + ", ".join([f"{p}" for p, _ in failed_ports]))
+    full_df = full_history_before_update
 
-        dfs = pd.read_html(response.content)
+elif not new_data_frames:
+    print("新しいデータなし。履歴ファイルは更新しません。")
+    full_df = full_history_before_update
 
-        if not dfs:
-            fetch_status[port]["status"] = "empty"
-            print(f"[Fetch] port {port} ({room_name}) 空応答")
-            continue
+else:
+    new_df = cleanup_history_df(pd.concat(new_data_frames, ignore_index=True))
 
-        df = dfs[0].fillna("")
-        df = df.replace(r'\s*詳細を見る ▼', '', regex=True)
+    # 既存履歴と同じキーの行は保存対象から外す。取得日を含むため、別日の履歴は消えない。
+    existing_keys = set(make_dedup_key(full_history_before_update).tolist()) if not full_history_before_update.empty else set()
+    new_keys = make_dedup_key(new_df)
+    new_unique_df = new_df[~new_keys.isin(existing_keys)].copy()
+    new_unique_df = cleanup_history_df(new_unique_df)
 
-        # ヘッダーだけ、または完全空テーブルは取得失敗扱いにして、前回値補完の対象にする。
-        if df.empty:
-            fetch_status[port]["status"] = "empty"
-            print(f"[Fetch] port {port} ({room_name}) テーブル空")
-            continue
-
-        df['部屋主'] = room_name
-        df['取得日'] = current_date_str
-        new_data_frames.append(df)
-
-        fetch_status[port]["status"] = "ok"
-        fetch_status[port]["rows"] = len(df)
-
-    except Exception as e:
-        fetch_status[port]["status"] = "error"
-        fetch_status[port]["error"] = str(e)
-        print(f"[Fetch] port {port} ({room_name}) 取得失敗: {e}")
-
-
-success_ports = [p for p, info in fetch_status.items() if info["status"] == "ok"]
-failed_ports = [p for p, info in fetch_status.items() if info["status"] != "ok"]
-
-success_rooms = {fetch_status[p]["room"] for p in success_ports}
-failed_rooms = {fetch_status[p]["room"] for p in failed_ports}
-
-# 同じ部屋主で複数ポートがある場合、1つでも成功していればその部屋は成功扱いにする。
-fallback_rooms = sorted(failed_rooms - success_rooms)
-
-print(f"[Fetch] 成功ポート: {len(success_ports)} / {len(target_ports)}")
-if failed_ports:
-    failed_summary = ", ".join([f"{p}:{fetch_status[p]['room']}({fetch_status[p]['status']})" for p in failed_ports])
-    print(f"[Fetch] 取得失敗/空応答ポート: {failed_summary}")
-
-
-if new_data_frames:
-    new_df = pd.concat(new_data_frames, ignore_index=True).fillna("")
-    print(f"新規取得データ: {len(new_df)} 行")
-
-    # セットリスト表示は、今回取得できたデータを基本にする。
-    # 取得失敗した部屋がある場合は、履歴から前回値を表示用だけに補完する。
-    display_parts = [new_df.copy()]
-    if KEEP_PREVIOUS_LIST_ON_FETCH_FAILURE and fallback_rooms:
-        fallback_display_df = get_latest_rows_for_rooms(history_df, fallback_rooms)
-        if not fallback_display_df.empty:
-            display_parts.append(fallback_display_df)
-            print(f"[Fallback] 取得失敗部屋の前回値を表示用に補完: {', '.join(fallback_rooms)} / {len(fallback_display_df)} 行")
-        else:
-            print(f"[Fallback] 取得失敗部屋の前回値が履歴から見つかりませんでした: {', '.join(fallback_rooms)}")
-
-    setlist_display_df = sort_setlist_display(pd.concat(display_parts, ignore_index=True).fillna(""))
-
-    # ここでは一時退避ファイル history_inbox_*.csv は作成しない。
-    # 保存安全性は save_df_to_gas_verified() の読み戻し検証で担保する。
-
-    combined_df = pd.concat([history_df, new_df], ignore_index=True)
-    combined_df = combined_df.fillna("")
-
-    clean_check_cols = ['部屋主', '曲名（ファイル名）', '作品名', '歌手名']
-    for col in clean_check_cols:
-        if col in combined_df.columns:
-            combined_df = combined_df[combined_df[col] != col]
-
-    # 別日に同じ部屋・同じ順番・同じ曲・同じ人が歌った履歴を消さないため、取得日を重複キーに含める。
-    subset_cols = ['取得日', '部屋主', '順番', '曲名（ファイル名）', '歌った人']
-
-    if dataframe_has_required_columns(combined_df, subset_cols):
-        before_dedup = len(combined_df)
-        final_df = combined_df.drop_duplicates(subset=subset_cols, keep='first')
-        print(f"重複除去: {before_dedup} -> {len(final_df)} 行")
+    if new_unique_df.empty:
+        print("追加対象の新規履歴はありません。履歴ファイルは更新しません。")
+        full_df = full_history_before_update
     else:
-        missing_cols = [c for c in subset_cols if c not in combined_df.columns]
-        print(f"[Dedup] 必要カラム不足のため、キー指定重複除去を行いません: {missing_cols}")
-        final_df = combined_df.drop_duplicates(keep='first')
+        print(f"追加対象の新規履歴: {len(new_unique_df)} 行")
 
-    final_df = final_df.fillna("")
+        # 最新の履歴ファイルへ追記。満杯なら history_2.csv, history_3.csv ... へ移行。
+        if history_records:
+            active_num = history_records[-1]['num']
+            active_df = history_records[-1]['df']
+            if len(active_df) >= HISTORY_MAX_ROWS:
+                active_num += 1
+                active_df = pd.DataFrame()
+        else:
+            active_num = 1
+            active_df = pd.DataFrame()
 
-    if '順番' in final_df.columns:
-        final_df['順番'] = pd.to_numeric(final_df['順番'], errors='coerce')
+        remaining_df = new_unique_df.reset_index(drop=True)
+        saved_parts = {}
+        save_ok = True
 
-    # 余計な保存列を作らず、取得日と順番だけで並べる。
-    # 以前の版で作られた history.csv に「取得日時」が残っている場合も、ここで削除する。
-    # 表示補完用の「取得状態」も history.csv には保存しない。
-    final_df = final_df.drop(columns=['取得日時', '取得状態'], errors='ignore')
+        while not remaining_df.empty:
+            active_filename = get_history_filename(active_num)
+            current_df = cleanup_history_df(active_df)
 
-    final_df['temp_date'] = pd.to_datetime(final_df['取得日'], errors='coerce') if '取得日' in final_df.columns else pd.NaT
+            remaining_capacity = HISTORY_MAX_ROWS - len(current_df)
+            if remaining_capacity <= 0:
+                active_num += 1
+                active_df = pd.DataFrame()
+                continue
 
-    sort_cols = ['temp_date']
-    ascending = [False]
-    if '順番' in final_df.columns:
-        sort_cols.append('順番')
-        ascending.append(False)
+            append_part = remaining_df.iloc[:remaining_capacity].copy()
+            next_df = cleanup_history_df(pd.concat([current_df, append_part], ignore_index=True))
 
-    final_df = final_df.sort_values(by=sort_cols, ascending=ascending, na_position='last')
-    final_df = final_df.drop(columns=['temp_date'], errors='ignore')
+            if save_df_to_gas_checked(active_filename, next_df, min_existing_rows=len(current_df)):
+                print(f"[History] {active_filename} に {len(append_part)} 行追記しました。現在 {len(next_df)} 行。")
+                saved_parts[active_num] = next_df
+                remaining_df = remaining_df.iloc[remaining_capacity:].reset_index(drop=True)
 
-    cols = list(final_df.columns)
-    if '部屋主' in cols:
-        cols.insert(0, cols.pop(cols.index('部屋主')))
-        final_df = final_df[cols]
-
-    # ここでは一時退避ファイル history_backup_*.csv は作成しない。
-    # history.csv の上書き前バックアップは使わず、保存後の読み戻し検証のみ行う。
-
-    if history_update_allowed:
-        if len(final_df) >= HISTORY_MAX_ROWS:
-            rows_to_keep = final_df.iloc[:HISTORY_KEEP_ROWS].copy()
-            rows_to_archive = final_df.iloc[HISTORY_KEEP_ROWS:].copy()
-            archive_filename = f"history_{next_archive_num}.csv"
-
-            # 誤上書き防止: 保存予定のアーカイブ名が本当に未使用か確認。
-            _, existing_archive_status = load_df_from_gas_with_status(archive_filename)
-
-            if existing_archive_status != "not_found":
-                print(f"[Archive] {archive_filename} は未使用ではありません。状態={existing_archive_status}。上書き防止のため更新を停止します。")
-                history_update_allowed = False
-
-            elif save_df_to_gas_verified(archive_filename, rows_to_archive):
-                print(f"[Archive] {len(rows_to_archive)} 行を {archive_filename} に検証付きでアーカイブしました。")
-                archive_dfs.append(rows_to_archive.fillna(""))
-                loaded_archive_files.append(archive_filename)
-                next_archive_num += 1
-                final_df = rows_to_keep
-
+                if not remaining_df.empty:
+                    active_num += 1
+                    active_df = pd.DataFrame()
+                else:
+                    active_df = next_df
             else:
-                print(f"[Archive] {archive_filename} への退避または検証に失敗しました。history.csv は切り詰めません。")
-                history_update_allowed = False
+                print(f"[STOP] {active_filename} の保存確認に失敗したため、以降の保存を停止します。")
+                save_ok = False
+                break
 
-    if history_update_allowed:
-        if save_df_to_gas_verified(history_file, final_df):
-            print("history.csv を検証付きで更新しました。")
+        # 表示・集計用に、保存済み分だけ反映する。失敗時も既存履歴は削らない。
+        merged_history_by_num = {h['num']: h['df'] for h in history_records}
+        merged_history_by_num.update(saved_parts)
+        full_df = cleanup_history_df(pd.concat([merged_history_by_num[n] for n in sorted(merged_history_by_num)], ignore_index=True)) if merged_history_by_num else pd.DataFrame()
+
+        if save_ok:
+            print("履歴ファイルの安全更新が完了しました。")
         else:
-            print("history.csv の更新または検証に失敗しました。")
-    else:
-        print("履歴の保全を優先し、history.csv の更新をスキップしました。")
+            print("履歴ファイルの一部更新で停止しました。既存履歴は削除していません。")
 
+# --- 全履歴データの結合（ローテーション済み history 系CSV 含む）---
+if full_df is None or full_df.empty:
+    full_df = pd.DataFrame()
 else:
-    final_df = history_df
+    full_df = cleanup_history_df(full_df)
 
-    # 全ポート失敗・空応答時は history.csv を一切更新しない。
-    # セットリスト表示には履歴から各部屋の前回値を出す。
-    all_rooms = sorted(set(room_map.values()))
-    if KEEP_PREVIOUS_LIST_ON_FETCH_FAILURE:
-        setlist_display_df = get_latest_rows_for_rooms(history_df, all_rooms)
-        if not setlist_display_df.empty:
-            print(f"[Fallback] 全ポート取得失敗のため、履歴から前回値を表示します: {len(setlist_display_df)} 行")
-        else:
-            setlist_display_df = history_df.copy()
-            print("[Fallback] 前回値を抽出できなかったため、history.csv 全体を表示に使用します。")
-    else:
-        setlist_display_df = history_df.copy()
-
-    setlist_display_df = sort_setlist_display(setlist_display_df)
-    print("新しいデータなし。過去データを使用します。history.csv は更新しません。")
-
-
-# --- 全履歴データの結合（アーカイブ含む）---
-if archive_dfs:
-    full_df = pd.concat([final_df] + archive_dfs, ignore_index=True)
-    full_df = full_df.fillna("")
-    print(f"全履歴データ合計: {len(full_df)} 行（history.csv + アーカイブ {len(archive_dfs)} ファイル）")
-else:
-    full_df = final_df
-
-# 念のため、表示用データが空の場合は全履歴を表示に使う。
-# 集計処理は引き続き full_df（history.csv + アーカイブ）を使う。
-if setlist_display_df.empty:
-    setlist_display_df = full_df.copy().fillna("")
-else:
-    setlist_display_df = setlist_display_df.fillna("")
-
+print(f"全履歴データ合計: {len(full_df)} 行")
 
 # ==========================================
 # ★集計処理
@@ -1157,8 +1001,8 @@ else:
 # ==========================================
 
 columns_to_hide = ['コメント'] 
-if not setlist_display_df.empty:
-    html_df = setlist_display_df.drop(columns=columns_to_hide, errors='ignore')
+if not full_df.empty:
+    html_df = full_df.drop(columns=columns_to_hide, errors='ignore')
 else:
     html_df = pd.DataFrame()
 
