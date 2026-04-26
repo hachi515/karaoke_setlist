@@ -7,6 +7,7 @@ import unicodedata
 import json
 import io
 from itertools import groupby
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ==========================================
 # ★ 設定: GitHubリポジトリ情報
@@ -232,17 +233,18 @@ def check_match(target_text, source_series):
 
 # --- 1. 過去データ読み込み・安全な履歴ローテーション ---
 # 方針:
-# 1) 履歴読み込みに失敗した場合は、history 系CSVを一切更新しない
-# 2) セトリ取得は「ポート単位」ではなく「部屋単位」で成功判定する
-#    - 同じ部屋に複数ポートがある場合、1ポートでも取れればその部屋は成功扱い
-#    - 全ポートが落ちた部屋がある場合のみ、履歴更新を止める
-# 3) 履歴は日付込みで重複判定し、別日の同じ曲・同じ順番を消さない
-# 4) 一定行数に達したら history_2.csv, history_3.csv ... へ移行し、以後は最新ファイルへ追記する
-# 5) ローカル一時ファイルは作らず、GASへCSV文字列として直接保存する
+# 1) セトリ取得は履歴読み込み結果に関係なく必ず実行する
+# 2) 取得できないポート・部屋は無視し、取得できた分だけ履歴へ追記する
+# 3) 履歴読み込みに失敗した場合だけ、既存履歴を壊さないため history 系CSVへの保存を禁止する
+# 4) 空データ保存・行数減少保存は禁止し、蓄積済みデータを消さない
+# 5) 履歴は日付込みで重複判定し、別日の同じ曲・同じ順番を消さない
+# 6) 一定行数に達したら history_2.csv, history_3.csv ... へ移行し、以後は最新ファイルへ追記する
 
 HISTORY_MAX_ROWS = 9500   # 1ファイルあたりの最大行数。この行数に達したら次の history_N.csv へ移行
 HISTORY_ARCHIVE_MISS_LIMIT = 3  # 欠番があっても後続アーカイブを拾えるよう、3件連続未検出まで探索
-REQUIRE_ALL_ROOMS_SUCCESS = True  # True: 全ポート取得できなかった部屋が1つでもあれば履歴更新を止める
+IGNORE_FETCH_FAILURES = True  # True: 取得失敗ポートがあっても、取れた分だけ処理を続行する
+ROOM_FETCH_TIMEOUT = 6        # 死んでいるポートで長時間止まらないよう短めにする
+ROOM_FETCH_WORKERS = 16       # セトリ取得を並列化して、常に収集が進むようにする
 
 # 「別日分が消える」事故を防ぐため、取得日を必ず重複キーに含める
 HISTORY_DEDUP_COLS = ['取得日', '部屋主', '順番', '曲名（ファイル名）', '歌った人']
@@ -368,9 +370,9 @@ def load_all_history_files():
 
 
 def fetch_room_df(port):
-    """1部屋分のHTMLテーブルを取得。失敗時は例外を投げ、呼び出し側で収集停止する。"""
-    url = f"http://Ykr.moe:{port}/simplelist.php"
-    response = requests.get(url, timeout=30)
+    """1部屋分のHTMLテーブルを取得する。失敗は呼び出し側で無視して処理継続する。"""
+    url = f"http://ykr.moe:{port}/simplelist.php"
+    response = requests.get(url, timeout=ROOM_FETCH_TIMEOUT)
     response.raise_for_status()
 
     dfs = pd.read_html(io.BytesIO(response.content))
@@ -380,6 +382,12 @@ def fetch_room_df(port):
     df = dfs[0].fillna("")
     if df.empty:
         raise ValueError("取得テーブルが空です")
+
+    # エラーページ等をテーブルとして読んだ場合に備え、最低限のカラムを確認する
+    required_cols = ['順番', '曲名（ファイル名）']
+    missing_cols = [c for c in required_cols if c not in df.columns]
+    if missing_cols:
+        raise ValueError(f"必要カラム不足: {missing_cols} / columns={list(df.columns)}")
 
     df = df.replace(r'\s*詳細を見る ▼', '', regex=True)
     df['部屋主'] = room_map[port]
@@ -405,22 +413,29 @@ archive_dfs = [h['df'] for h in history_records[:-1]] if len(history_records) > 
 target_ports = list(room_map.keys())
 new_data_frames = []
 failed_ports = []
+fetched_ports = []
 fetch_status = {}
-collection_ok = history_load_ok
 
+# 重要:
+# 履歴読み込みに失敗していても、セトリ収集自体は必ず動かす。
+# ただし、履歴読み込みが不完全な時は既存履歴を壊す恐れがあるため history 系CSVへは保存しない。
 if not history_load_ok:
-    print("[STOP] 履歴の読み込みが不完全なため、データ収集と履歴更新を停止します。")
-else:
-    print("データを取得中...")
+    print("[Guard] 履歴の読み込みが不完全です。収集は実行しますが、履歴ファイルへの保存は禁止します。")
 
-    # 修正ポイント:
-    # 以前は1ポートでも失敗した時点で break し、履歴更新も止めていた。
-    # 同じ部屋に複数ポートがあるため、ポート単位ではなく部屋単位で成功判定する。
-    for port in target_ports:
+print("データを取得中...")
+
+# 死んでいるポートで処理全体が止まらないよう、短いタイムアウト + 並列取得にする。
+max_workers = min(ROOM_FETCH_WORKERS, max(1, len(target_ports)))
+with ThreadPoolExecutor(max_workers=max_workers) as executor:
+    future_to_port = {executor.submit(fetch_room_df, port): port for port in target_ports}
+
+    for future in as_completed(future_to_port):
+        port = future_to_port[future]
         room_name = room_map.get(port, "不明")
         try:
-            df = fetch_room_df(port)
+            df = future.result()
             new_data_frames.append(df)
+            fetched_ports.append(port)
             fetch_status[port] = {
                 "room": room_name,
                 "status": "ok",
@@ -435,39 +450,17 @@ else:
                 "status": "error",
                 "error": str(e)
             }
-            print(f"[Fetch] NG {port} ({room_name}) 取得失敗: {e}")
+            print(f"[Fetch] SKIP {port} ({room_name}) 取得失敗: {e}")
 
-    success_ports_count = sum(1 for x in fetch_status.values() if x["status"] == "ok")
-    print(f"[Fetch] 成功ポート: {success_ports_count} / {len(target_ports)}")
+success_ports_count = len(fetched_ports)
+print(f"[Fetch] 成功ポート: {success_ports_count} / {len(target_ports)}")
 
-    if failed_ports:
-        print("失敗ポート: " + ", ".join([f"{p}" for p, _ in failed_ports]))
+if failed_ports:
+    print("[Fetch] 取得できなかったポートは無視します: " + ", ".join([f"{p}" for p, _ in failed_ports]))
 
-    # 同じ部屋に複数ポートがある場合、1つでも成功していればその部屋は成功扱い
-    success_rooms = {
-        info["room"]
-        for info in fetch_status.values()
-        if info["status"] == "ok"
-    }
-    all_rooms = set(room_map.values())
-    failed_rooms = sorted(all_rooms - success_rooms)
-
-    if REQUIRE_ALL_ROOMS_SUCCESS and failed_rooms:
-        collection_ok = False
-        print("[STOP] 全ポート取得できなかった部屋があるため、履歴ファイルは更新しません。")
-        print("失敗部屋: " + ", ".join(failed_rooms))
-    elif not new_data_frames:
-        collection_ok = False
-        print("[STOP] 新しいデータが1件も取得できませんでした。履歴ファイルは更新しません。")
-    else:
-        collection_ok = True
-
-if not collection_ok:
-    # ここが重要: 取得が不完全と判断した場合は history.csv / history_N.csv を一切保存しない
-    full_df = full_history_before_update
-
-elif not new_data_frames:
-    print("新しいデータなし。履歴ファイルは更新しません。")
+# 取得できた分が1件もない場合は、既存履歴をそのまま使い、保存もしない。
+if not new_data_frames:
+    print("[Fetch] 取得成功データがありません。履歴ファイルは更新しません。")
     full_df = full_history_before_update
 
 else:
@@ -481,70 +474,83 @@ else:
         new_df = cleanup_history_df(new_df)
         print(f"[Dedup] 今回取得分の重複除去: {before_rows} -> {len(new_df)} 行")
 
-    # 既存履歴と同じキーの行は保存対象から外す。取得日を含むため、別日の履歴は消えない。
-    existing_keys = set(make_dedup_key(full_history_before_update).tolist()) if not full_history_before_update.empty else set()
-    new_keys = make_dedup_key(new_df)
-    new_unique_df = new_df[~new_keys.isin(existing_keys)].copy()
-    new_unique_df = cleanup_history_df(new_unique_df)
+    print(f"[Fetch] 今回収集できた行数: {len(new_df)} 行")
 
-    if new_unique_df.empty:
-        print("追加対象の新規履歴はありません。履歴ファイルは更新しません。")
-        full_df = full_history_before_update
-    else:
-        print(f"追加対象の新規履歴: {len(new_unique_df)} 行")
-
-        # 最新の履歴ファイルへ追記。満杯なら history_2.csv, history_3.csv ... へ移行。
-        if history_records:
-            active_num = history_records[-1]['num']
-            active_df = history_records[-1]['df']
-            if len(active_df) >= HISTORY_MAX_ROWS:
-                active_num += 1
-                active_df = pd.DataFrame()
+    # 履歴読み込みが不完全な時は、保存すると既存CSVを壊す可能性がある。
+    # その場合でもダッシュボード表示・集計には今回取得分を使えるよう full_df には反映する。
+    if not history_load_ok:
+        print("[Guard] 履歴読み込み不完全のため、今回取得分は表示用のみ使用し、history 系CSVには保存しません。")
+        if full_history_before_update.empty:
+            full_df = new_df
         else:
-            active_num = 1
-            active_df = pd.DataFrame()
+            full_df = cleanup_history_df(pd.concat([full_history_before_update, new_df], ignore_index=True))
 
-        remaining_df = new_unique_df.reset_index(drop=True)
-        saved_parts = {}
-        save_ok = True
+    else:
+        # 既存履歴と同じキーの行は保存対象から外す。取得日を含むため、別日の履歴は消えない。
+        existing_keys = set(make_dedup_key(full_history_before_update).tolist()) if not full_history_before_update.empty else set()
+        new_keys = make_dedup_key(new_df)
+        new_unique_df = new_df[~new_keys.isin(existing_keys)].copy()
+        new_unique_df = cleanup_history_df(new_unique_df)
 
-        while not remaining_df.empty:
-            active_filename = get_history_filename(active_num)
-            current_df = cleanup_history_df(active_df)
+        if new_unique_df.empty:
+            print("追加対象の新規履歴はありません。履歴ファイルは更新しません。")
+            full_df = full_history_before_update
+        else:
+            print(f"追加対象の新規履歴: {len(new_unique_df)} 行")
 
-            remaining_capacity = HISTORY_MAX_ROWS - len(current_df)
-            if remaining_capacity <= 0:
-                active_num += 1
-                active_df = pd.DataFrame()
-                continue
-
-            append_part = remaining_df.iloc[:remaining_capacity].copy()
-            next_df = cleanup_history_df(pd.concat([current_df, append_part], ignore_index=True))
-
-            if save_df_to_gas_checked(active_filename, next_df, min_existing_rows=len(current_df)):
-                print(f"[History] {active_filename} に {len(append_part)} 行追記しました。現在 {len(next_df)} 行。")
-                saved_parts[active_num] = next_df
-                remaining_df = remaining_df.iloc[remaining_capacity:].reset_index(drop=True)
-
-                if not remaining_df.empty:
+            # 最新の履歴ファイルへ追記。満杯なら history_2.csv, history_3.csv ... へ移行。
+            if history_records:
+                active_num = history_records[-1]['num']
+                active_df = history_records[-1]['df']
+                if len(active_df) >= HISTORY_MAX_ROWS:
                     active_num += 1
                     active_df = pd.DataFrame()
-                else:
-                    active_df = next_df
             else:
-                print(f"[STOP] {active_filename} の保存確認に失敗したため、以降の保存を停止します。")
-                save_ok = False
-                break
+                active_num = 1
+                active_df = pd.DataFrame()
 
-        # 表示・集計用に、保存済み分だけ反映する。失敗時も既存履歴は削らない。
-        merged_history_by_num = {h['num']: h['df'] for h in history_records}
-        merged_history_by_num.update(saved_parts)
-        full_df = cleanup_history_df(pd.concat([merged_history_by_num[n] for n in sorted(merged_history_by_num)], ignore_index=True)) if merged_history_by_num else pd.DataFrame()
+            remaining_df = new_unique_df.reset_index(drop=True)
+            saved_parts = {}
+            save_ok = True
 
-        if save_ok:
-            print("履歴ファイルの安全更新が完了しました。")
-        else:
-            print("履歴ファイルの一部更新で停止しました。既存履歴は削除していません。")
+            while not remaining_df.empty:
+                active_filename = get_history_filename(active_num)
+                current_df = cleanup_history_df(active_df)
+
+                remaining_capacity = HISTORY_MAX_ROWS - len(current_df)
+                if remaining_capacity <= 0:
+                    active_num += 1
+                    active_df = pd.DataFrame()
+                    continue
+
+                append_part = remaining_df.iloc[:remaining_capacity].copy()
+                next_df = cleanup_history_df(pd.concat([current_df, append_part], ignore_index=True))
+
+                # min_existing_rows を渡すので、既存ファイルより行数が減る保存は拒否される。
+                if save_df_to_gas_checked(active_filename, next_df, min_existing_rows=len(current_df)):
+                    print(f"[History] {active_filename} に {len(append_part)} 行追記しました。現在 {len(next_df)} 行。")
+                    saved_parts[active_num] = next_df
+                    remaining_df = remaining_df.iloc[remaining_capacity:].reset_index(drop=True)
+
+                    if not remaining_df.empty:
+                        active_num += 1
+                        active_df = pd.DataFrame()
+                    else:
+                        active_df = next_df
+                else:
+                    print(f"[STOP] {active_filename} の保存確認に失敗したため、以降の保存を停止します。既存履歴は削除していません。")
+                    save_ok = False
+                    break
+
+            # 表示・集計用に、保存済み分だけ反映する。失敗時も既存履歴は削らない。
+            merged_history_by_num = {h['num']: h['df'] for h in history_records}
+            merged_history_by_num.update(saved_parts)
+            full_df = cleanup_history_df(pd.concat([merged_history_by_num[n] for n in sorted(merged_history_by_num)], ignore_index=True)) if merged_history_by_num else pd.DataFrame()
+
+            if save_ok:
+                print("履歴ファイルの安全更新が完了しました。")
+            else:
+                print("履歴ファイルの一部更新で停止しました。既存履歴は削除していません。")
 
 # --- 全履歴データの結合（ローテーション済み history 系CSV 含む）---
 if full_df is None or full_df.empty:
