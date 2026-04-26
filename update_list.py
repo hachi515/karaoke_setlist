@@ -232,14 +232,17 @@ def check_match(target_text, source_series):
 
 # --- 1. 過去データ読み込み・安全な履歴ローテーション ---
 # 方針:
-# 1) 1つでも取得失敗したら、その時点で収集を止め、history 系CSVは一切更新しない
-# 2) 履歴は日付込みで重複判定し、別日の同じ曲・同じ順番を消さない
-# 3) 一定行数に達したら history_2.csv, history_3.csv ... へ移行し、以後は最新ファイルへ追記する
-# 4) ローカル一時ファイルは作らず、GASへCSV文字列として直接保存する
+# 1) 履歴読み込みに失敗した場合は、history 系CSVを一切更新しない
+# 2) セトリ取得は「ポート単位」ではなく「部屋単位」で成功判定する
+#    - 同じ部屋に複数ポートがある場合、1ポートでも取れればその部屋は成功扱い
+#    - 全ポートが落ちた部屋がある場合のみ、履歴更新を止める
+# 3) 履歴は日付込みで重複判定し、別日の同じ曲・同じ順番を消さない
+# 4) 一定行数に達したら history_2.csv, history_3.csv ... へ移行し、以後は最新ファイルへ追記する
+# 5) ローカル一時ファイルは作らず、GASへCSV文字列として直接保存する
 
 HISTORY_MAX_ROWS = 9500   # 1ファイルあたりの最大行数。この行数に達したら次の history_N.csv へ移行
 HISTORY_ARCHIVE_MISS_LIMIT = 3  # 欠番があっても後続アーカイブを拾えるよう、3件連続未検出まで探索
-REQUIRE_ALL_PORTS_SUCCESS = True  # True: 1部屋でも取得失敗したら履歴更新を止める
+REQUIRE_ALL_ROOMS_SUCCESS = True  # True: 全ポート取得できなかった部屋が1つでもあれば履歴更新を止める
 
 # 「別日分が消える」事故を防ぐため、取得日を必ず重複キーに含める
 HISTORY_DEDUP_COLS = ['取得日', '部屋主', '順番', '曲名（ファイル名）', '歌った人']
@@ -402,27 +405,65 @@ archive_dfs = [h['df'] for h in history_records[:-1]] if len(history_records) > 
 target_ports = list(room_map.keys())
 new_data_frames = []
 failed_ports = []
+fetch_status = {}
 collection_ok = history_load_ok
 
 if not history_load_ok:
     print("[STOP] 履歴の読み込みが不完全なため、データ収集と履歴更新を停止します。")
 else:
     print("データを取得中...")
+
+    # 修正ポイント:
+    # 以前は1ポートでも失敗した時点で break し、履歴更新も止めていた。
+    # 同じ部屋に複数ポートがあるため、ポート単位ではなく部屋単位で成功判定する。
     for port in target_ports:
+        room_name = room_map.get(port, "不明")
         try:
-            new_data_frames.append(fetch_room_df(port))
+            df = fetch_room_df(port)
+            new_data_frames.append(df)
+            fetch_status[port] = {
+                "room": room_name,
+                "status": "ok",
+                "rows": len(df)
+            }
+            print(f"[Fetch] OK {port} ({room_name}) rows={len(df)}")
+
         except Exception as e:
             failed_ports.append((port, str(e)))
-            collection_ok = False
-            print(f"[STOP] {port} ({room_map.get(port, '不明')}) の取得に失敗: {e}")
-            if REQUIRE_ALL_PORTS_SUCCESS:
-                break
+            fetch_status[port] = {
+                "room": room_name,
+                "status": "error",
+                "error": str(e)
+            }
+            print(f"[Fetch] NG {port} ({room_name}) 取得失敗: {e}")
 
-if not collection_ok:
-    # ここが重要: 失敗時は history.csv / history_N.csv を一切保存しない
-    print("[STOP] 取得失敗があったため収集を停止し、履歴ファイルは更新しません。")
+    success_ports_count = sum(1 for x in fetch_status.values() if x["status"] == "ok")
+    print(f"[Fetch] 成功ポート: {success_ports_count} / {len(target_ports)}")
+
     if failed_ports:
         print("失敗ポート: " + ", ".join([f"{p}" for p, _ in failed_ports]))
+
+    # 同じ部屋に複数ポートがある場合、1つでも成功していればその部屋は成功扱い
+    success_rooms = {
+        info["room"]
+        for info in fetch_status.values()
+        if info["status"] == "ok"
+    }
+    all_rooms = set(room_map.values())
+    failed_rooms = sorted(all_rooms - success_rooms)
+
+    if REQUIRE_ALL_ROOMS_SUCCESS and failed_rooms:
+        collection_ok = False
+        print("[STOP] 全ポート取得できなかった部屋があるため、履歴ファイルは更新しません。")
+        print("失敗部屋: " + ", ".join(failed_rooms))
+    elif not new_data_frames:
+        collection_ok = False
+        print("[STOP] 新しいデータが1件も取得できませんでした。履歴ファイルは更新しません。")
+    else:
+        collection_ok = True
+
+if not collection_ok:
+    # ここが重要: 取得が不完全と判断した場合は history.csv / history_N.csv を一切保存しない
     full_df = full_history_before_update
 
 elif not new_data_frames:
@@ -431,6 +472,14 @@ elif not new_data_frames:
 
 else:
     new_df = cleanup_history_df(pd.concat(new_data_frames, ignore_index=True))
+
+    # 複数ポートが同じ部屋を指す場合、今回取得分の中で同じ曲が重複することがあるため除去する。
+    dedup_cols = [c for c in HISTORY_DEDUP_COLS if c in new_df.columns]
+    if dedup_cols:
+        before_rows = len(new_df)
+        new_df = new_df.drop_duplicates(subset=dedup_cols, keep='last')
+        new_df = cleanup_history_df(new_df)
+        print(f"[Dedup] 今回取得分の重複除去: {before_rows} -> {len(new_df)} 行")
 
     # 既存履歴と同じキーの行は保存対象から外す。取得日を含むため、別日の履歴は消えない。
     existing_keys = set(make_dedup_key(full_history_before_update).tolist()) if not full_history_before_update.empty else set()
