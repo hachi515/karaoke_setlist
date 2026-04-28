@@ -175,8 +175,20 @@ ROOM_FETCH_WORKERS = 16
 HISTORY_DEDUP_COLS = ['取得日', '部屋主', '順番', '曲名（ファイル名）', '歌った人']
 
 
-def get_history_filename(num):
-    return "history.csv" if num == 1 else f"history_{num}.csv"
+def get_history_filename_candidates(num):
+    if num == 1:
+        # 既存環境差分吸収:
+        # - history.csv
+        # - history_1.csv
+        # のどちらでも読めるようにする
+        return ["history.csv", "history_1.csv"]
+    return [f"history_{num}.csv"]
+
+
+def get_history_filename(num, filename_by_num=None):
+    if filename_by_num and num in filename_by_num:
+        return filename_by_num[num]
+    return get_history_filename_candidates(num)[0]
 
 
 def sort_history_df(df):
@@ -278,22 +290,31 @@ def save_df_to_gas_checked(filename, df, min_existing_rows=0):
 def load_all_history_files():
     histories = []
     loaded = []
+    filename_by_num = {}
     miss = 0
     num = 1
     while miss < HISTORY_ARCHIVE_MISS_LIMIT:
-        fn = get_history_filename(num)
-        df, st = load_df_from_gas_with_status(fn)
-        if st == "ok":
-            df = cleanup_history_df(df)
-            histories.append({"num": num, "filename": fn, "df": df})
-            loaded.append(fn)
-            miss = 0
-        elif st in ("not_found", "empty"):
-            miss += 1
-        else:
-            return histories, loaded, False
+        found = False
+        states = []
+        for fn in get_history_filename_candidates(num):
+            df, st = load_df_from_gas_with_status(fn)
+            states.append(st)
+            if st == "ok":
+                df = cleanup_history_df(df)
+                histories.append({"num": num, "filename": fn, "df": df})
+                loaded.append(fn)
+                filename_by_num[num] = fn
+                miss = 0
+                found = True
+                break
+        if found:
+            num += 1
+            continue
+        if any(st == "error" for st in states):
+            return histories, loaded, filename_by_num, False
+        miss += 1
         num += 1
-    return histories, loaded, True
+    return histories, loaded, filename_by_num, True
 
 
 def fetch_room_df(port):
@@ -313,7 +334,7 @@ def fetch_room_df(port):
 
 
 # --- 既存履歴読み込み ---
-history_records, loaded_history_files, history_load_ok = load_all_history_files()
+history_records, loaded_history_files, history_filename_by_num, history_load_ok = load_all_history_files()
 print(f"履歴ファイル: {loaded_history_files}")
 history_dfs = [h['df'] for h in history_records]
 full_history_before_update = cleanup_history_df(pd.concat(history_dfs, ignore_index=True)) if history_dfs else pd.DataFrame()
@@ -371,7 +392,7 @@ else:
             remaining_df = new_unique_df.reset_index(drop=True)
             saved_parts = {}
             while not remaining_df.empty:
-                fn = get_history_filename(active_num)
+                fn = get_history_filename(active_num, filename_by_num=history_filename_by_num)
                 cur = cleanup_history_df(active_df)
                 cap = HISTORY_MAX_ROWS - len(cur)
                 if cap <= 0:
