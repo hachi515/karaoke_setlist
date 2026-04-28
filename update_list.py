@@ -1113,22 +1113,47 @@ else:
 # HTML生成 (HTML出力・印刷設定)
 # ==========================================
 
-columns_to_hide = ['コメント'] 
+columns_to_hide = ['コメント']
+
+# --- 列の並び替え: 取得日 を 歌った人 の右に置く ---
 if not full_df.empty:
     html_df = full_df.drop(columns=columns_to_hide, errors='ignore')
+    cols = list(html_df.columns)
+    if '取得日' in cols and '歌った人' in cols:
+        cols.remove('取得日')
+        idx = cols.index('歌った人') + 1
+        cols.insert(idx, '取得日')
+        html_df = html_df[cols]
 else:
     html_df = pd.DataFrame()
 
+# --- 優先表示する列（スマホ時に常時表示する列）---
+PRIORITY_COLS = ['部屋主', '曲名（ファイル名）', '作品名']
+SETLIST_COLUMNS = list(html_df.columns)
+
+def _col_class(col_name):
+    return 'col-priority' if col_name in PRIORITY_COLS else 'col-detail'
+
 setlist_rows = ""
 for _, row in html_df.iterrows():
-    setlist_rows += '<tr>'
-    for val in row:
-        setlist_rows += f'<td>{val}</td>'
+    setlist_rows += '<tr class="setlist-row">'
+    for col, val in zip(SETLIST_COLUMNS, row):
+        setlist_rows += (
+            f'<td data-label="{col}" class="{_col_class(col)}">{val}</td>'
+        )
+    # スマホ用「詳細を表示」トグル（CSSで desktop は非表示）
+    setlist_rows += '<td class="col-toggle" aria-hidden="true"></td>'
     setlist_rows += '</tr>'
 
 setlist_headers = ""
-for col in html_df.columns:
-    setlist_headers += f'<th onclick="sortTable({list(html_df.columns).index(col)})">{col} <i class="fas fa-sort"></i></th>'
+for i, col in enumerate(SETLIST_COLUMNS):
+    cls = _col_class(col)
+    setlist_headers += (
+        f'<th class="{cls}" onclick="sortTable({i})">'
+        f'{col} <i class="fas fa-sort"></i></th>'
+    )
+# トグル列ヘッダ（スマホ用ダミー、desktopでは display:none）
+setlist_headers += '<th class="col-toggle" aria-hidden="true"></th>'
 
 graph_json_count = json.dumps(graph_series_data_count, ensure_ascii=False)
 graph_json_user = json.dumps(graph_series_data_user, ensure_ascii=False)
@@ -1174,13 +1199,192 @@ html_content = f"""
             cursor: default; 
         }}
         
+        /* ===== Setlist Table 共通スタイル ===== */
+        table {{
+            width: 100%; border-collapse: separate; border-spacing: 0;
+            background: #fff; border-radius: 8px;
+            margin-top: 10px; margin-bottom: 20px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+            overflow: hidden;
+        }}
         th, td {{
-            padding: 5px 8px; text-align: left; border-bottom: 1px solid #eee;
-            font-size: 13px; vertical-align: middle; line-height: 1.3;
+            padding: 8px 10px; text-align: left;
+            border-bottom: 1px solid #eef0f3;
+            font-size: 13px; vertical-align: middle; line-height: 1.4;
         }}
         th {{
-            background-color: var(--primary-color); color: #fff;
-            position: sticky; top: 0; z-index: 10; font-weight: bold;
+            background: linear-gradient(180deg, #34495e 0%, #2c3e50 100%);
+            color: #fff;
+            position: sticky; top: 0; z-index: 10;
+            font-weight: 600; cursor: pointer;
+            white-space: nowrap;
+        }}
+        th:hover {{ background: #3a546d; }}
+
+        /* セットリスト：ストライプではなく、ホバーと罫線で見せる */
+        #setlistTable tbody tr {{ background: #fff; transition: background 0.15s; }}
+        #setlistTable tbody tr:nth-child(even) td {{
+            background-color: #fbfcfd;  /* ごく薄いストライプ */
+        }}
+        #setlistTable tbody tr:hover td {{
+            background-color: #eaf4fd !important;
+        }}
+
+        /* 部屋主は識別しやすくバッジ風に */
+        #setlistTable td[data-label="部屋主"] {{
+            font-weight: 600;
+            color: #2c3e50;
+            white-space: nowrap;
+        }}
+        /* 曲名は強調 */
+        #setlistTable td[data-label="曲名（ファイル名）"] {{
+            font-weight: 600;
+            color: #1f2d3d;
+            word-break: break-word;
+        }}
+        /* 作品名はやや控えめ */
+        #setlistTable td[data-label="作品名"] {{
+            color: #5a6878;
+            word-break: break-word;
+        }}
+
+        /* desktopではトグル列は完全非表示 */
+        #setlistTable th.col-toggle,
+        #setlistTable td.col-toggle {{ display: none; }}
+
+        tr.hidden {{ display: none !important; }}
+
+        /* ===== タブレット (〜960px) =====
+           副次情報のフォントを少し落とす */
+        @media (max-width: 960px) {{
+            th, td {{ padding: 7px 8px; font-size: 12.5px; }}
+        }}
+
+        /* ===== スマホ (〜720px) : カードレイアウト ===== */
+        @media (max-width: 720px) {{
+            #setlistTable {{
+                box-shadow: none;
+                background: transparent;
+                border-radius: 0;
+            }}
+            #setlistTable thead {{ display: none; }}
+            #setlistTable,
+            #setlistTable tbody {{ display: block; width: 100%; }}
+
+            #setlistTable tr {{
+                display: grid;
+                grid-template-columns: auto 1fr auto;
+                grid-template-areas:
+                    "room  title  toggle"
+                    "room  work   toggle"
+                    "detail detail detail";
+                column-gap: 10px;
+                row-gap: 2px;
+                background: #fff;
+                border: 1px solid #e3e7ec;
+                border-radius: 10px;
+                margin-bottom: 10px;
+                padding: 10px 12px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+            }}
+            /* スマホでもうっすらストライプ（背景色のついた偶数カード）*/
+            #setlistTable tbody tr:nth-child(even) {{
+                background: #f7f9fc;
+            }}
+            #setlistTable tbody tr:hover td {{ background: transparent !important; }}
+
+            #setlistTable td {{
+                border: none;
+                padding: 2px 0;
+                background: transparent !important;
+                font-size: 13px;
+            }}
+
+            /* 部屋主（左にバッジ）*/
+            #setlistTable td[data-label="部屋主"] {{
+                grid-area: room;
+                align-self: start;
+                background: linear-gradient(135deg,#667eea,#764ba2) !important;
+                color: #fff !important;
+                font-weight: 600;
+                font-size: 11px;
+                padding: 4px 8px !important;
+                border-radius: 999px;
+                line-height: 1.2;
+                max-width: 110px;
+                text-align: center;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }}
+
+            /* 曲名（タイトル）*/
+            #setlistTable td[data-label="曲名（ファイル名）"] {{
+                grid-area: title;
+                font-weight: 700;
+                font-size: 14.5px;
+                color: #1f2d3d;
+            }}
+
+            /* 作品名（サブタイトル）*/
+            #setlistTable td[data-label="作品名"] {{
+                grid-area: work;
+                font-size: 12px;
+                color: #6b7785;
+            }}
+
+            /* それ以外の列（順番・歌手名・歌った人・取得日 など）はカード下部に展開 */
+            #setlistTable td.col-detail {{
+                grid-area: unset;
+                display: none;
+                padding: 4px 0 !important;
+                font-size: 12.5px;
+                color: #4a5562;
+                border-top: 1px dashed #e3e7ec;
+            }}
+            #setlistTable td.col-detail::before {{
+                content: attr(data-label) " : ";
+                font-weight: 600;
+                color: #8a95a3;
+                margin-right: 4px;
+            }}
+            #setlistTable tr.expanded td.col-detail {{
+                display: block;
+                grid-column: 1 / -1;
+            }}
+            /* 展開された詳細群の最初だけ上罫線 */
+            #setlistTable tr.expanded td.col-detail:first-of-type {{
+                margin-top: 6px;
+            }}
+
+            /* 右上の展開ボタン */
+            #setlistTable td.col-toggle {{
+                display: flex !important;
+                grid-area: toggle;
+                align-items: center;
+                justify-content: center;
+                width: 28px; height: 28px;
+                border-radius: 50%;
+                background: #eef2f7;
+                color: #3498db;
+                font-size: 12px;
+                cursor: pointer;
+                user-select: none;
+            }}
+            #setlistTable td.col-toggle::before {{ content: "▼"; }}
+            #setlistTable tr.expanded td.col-toggle {{ background: #3498db; color: #fff; }}
+            #setlistTable tr.expanded td.col-toggle::before {{ content: "▲"; }}
+
+            /* スマホで横スクロールが起こらないように */
+            .tab-content {{ padding: 0 8px 40px 8px; }}
+        }}
+
+        /* ===== さらに小さい端末 (〜420px) ===== */
+        @media (max-width: 420px) {{
+            #setlistTable td[data-label="曲名（ファイル名）"] {{ font-size: 14px; }}
+            #setlistTable td[data-label="部屋主"] {{ max-width: 90px; font-size: 10.5px; }}
+            .header-inner h1 {{ font-size: 1.05rem; }}
+            .port-input-wrapper {{ display: none; }}  /* 入力UIは横幅優先で隠す */
         }}
 
         .top-section {{
@@ -1228,7 +1432,7 @@ html_content = f"""
         .controls-row {{
             padding: 8px 15px; display: flex; gap: 8px; align-items: center;
             background-color: #fff; border-bottom: 1px solid var(--border-color);
-            height: 40px; 
+            height: 40px;
             flex-wrap: nowrap;
             overflow-x: auto;
         }}
@@ -1252,26 +1456,16 @@ html_content = f"""
         .ctrl-graph {{ display: none; width: 100%; align-items: center; justify-content: flex-end; }}
 
         .content-area {{
-            flex: 1; position: relative; overflow: hidden; 
+            flex: 1; position: relative; overflow: hidden;
         }}
         .tab-content {{
-            display: none; position: absolute; 
+            display: none; position: absolute;
             top: 0; left: 0; right: 0; bottom: 0;
-            overflow-y: auto; 
+            overflow-y: auto;
             -webkit-overflow-scrolling: touch;
             padding: 0 15px 40px 15px;
         }}
         .tab-content.active {{ display: block; }}
-
-        table {{
-            width: 100%; border-collapse: separate; border-spacing: 0;
-            background: #fff; border-radius: 4px; margin-top: 10px; margin-bottom: 20px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }}
-        
-        tr:nth-child(even) {{ background-color: #fafafa; }}
-        tr:hover {{ background-color: #f1f8ff; }}
-        tr.hidden {{ display: none !important; }}
 
         .category-header {{
             margin-top: 20px; padding: 10px 15px;
@@ -1891,6 +2085,18 @@ html_content = f"""
             tbodyRows = Array.from(tbody.rows);
             tableData = tbodyRows.map(row => row.innerText.toUpperCase());
             countDisplay.innerText = '全 ' + tbodyRows.length + ' 件';
+
+            // スマホ向けカード：行（またはトグルボタン）クリックで詳細展開
+            tbody.addEventListener('click', (e) => {{
+                // 検索結果のテキスト選択中はトグルしない
+                if (window.getSelection && window.getSelection().toString().length > 0) return;
+                const tr = e.target.closest('tr.setlist-row');
+                if (!tr) return;
+                // モバイル幅でのみ動作させる（PCでは普通の表として使う）
+                if (window.matchMedia('(max-width: 720px)').matches) {{
+                    tr.classList.toggle('expanded');
+                }}
+            }});
         }}
     }});
 
