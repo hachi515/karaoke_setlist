@@ -1036,38 +1036,18 @@ function buildRankingTop20(cat, mode){
   }
   return top20;
 }
-function buildRankCardHtml(r){
-  const isTop3 = r.rank<=3;
+function buildRankCardHtml(r, mode){
   const grade = r.rank===1?'gold':r.rank===2?'silver':r.rank===3?'bronze':'';
-  if(isTop3){
-    return `<div class="rank-card-top3 ${grade}">
-      <div class="rank-top3-badgewrap">
-        <div class="rank-crown ${grade}"><i class="fas fa-crown"></i></div>
-        <div class="rank-top3-num ${grade}">${r.rank}</div>
-      </div>
-      <div class="rank-top3-info">
-        <div class="rank-top3-anime">${escHtml(r.anime)}</div>
-        <div class="rank-top3-song">${escHtml(r.song)}</div>
-        <div class="rank-top3-artist">${escHtml(r.artist)}</div>
-        <div class="rank-top3-types">${typePillHtml(r.type)}</div>
-      </div>
-      <div class="rank-top3-metrics" style="grid-column:1/-1">
-        ${flatMetricHtml('人数',r.user_count,'user')}
-        ${flatMetricHtml('歌唱数',r.count,'song')}
-      </div>
-    </div>`;
-  } else {
-    return `<div class="rank-row-flat">
-      <div class="num-badge">${r.rank}</div>
-      <div class="rank-info">
-        <div class="rank-anime">${escHtml(r.anime)}</div>
-        <div class="rank-sub">${escHtml(r.song)} / ${escHtml(r.artist)}</div>
-        <div class="rank-types-inline">${typePillHtml(r.type)}</div>
-      </div>
-      ${flatMetricHtml('人数',r.user_count,'user')}
-      ${flatMetricHtml('歌唱数',r.count,'song')}
-    </div>`;
-  }
+  return `<div class="rank-row-flat ${grade}">
+    <div class="num-badge ${grade}">${r.rank}</div>
+    <div class="rank-info">
+      <div class="rank-anime">${escHtml(r.anime)}</div>
+      <div class="rank-sub">${escHtml(r.song)} / ${escHtml(r.artist)}</div>
+      <div class="rank-types-inline">${typePillHtml(r.type)}</div>
+    </div>
+    ${flatMetricHtml('人数',r.user_count,'user')}
+    ${flatMetricHtml('歌唱数',r.count,'song')}
+  </div>`;
 }
 function renderRanking(){
   const cat = rankCatSel.value;
@@ -1077,13 +1057,14 @@ function renderRanking(){
   const list = document.getElementById('rankList');
   if(top20.length===0){list.innerHTML='<div class="empty">ランキング対象データがありません</div>';return;}
   let html='';
-  top20.forEach(r=>html+=buildRankCardHtml(r));
+  top20.forEach(r=>html+=buildRankCardHtml(r, mode));
   list.innerHTML = html;
 }
 
 // ===== Trend =====
 const trendPeriodSel = document.getElementById('trendPeriod');
 const trendSortSel = document.getElementById('trendSort');
+const trendModeSel = document.getElementById('trendMode');
 TREND_PERIODS.forEach(p=>{
   const o=document.createElement('option');o.value=String(p);o.innerText=`直近${p}日`;
   if(p===7) o.selected=true;
@@ -1091,47 +1072,76 @@ TREND_PERIODS.forEach(p=>{
 });
 trendPeriodSel.addEventListener('change', renderTrend);
 trendSortSel.addEventListener('change', renderTrend);
+if(trendModeSel) trendModeSel.addEventListener('change', renderTrend);
+
+function trendCurValue(it, mode){
+  return mode==='user' ? (it.cur_user||0) : (it.cur_count||0);
+}
+function trendPrevValue(it, mode){
+  if(mode==='user') return (it.prev_user!=null ? it.prev_user : 0);
+  return (it.prev_count!=null ? it.prev_count : 0);
+}
+function trendDelta(it, mode){
+  return trendCurValue(it, mode) - trendPrevValue(it, mode);
+}
+function growthBadgeHtml(it, mode){
+  const cur = trendCurValue(it, mode);
+  const prev = trendPrevValue(it, mode);
+  const d = cur - prev;
+  if(prev<=0 && cur>0) return `<span class="growth-badge new">NEW</span>`;
+  if(prev<=0 && cur<=0) return '';
+  const pct = Math.round((d/prev)*100);
+  if(pct===0) return `<span class="growth-badge flat">±0%</span>`;
+  if(pct>0) return `<span class="growth-badge up">▲${pct}%</span>`;
+  return `<span class="growth-badge down">▼${Math.abs(pct)}%</span>`;
+}
 
 function buildTrendItems(){
-  const period = trendPeriodSel.value;
   const sort = trendSortSel.value;
+  const mode = trendModeSel ? trendModeSel.value : 'count';
+  const period = trendPeriodSel.value;
   const td = TREND_DATA[period] || {kpi:{surge_count:0,new_in:0,max_delta:0},items:[]};
-  const items = td.items.slice();
-  if(sort==='surge') items.sort((a,b)=>b.delta-a.delta || b.cur_count-a.cur_count);
-  else if(sort==='new') items.sort((a,b)=>(b.is_new?1:0)-(a.is_new?1:0) || b.delta-a.delta);
-  else items.sort((a,b)=>b.delta-a.delta);
-  return {kpi: td.kpi, items: items};
+  // Recompute delta per current mode for sorting / display
+  const items = td.items.map(it=>{
+    const d = trendDelta(it, mode);
+    return Object.assign({}, it, {_delta_m: d, _cur_m: trendCurValue(it, mode), _is_new_m: (trendPrevValue(it,mode)<=0 && trendCurValue(it,mode)>0)});
+  });
+  if(sort==='surge') items.sort((a,b)=>b._delta_m-a._delta_m || b._cur_m-a._cur_m);
+  else if(sort==='new') items.sort((a,b)=>(b._is_new_m?1:0)-(a._is_new_m?1:0) || b._delta_m-a._delta_m);
+  else items.sort((a,b)=>b._delta_m-a._delta_m);
+  // Recompute kpi for current mode
+  const surge_count = items.filter(x=>x._delta_m>0).length;
+  const new_in = items.filter(x=>x._is_new_m).length;
+  const max_delta = items.reduce((m,x)=>Math.max(m, x._delta_m), 0);
+  return {kpi:{surge_count, new_in, max_delta}, items, mode};
 }
 
 function buildTrendHtml(){
-  const {kpi, items} = buildTrendItems();
+  const {kpi, items, mode} = buildTrendItems();
+  const unit = mode==='user' ? '人' : '曲';
   let html = '';
   html += `<div class="trend-stats">
-    <div class="trend-stat"><div class="ico up"><i class="fas fa-arrow-trend-up"></i></div><div class="lbl">急上昇</div><div class="val">${kpi.surge_count}<small>曲</small></div></div>
-    <div class="trend-stat"><div class="ico new"><i class="far fa-star"></i></div><div class="lbl">新規ランクイン</div><div class="val">${kpi.new_in}<small>曲</small></div></div>
+    <div class="trend-stat"><div class="ico up"><i class="fas fa-arrow-trend-up"></i></div><div class="lbl">急上昇</div><div class="val">${kpi.surge_count}<small>${unit}</small></div></div>
+    <div class="trend-stat"><div class="ico new"><i class="far fa-star"></i></div><div class="lbl">新規ランクイン</div><div class="val">${kpi.new_in}<small>${unit}</small></div></div>
     <div class="trend-stat"><div class="ico max"><i class="fas fa-arrow-up"></i></div><div class="lbl">最大伸び</div><div class="val">+${kpi.max_delta}</div></div>
   </div>`;
 
   if(items.length>0){
     const p = items[0];
-    const thumbUrl = getThumbUrl(TREND_TARGET_CAT, p.anime);
+    const cur_user = p.cur_user||0;
+    const cur_count = p.cur_count||0;
     html += `<div class="trend-pickup">
       <div class="trend-pickup-head"><i class="fas fa-fire"></i> 急上昇ピックアップ</div>
-      <div class="trend-pickup-body">
-        <div class="thumb-square">
-          ${thumbUrl?`<img src="${thumbUrl}" alt="">`:'<i class="far fa-image"></i>'}
-          <span class="thumb-tag">急上昇 No.1</span>
+      <div class="trend-pickup-row">
+        <div class="num-badge">1</div>
+        <div class="pickup-info">
+          <div class="pickup-anime">${escHtml(p.anime)}</div>
+          <div class="pickup-sub">${escHtml(p.song)} / ${escHtml(p.artist)}</div>
+          <div class="pickup-types-inline">${typePillHtml(p.type)}</div>
         </div>
-        <div class="tp-info">
-          <div class="tp-anime">${escHtml(p.anime)}</div>
-          <div class="tp-song">${escHtml(p.song)}</div>
-          <div class="tp-artist">${escHtml(p.artist)}</div>
-          <div class="tp-type">${typePillHtml(p.type)}</div>
-        </div>
-      </div>
-      <div class="tp-metrics">
-        ${flatMetricHtml('人数',p.cur_user,'user')}
-        ${flatMetricHtml('歌唱数',p.cur_count,'song')}
+        ${flatMetricHtml('人数',cur_user,'user')}
+        ${flatMetricHtml('歌唱数',cur_count,'song')}
+        ${growthBadgeHtml(p, mode)}
       </div>
     </div>`;
   }
@@ -1140,17 +1150,16 @@ function buildTrendHtml(){
     html += `<div class="notable-head"><i class="fas fa-arrow-trend-up"></i> 注目の上昇曲</div>`;
     items.slice(1, 10).forEach((it,idx)=>{
       const rank = idx+2;
-      const thumbUrl = getThumbUrl(TREND_TARGET_CAT, it.anime);
       html += `<div class="notable-row">
-        <div class="num-badge" style="width:30px;height:30px;font-size:13px">${rank}</div>
-        <div class="thumb-mini">${thumbUrl?`<img src="${thumbUrl}" alt="">`:'<i class="far fa-image"></i>'}</div>
+        <div class="num-badge">${rank}</div>
         <div class="notable-info">
           <div class="notable-anime">${escHtml(it.anime)}</div>
           <div class="notable-artist">${escHtml(it.song)} / ${escHtml(it.artist)}</div>
           <div class="notable-types">${typePillHtml(it.type)}</div>
         </div>
-        ${flatMetricHtml('人数',it.cur_user,'user')}
-        ${flatMetricHtml('歌唱数',it.cur_count,'song')}
+        ${flatMetricHtml('人数',it.cur_user||0,'user')}
+        ${flatMetricHtml('歌唱数',it.cur_count||0,'song')}
+        ${growthBadgeHtml(it, mode)}
       </div>`;
     });
   }
@@ -1163,11 +1172,42 @@ function renderTrend(){
 }
 
 // ===== Env =====
+const ENV_PASSWORD = '0515';
 const envCatSel = document.getElementById('envCat');
 CATS.forEach(c=>{const o=document.createElement('option');o.value=c;o.innerText=c;envCatSel.appendChild(o);});
 envCatSel.addEventListener('change', renderEnv);
 
+function envIsUnlocked(){return sessionStorage.getItem('envUnlocked')==='1';}
+function envApplyLockState(){
+  const lock = document.getElementById('envLockScreen');
+  const content = document.getElementById('envContent');
+  if(envIsUnlocked()){
+    lock.style.display='none';
+    content.style.display='';
+    renderEnv();
+  } else {
+    lock.style.display='';
+    content.style.display='none';
+  }
+}
+function envTryUnlock(){
+  const v = document.getElementById('envPwInput').value;
+  const msg = document.getElementById('envPwMsg');
+  if(v===ENV_PASSWORD){
+    sessionStorage.setItem('envUnlocked','1');
+    msg.innerText='';
+    envApplyLockState();
+  } else {
+    msg.innerText = 'パスワードが正しくありません';
+    document.getElementById('envPwInput').value='';
+  }
+}
+document.getElementById('envPwBtn').addEventListener('click', envTryUnlock);
+document.getElementById('envPwInput').addEventListener('keydown', e=>{ if(e.key==='Enter') envTryUnlock(); });
+envApplyLockState();
+
 function renderEnv(){
+  if(!envIsUnlocked()) return;
   const cat = envCatSel.value;
   const works = (COOL_DATA[cat]||{works:[]}).works;
   const list = document.getElementById('envList');
@@ -1201,10 +1241,11 @@ async function handleImageUpload(input, cat, work, thumbId){
     const dataUrl = await cropToSquareDataUrl(file, 512);
     const base64 = dataUrl.split(',')[1];
     showEnvStatus('Driveへアップロード中...', false);
+    const existingId = (IMAGE_MAP[cat] && IMAGE_MAP[cat][work]) || '';
     const res = await fetch(GAS_URL, {
       method:'POST',
       headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body: JSON.stringify({action:'upload_image',quarter:cat,work:work,filename:file.name,content_base64:base64,mime:'image/jpeg'})
+      body: JSON.stringify({action:'upload_image',quarter:cat,work:work,filename:file.name,content_base64:base64,mime:'image/jpeg',existing_file_id:existingId,overwrite:true})
     });
     const text = await res.text();
     let result; try{result=JSON.parse(text);}catch(e){result={ok:false,msg:text};}
@@ -1222,6 +1263,44 @@ async function handleImageUpload(input, cat, work, thumbId){
   }
   input.value = '';
 }
+
+// CSV editor for cool_analysis.csv
+function showCsvMsg(msg, kind){
+  const el = document.getElementById('envCsvMsg');
+  el.innerText = msg;
+  el.className = 'env-csv-msg' + (kind ? ' '+kind : '');
+}
+async function envCsvLoad(){
+  showCsvMsg('読み込み中...', '');
+  try{
+    const res = await fetch(GAS_URL+'?filename=cool_analysis.csv', {method:'GET'});
+    if(!res.ok){ showCsvMsg('読み込み失敗: HTTP '+res.status, 'error'); return; }
+    const text = await res.text();
+    document.getElementById('envCsvText').value = text;
+    showCsvMsg('読み込み完了 ('+text.length+' 文字)', 'ok');
+  }catch(e){
+    showCsvMsg('読み込みエラー: '+e.message, 'error');
+  }
+}
+async function envCsvSave(){
+  const content = document.getElementById('envCsvText').value;
+  if(!content){ showCsvMsg('内容が空です', 'error'); return; }
+  if(!confirm('cool_analysis.csv を保存します。よろしいですか？')) return;
+  showCsvMsg('保存中...', '');
+  try{
+    const res = await fetch(GAS_URL, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({filename:'cool_analysis.csv', content:content})
+    });
+    if(!res.ok){ showCsvMsg('保存失敗: HTTP '+res.status, 'error'); return; }
+    showCsvMsg('保存完了。次回更新で反映されます。', 'ok');
+  }catch(e){
+    showCsvMsg('保存エラー: '+e.message, 'error');
+  }
+}
+document.getElementById('envCsvLoad').addEventListener('click', envCsvLoad);
+document.getElementById('envCsvSave').addEventListener('click', envCsvSave);
 function cropToSquareDataUrl(file, size){
   return new Promise((resolve,reject)=>{
     const reader = new FileReader();
@@ -1318,9 +1397,9 @@ function buildRankHtmlForCatExport(cat, mode){
   const modeT = mode==='count' ? '歌唱数ランキング' : '歌唱人数ランキング';
   let h = `<div style="font-size:14px;font-weight:700;color:var(--primary);padding-left:10px;border-left:3px solid var(--accent);margin:14px 0 8px">${escHtml(cat)} ${modeT}</div>`;
   top20.forEach(r=>{
-    const card = buildRankCardHtml(r);
+    const card = buildRankCardHtml(r, mode);
     h += card
-      .replace(/(<div class="rank-top3-anime">)([^<]+)(<\/div>)/, (_,p1,n,p3)=>p1+`<a class="export-link" href="#search:${encodeURIComponent(r.anime+' '+r.song)}">${n}</a>`+p3)
+      .replace(/(<div class="rank-anime">)([^<]+)(<\/div>)/, (_,p1,n,p3)=>p1+`<a class="export-link" href="#search:${encodeURIComponent(r.anime+' '+r.song)}">${n}</a>`+p3)
       .replace(/(<div class="rank-sub">)([^<]+)(<\/div>)/, (_,p1,n,p3)=>p1+`<a class="export-link" href="#search:${encodeURIComponent(r.anime+' '+r.song)}">${n}</a>`+p3);
   });
   return h;
