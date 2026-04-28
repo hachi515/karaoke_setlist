@@ -30,6 +30,9 @@ OFFLINE_FILES = [
 # デプロイしたGASのウェブアプリURL (履歴保存やCool解析の取得に使用)
 GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyzKEPfj0bYcRyEdizwQXcduIOQFt2_njtFQSyGP9jBjrhR8pyVKwDol6VN7bLPrktq/exec"
 CSV_EMPTY_PREFIX_BYTES = b'\xef\xbb\xbf\r\n\t '  # BOMと空白のみのCSVレスポンス判定に使う
+EXPECTED_HISTORY_COLUMNS = [
+    '部屋主', '順番', '曲名（ファイル名）', '作品名', '歌手名', '歌った人', '取得日'
+]
 
 def load_df_from_github(filename, **kwargs):
     """GitHubのRawデータからCSVを読み込む"""
@@ -91,6 +94,11 @@ def load_df_from_gas_with_status(filename, **kwargs):
         return pd.DataFrame(), "error"
 
     content_bytes = response.content
+    response_text = response.text if isinstance(response.text, str) else ""
+    if "Exception: Service error: Drive" in response_text:
+        print(f"[GAS] Drive service error detected for {filename}.")
+        return pd.DataFrame(), "error"
+
     if not content_bytes or content_bytes.lstrip(CSV_EMPTY_PREFIX_BYTES) == b'':
         print(f"[GAS] Empty file: {filename}")
         return pd.DataFrame(), "empty"
@@ -237,7 +245,7 @@ def check_match(target_text, source_series):
 # 2) 取得できないポート・部屋は無視し、取得できた分だけ履歴へ追記する
 # 3) 履歴読み込みに失敗した場合だけ、既存履歴を壊さないため history 系CSVへの保存を禁止する
 # 4) 空データ保存・行数減少保存は禁止し、蓄積済みデータを消さない
-# 5) 履歴は日付込みで重複判定し、別日の同じ曲・同じ順番を消さない
+# 5) 重複判定は内容一致を優先し、取得日が異なっても同一行の二重登録を防ぐ
 # 6) 一定行数に達したら history_2.csv, history_3.csv ... へ移行し、以後は最新ファイルへ追記する
 
 HISTORY_MAX_ROWS = 9500   # 1ファイルあたりの最大行数。この行数に達したら次の history_N.csv へ移行
@@ -246,7 +254,7 @@ IGNORE_FETCH_FAILURES = True  # True: 取得失敗ポートがあっても、取
 ROOM_FETCH_TIMEOUT = 6        # 死んでいるポートで長時間止まらないよう短めにする
 ROOM_FETCH_WORKERS = 16       # セトリ取得を並列化して、常に収集が進むようにする
 
-# 「別日分が消える」事故を防ぐため、取得日を必ず重複キーに含める
+# 基本は取得日込みで重複判定し、同日内の重複を確実に除去する
 HISTORY_DEDUP_COLS = ['取得日', '部屋主', '順番', '曲名（ファイル名）', '歌った人']
 
 
@@ -280,7 +288,32 @@ def sort_history_df(df):
         cols.insert(0, cols.pop(cols.index('部屋主')))
         df = df[cols]
 
-    return df.fillna("")
+    return format_history_order_column(df.fillna(""))
+
+
+def format_history_order_column(df):
+    """順番の表示を整数優先に整え、小数点以下 .0 の表示を防ぐ。"""
+    if df is None or df.empty or '順番' not in df.columns:
+        return pd.DataFrame() if df is None else df
+
+    def _format_order(v):
+        if pd.isna(v):
+            return ""
+        s = str(v).strip()
+        if s == "":
+            return ""
+
+        n = pd.to_numeric(pd.Series([s]), errors='coerce').iloc[0]
+        if pd.isna(n):
+            return s
+
+        if float(n).is_integer():
+            return str(int(n))
+        return f"{n:g}"
+
+    df = df.copy()
+    df['順番'] = df['順番'].apply(_format_order)
+    return df
 
 
 def cleanup_history_df(df):
@@ -294,19 +327,44 @@ def cleanup_history_df(df):
         if col in df.columns:
             df = df[df[col].astype(str) != col]
 
+    # GASエラー文言がカラム名として混入するケースを除去し、履歴列のみを残す
+    bad_col_patterns = [
+        r'^Error:',
+        r'Exception:\s*Service error:\s*Drive'
+    ]
+    bad_cols = []
+    for c in df.columns:
+        col = str(c).strip()
+        for pat in bad_col_patterns:
+            if re.search(pat, col, flags=re.IGNORECASE):
+                bad_cols.append(c)
+                break
+    if bad_cols:
+        df = df.drop(columns=bad_cols, errors='ignore')
+
+    keep_cols = [c for c in EXPECTED_HISTORY_COLUMNS if c in df.columns]
+    other_cols = [c for c in df.columns if c not in keep_cols]
+    if keep_cols:
+        df = df[keep_cols + other_cols]
+
     return sort_history_df(df)
 
 
-def make_dedup_key(df):
+def make_dedup_key(df, for_history_compare=False):
     """存在しない列は空文字として扱い、履歴比較用キーを作る。"""
     if df is None or df.empty:
         return pd.Series([], dtype=str)
 
     work = df.copy().fillna("")
-    for col in HISTORY_DEDUP_COLS:
+    dedup_cols = HISTORY_DEDUP_COLS.copy()
+    if for_history_compare and '取得日' in dedup_cols:
+        # 収集日が異なる再取得（例: 25日のデータを28日に再収集）でも二重登録しない
+        dedup_cols.remove('取得日')
+
+    for col in dedup_cols:
         if col not in work.columns:
             work[col] = ""
-    return work[HISTORY_DEDUP_COLS].astype(str).agg("\u241f".join, axis=1)
+    return work[dedup_cols].astype(str).agg("\u241f".join, axis=1)
 
 
 def save_df_to_gas_checked(filename, df, min_existing_rows=0, allow_empty=False):
@@ -486,9 +544,9 @@ else:
             full_df = cleanup_history_df(pd.concat([full_history_before_update, new_df], ignore_index=True))
 
     else:
-        # 既存履歴と同じキーの行は保存対象から外す。取得日を含むため、別日の履歴は消えない。
-        existing_keys = set(make_dedup_key(full_history_before_update).tolist()) if not full_history_before_update.empty else set()
-        new_keys = make_dedup_key(new_df)
+        # 既存履歴と同じ内容キーの行は保存対象から外す（取得日違いの再収集も重複として除外）。
+        existing_keys = set(make_dedup_key(full_history_before_update, for_history_compare=True).tolist()) if not full_history_before_update.empty else set()
+        new_keys = make_dedup_key(new_df, for_history_compare=True)
         new_unique_df = new_df[~new_keys.isin(existing_keys)].copy()
         new_unique_df = cleanup_history_df(new_unique_df)
 
@@ -1063,7 +1121,7 @@ else:
 
 setlist_rows = ""
 for _, row in html_df.iterrows():
-    setlist_rows += '<tr>'
+    setlist_rows += '<tr class="setlist-row">'
     for val in row:
         setlist_rows += f'<td>{val}</td>'
     setlist_rows += '</tr>'
@@ -1210,10 +1268,16 @@ html_content = f"""
             background: #fff; border-radius: 4px; margin-top: 10px; margin-bottom: 20px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }}
-        
-        tr:nth-child(even) {{ background-color: #fafafa; }}
-        tr:hover {{ background-color: #f1f8ff; }}
+        #setlistTable tbody tr:nth-child(odd) {{ background-color: #ffffff; }}
+        #setlistTable tbody tr:nth-child(even) {{ background-color: #f5f9ff; }}
+        #setlistTable tbody tr:hover {{ background-color: #e9f3ff; }}
         tr.hidden {{ display: none !important; }}
+        #setlistTable td {{
+            border-bottom: 1px solid #e7eef7;
+        }}
+        #setlistTable td:first-child {{
+            border-left: 4px solid #d9e8fb;
+        }}
 
         .category-header {{
             margin-top: 20px; padding: 10px 15px;
@@ -1322,6 +1386,80 @@ html_content = f"""
             .category-header {{ page-break-after: avoid; }}
             thead {{ display: table-header-group; }}
             .chart-wrapper {{ height: auto; }}
+        }}
+
+        @media (max-width: 900px) {{
+            html, body {{
+                font-size: 12px;
+            }}
+            .header-inner {{
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 8px;
+            }}
+            .controls-row {{
+                height: auto;
+                padding: 8px 10px;
+            }}
+            .ctrl-setlist {{
+                flex-wrap: wrap;
+            }}
+            .search-box {{
+                width: min(100%, 320px);
+                flex: 1 1 220px;
+            }}
+            .count-display {{
+                margin-left: 0;
+                width: 100%;
+            }}
+            #setlistTable {{
+                background: transparent;
+                box-shadow: none;
+            }}
+            #setlistTable thead {{
+                display: none;
+            }}
+            #setlistTable, #setlistTable tbody, #setlistTable tr, #setlistTable td {{
+                display: block;
+                width: 100%;
+                box-sizing: border-box;
+            }}
+            #setlistTable tbody tr {{
+                border: 1px solid #d9e2ef;
+                border-radius: 10px;
+                margin: 10px 0 14px;
+                overflow: hidden;
+                background: #fff;
+                box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+                cursor: pointer;
+            }}
+            #setlistTable tbody tr:nth-child(even) {{
+                background: #f8fbff;
+            }}
+            #setlistTable td {{
+                display: none;
+                border-left: none !important;
+                border-bottom: 1px dashed #d7e2f1;
+                padding: 7px 12px;
+                font-size: 12px;
+                line-height: 1.4;
+            }}
+            #setlistTable td::before {{
+                content: attr(data-label) "：";
+                font-weight: 700;
+                color: #50637a;
+                margin-right: 6px;
+            }}
+            #setlistTable td.primary-col {{
+                display: block;
+                font-weight: 700;
+            }}
+            #setlistTable tr.expanded td {{
+                display: block;
+            }}
+            #setlistTable tr.expanded td:last-child {{
+                border-bottom: none;
+            }}
         }}
     </style>
 </head>
@@ -1828,6 +1966,7 @@ html_content = f"""
     let tbodyRows = [];
 
     window.addEventListener('DOMContentLoaded', () => {{
+        initSetlistResponsiveUI();
         const tbody = table.tBodies[0];
         if (tbody) {{
             tbodyRows = Array.from(tbody.rows);
@@ -1835,6 +1974,29 @@ html_content = f"""
             countDisplay.innerText = '全 ' + tbodyRows.length + ' 件';
         }}
     }});
+
+    function initSetlistResponsiveUI() {{
+        if (!table) return;
+        const headers = Array.from(table.querySelectorAll('thead th')).map(th => th.innerText.replace(/\\s+\\S*$/, '').trim());
+        const primaryCols = new Set(['部屋主', '曲名（ファイル名）', '作品名']);
+        const tbody = table.tBodies[0];
+        if (!tbody) return;
+        Array.from(tbody.rows).forEach(row => {{
+            Array.from(row.cells).forEach((cell, idx) => {{
+                const label = headers[idx] || `項目${{idx + 1}}`;
+                cell.setAttribute('data-label', label);
+                if (primaryCols.has(label)) {{
+                    cell.classList.add('primary-col');
+                }}
+            }});
+            row.addEventListener('click', (event) => {{
+                if (window.innerWidth > 900) return;
+                if (window.getSelection().toString().length > 0) return;
+                if (event.target.closest('a, button, input, select, textarea')) return;
+                row.classList.toggle('expanded');
+            }});
+        }});
+    }}
 
     searchInput.addEventListener("keyup", function(event) {{
         if (event.key === "Enter") performSearch();
