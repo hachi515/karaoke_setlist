@@ -33,8 +33,6 @@ CSV_EMPTY_PREFIX_BYTES = b'\xef\xbb\xbf\r\n\t '  # BOMと空白のみのCSVレ�
 EXPECTED_HISTORY_COLUMNS = [
     '取得日', '部屋主', '順番', '曲名（ファイル名）', '作品名', '歌手名', '歌った人'
 ]
-# 履歴表示・HTML出力時の見せ順（取得日は歌った人の右）
-HISTORY_DISPLAY_COLUMNS = ['部屋主', '順番', '曲名（ファイル名）', '作品名', '歌手名', '歌った人', '取得日']
 
 def load_df_from_github(filename, **kwargs):
     """GitHubのRawデータからCSVを読み込む"""
@@ -286,7 +284,8 @@ def sort_history_df(df):
         df = df.drop(columns=['_temp_date'])
 
     cols = list(df.columns)
-    display_cols = [c for c in HISTORY_DISPLAY_COLUMNS if c in cols]
+    display_priority = ['部屋主', '順番', '曲名（ファイル名）', '作品名', '歌手名', '歌った人', '取得日']
+    display_cols = [c for c in display_priority if c in cols]
     other_cols = [c for c in cols if c not in display_cols]
     if display_cols:
         df = df[display_cols + other_cols]
