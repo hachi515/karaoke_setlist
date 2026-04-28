@@ -6,7 +6,6 @@ import re
 import unicodedata
 import json
 import io
-import base64
 from itertools import groupby
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -23,78 +22,57 @@ OFFLINE_FILES = [
     "offline_list_2025_1st.csv"
 ]
 
-# ==========================================
-# ★ GAS連携・GitHub読み込み用設定
-# ==========================================
 GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyzKEPfj0bYcRyEdizwQXcduIOQFt2_njtFQSyGP9jBjrhR8pyVKwDol6VN7bLPrktq/exec"
 CSV_EMPTY_PREFIX_BYTES = b'\xef\xbb\xbf\r\n\t '
-EXPECTED_HISTORY_COLUMNS = [
-    '取得日', '部屋主', '順番', '曲名（ファイル名）', '作品名', '歌手名', '歌った人'
-]
+EXPECTED_HISTORY_COLUMNS = ['取得日', '部屋主', '順番', '曲名（ファイル名）', '作品名', '歌手名', '歌った人']
 
-# 推移タブ対象クール（特集）
+ALLOWED_CATEGORIES = ["2026年春アニメ", "2026年冬アニメ", "2025年秋アニメ"]
 TREND_TARGET_CATEGORY = "2026年春アニメ"
 TREND_PERIOD_OPTIONS = [3, 7, 14, 30]
+TREND_PICKUP_TOTAL = 10  # 大カード1 + 注目9
 
-# ALLOWED CATEGORIES
-ALLOWED_CATEGORIES = ["2026年春アニメ", "2026年冬アニメ", "2025年秋アニメ"]
 
 def load_df_from_github(filename, **kwargs):
     url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/{GITHUB_BRANCH}/{filename}"
-    print(f"[GitHub] Loading {filename} from {url}...")
+    print(f"[GitHub] {filename}")
     try:
         response = requests.get(url, timeout=30)
         if response.status_code == 200:
-            content_bytes = response.content
             for enc in ['utf-8-sig', 'utf-8', 'cp932', 'shift_jis']:
                 try:
-                    df = pd.read_csv(io.BytesIO(content_bytes), encoding=enc, engine='python', **kwargs)
+                    df = pd.read_csv(io.BytesIO(response.content), encoding=enc, engine='python', **kwargs)
                     if not df.empty:
                         df.columns = df.columns.astype(str).str.replace('\ufeff', '').str.strip()
-                    print(f"[GitHub] Success: Loaded {filename} (Encoding: {enc}). Rows: {len(df)}")
+                    print(f"[GitHub] OK {filename} rows={len(df)}")
                     return df
                 except Exception:
                     continue
-            print(f"[GitHub] Failed to decode {filename}.")
-            return pd.DataFrame()
-        elif response.status_code == 404:
-            print(f"[GitHub] File not found: {filename} (404).")
-            return pd.DataFrame()
-        else:
-            print(f"[GitHub] Error: Status {response.status_code}")
-            return pd.DataFrame()
+        return pd.DataFrame()
     except Exception as e:
-        print(f"[GitHub] Connection error: {e}")
+        print(f"[GitHub] err {e}")
         return pd.DataFrame()
 
 
 def load_df_from_gas_with_status(filename, **kwargs):
-    print(f"[GAS] Loading {filename}...")
     try:
         response = requests.get(GAS_WEB_APP_URL, params={'filename': filename}, timeout=60)
     except Exception as e:
-        print(f"[GAS] Connection error: {e}")
         return pd.DataFrame(), "error"
-
     if response.status_code == 404:
         return pd.DataFrame(), "not_found"
     if response.status_code != 200:
         return pd.DataFrame(), "error"
-
     content_bytes = response.content
     response_text = response.text if isinstance(response.text, str) else ""
     if "Exception: Service error: Drive" in response_text:
         return pd.DataFrame(), "error"
-
     if not content_bytes or content_bytes.lstrip(CSV_EMPTY_PREFIX_BYTES) == b'':
         return pd.DataFrame(), "empty"
-
     for enc in ['utf-8-sig', 'utf-8', 'cp932', 'shift_jis']:
         try:
             df = pd.read_csv(io.BytesIO(content_bytes), encoding=enc, engine='python', **kwargs)
             if len(df.columns) > 0:
                 df.columns = df.columns.astype(str).str.replace('\ufeff', '').str.strip()
-            print(f"[GAS] Success: Loaded {filename} ({enc}). Rows: {len(df)}")
             return df, "ok"
         except Exception:
             continue
@@ -107,7 +85,6 @@ def load_df_from_gas(filename, **kwargs):
 
 
 def load_json_from_gas(filename):
-    """GASからJSONを読み込む(image_map.json用)"""
     try:
         response = requests.get(GAS_WEB_APP_URL, params={'filename': filename}, timeout=30)
         if response.status_code == 200:
@@ -119,36 +96,24 @@ def load_json_from_gas(filename):
             except Exception:
                 return {}
         return {}
-    except Exception as e:
-        print(f"[GAS] JSON load error: {e}")
+    except Exception:
         return {}
 
 
 def save_df_to_gas(filename, df):
-    print(f"[GAS] Uploading {filename}...")
     try:
         csv_buffer = io.StringIO()
         df.to_csv(csv_buffer, index=False)
         payload = {'filename': filename, 'content': csv_buffer.getvalue()}
         response = requests.post(GAS_WEB_APP_URL, json=payload, timeout=60)
-        if response.status_code == 200:
-            print(f"[GAS] Upload success: {response.text}")
-            return True
-        else:
-            print(f"[GAS] Upload failed: {response.status_code}")
-            return False
-    except Exception as e:
-        print(f"[GAS] Upload error: {e}")
+        return response.status_code == 200
+    except Exception:
         return False
 
-# ==========================================
-# メイン処理
-# ==========================================
 
 now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
 current_date_str = now.strftime("%Y/%m/%d")
 current_datetime_str = now.strftime("%Y/%m/%d %H:%M")
-current_date_dash = now.strftime("%Y-%m-%d")
 
 room_map = {
     11000: "ゆーふうりん部屋", 11001: "ゆーふうりん部屋", 11002: "ゆーふうりん部屋",
@@ -200,11 +165,10 @@ def check_match(target_text, source_series):
     if re.match(r'^[A-Z0-9\s]+$', target_text):
         pattern = r'(?:^|[^A-Z0-9])' + safe_target + r'(?:[^A-Z0-9]|$)'
         return source_series.str.contains(pattern, regex=True, case=False, na=False)
-    else:
-        return source_series.str.contains(safe_target, case=False, na=False)
+    return source_series.str.contains(safe_target, case=False, na=False)
 
 
-# --- 1. 過去データ読み込み・安全な履歴ローテーション ---
+# --- 履歴処理 ---
 HISTORY_MAX_ROWS = 9500
 HISTORY_ARCHIVE_MISS_LIMIT = 3
 ROOM_FETCH_TIMEOUT = 6
@@ -239,10 +203,10 @@ def sort_history_df(df):
 
 
 def format_history_order_column(df):
-    if df is None or df.empty or '順���' not in df.columns:
+    if df is None or df.empty or '順番' not in df.columns:
         return pd.DataFrame() if df is None else df
 
-    def _format_order(v):
+    def _fmt(v):
         if pd.isna(v):
             return ""
         s = str(v).strip()
@@ -256,7 +220,7 @@ def format_history_order_column(df):
         return f"{n:g}"
 
     df = df.copy()
-    df['順番'] = df['順番'].apply(_format_order)
+    df['順番'] = df['順番'].apply(_fmt)
     return df
 
 
@@ -264,22 +228,18 @@ def cleanup_history_df(df):
     if df is None or df.empty:
         return pd.DataFrame() if df is None else df.fillna("")
     df = df.copy().fillna("")
-    clean_check_cols = ['部屋主', '曲名（ファイル名）', '作品名', '歌手名']
-    for col in clean_check_cols:
+    for col in ['部屋主', '曲名（ファイル名）', '作品名', '歌手名']:
         if col in df.columns:
             df = df[df[col].astype(str) != col]
-
-    bad_col_patterns = [r'^Error:', r'Exception:\s*Service error:\s*Drive']
     bad_cols = []
     for c in df.columns:
         col = str(c).strip()
-        for pat in bad_col_patterns:
+        for pat in [r'^Error:', r'Exception:\s*Service error:\s*Drive']:
             if re.search(pat, col, flags=re.IGNORECASE):
                 bad_cols.append(c)
                 break
     if bad_cols:
         df = df.drop(columns=bad_cols, errors='ignore')
-
     keep_cols = [c for c in EXPECTED_HISTORY_COLUMNS if c in df.columns]
     other_cols = [c for c in df.columns if c not in keep_cols]
     if keep_cols:
@@ -300,45 +260,41 @@ def make_dedup_key(df, for_history_compare=False):
     return work[dedup_cols].astype(str).agg("\u241f".join, axis=1)
 
 
-def save_df_to_gas_checked(filename, df, min_existing_rows=0, allow_empty=False):
+def save_df_to_gas_checked(filename, df, min_existing_rows=0):
     if df is None:
         return False
     df = cleanup_history_df(df)
-    if df.empty and not allow_empty:
-        return False
-    if len(df) < min_existing_rows:
+    if df.empty or len(df) < min_existing_rows:
         return False
     if not save_df_to_gas(filename, df):
         return False
-    verify_df, verify_status = load_df_from_gas_with_status(filename)
-    if verify_status != "ok":
+    verify_df, st = load_df_from_gas_with_status(filename)
+    if st != "ok":
         return False
-    verify_df = cleanup_history_df(verify_df)
-    if len(verify_df) < len(df):
+    if len(cleanup_history_df(verify_df)) < len(df):
         return False
     return True
 
 
 def load_all_history_files():
     histories = []
-    loaded_files = []
-    missing_count = 0
+    loaded = []
+    miss = 0
     num = 1
-    while missing_count < HISTORY_ARCHIVE_MISS_LIMIT:
-        filename = get_history_filename(num)
-        df, status = load_df_from_gas_with_status(filename)
-        if status == "ok":
+    while miss < HISTORY_ARCHIVE_MISS_LIMIT:
+        fn = get_history_filename(num)
+        df, st = load_df_from_gas_with_status(fn)
+        if st == "ok":
             df = cleanup_history_df(df)
-            histories.append({"num": num, "filename": filename, "df": df})
-            loaded_files.append(filename)
-            missing_count = 0
-        elif status in ("not_found", "empty"):
-            missing_count += 1
+            histories.append({"num": num, "filename": fn, "df": df})
+            loaded.append(fn)
+            miss = 0
+        elif st in ("not_found", "empty"):
+            miss += 1
         else:
-            print(f"[STOP] {filename} の読み込みに失敗。")
-            return histories, loaded_files, False
+            return histories, loaded, False
         num += 1
-    return histories, loaded_files, True
+    return histories, loaded, True
 
 
 def fetch_room_df(port):
@@ -349,54 +305,40 @@ def fetch_room_df(port):
     if not dfs:
         raise ValueError("テーブルなし")
     df = dfs[0].fillna("")
-    if df.empty:
-        raise ValueError("空テーブル")
-    required_cols = ['順番', '曲名（ファイル名）']
-    missing_cols = [c for c in required_cols if c not in df.columns]
-    if missing_cols:
-        raise ValueError(f"必要カラム不足: {missing_cols}")
+    if df.empty or '順番' not in df.columns or '曲名（ファイル名）' not in df.columns:
+        raise ValueError("カラム不足")
     df = df.replace(r'\s*詳細を見る ▼', '', regex=True)
     df['部屋主'] = room_map[port]
     df['取得日'] = current_date_str
     return df
 
 
-# --- 既存履歴の読み込み ---
+# --- 既存履歴読み込み ---
 history_records, loaded_history_files, history_load_ok = load_all_history_files()
-if loaded_history_files:
-    print(f"履歴ファイルを読み込みました: {', '.join(loaded_history_files)}")
-else:
-    print("履歴ファイルなし。")
-
+print(f"履歴ファイル: {loaded_history_files}")
 history_dfs = [h['df'] for h in history_records]
 full_history_before_update = cleanup_history_df(pd.concat(history_dfs, ignore_index=True)) if history_dfs else pd.DataFrame()
 
-# --- 2. 新しいデータ取得 ---
-target_ports = list(room_map.keys())
+# --- 新データ取得 ---
+print("データ取得中...")
 new_data_frames = []
-failed_ports = []
 fetched_ports = []
-
-print("データを取得中...")
+target_ports = list(room_map.keys())
 max_workers = min(ROOM_FETCH_WORKERS, max(1, len(target_ports)))
-with ThreadPoolExecutor(max_workers=max_workers) as executor:
-    future_to_port = {executor.submit(fetch_room_df, port): port for port in target_ports}
-    for future in as_completed(future_to_port):
-        port = future_to_port[future]
-        room_name = room_map.get(port, "不明")
+with ThreadPoolExecutor(max_workers=max_workers) as ex:
+    futures = {ex.submit(fetch_room_df, p): p for p in target_ports}
+    for f in as_completed(futures):
+        port = futures[f]
         try:
-            df = future.result()
+            df = f.result()
             new_data_frames.append(df)
             fetched_ports.append(port)
-            print(f"[Fetch] OK {port} ({room_name}) rows={len(df)}")
         except Exception as e:
-            failed_ports.append((port, str(e)))
-            print(f"[Fetch] SKIP {port} ({room_name}) {e}")
+            print(f"[Fetch SKIP] {port}: {e}")
 
-print(f"[Fetch] 成功ポート: {len(fetched_ports)} / {len(target_ports)}")
+print(f"成功: {len(fetched_ports)}/{len(target_ports)}")
 
 if not new_data_frames:
-    print("[Fetch] 取得成功データなし。")
     full_df = full_history_before_update
 else:
     new_df = cleanup_history_df(pd.concat(new_data_frames, ignore_index=True))
@@ -404,13 +346,9 @@ else:
     if dedup_cols:
         new_df = new_df.drop_duplicates(subset=dedup_cols, keep='last')
         new_df = cleanup_history_df(new_df)
-    print(f"[Fetch] 今回収集: {len(new_df)} 行")
 
     if not history_load_ok:
-        if full_history_before_update.empty:
-            full_df = new_df
-        else:
-            full_df = cleanup_history_df(pd.concat([full_history_before_update, new_df], ignore_index=True))
+        full_df = cleanup_history_df(pd.concat([full_history_before_update, new_df], ignore_index=True)) if not full_history_before_update.empty else new_df
     else:
         existing_keys = set(make_dedup_key(full_history_before_update, for_history_compare=True).tolist()) if not full_history_before_update.empty else set()
         new_keys = make_dedup_key(new_df, for_history_compare=True)
@@ -418,10 +356,9 @@ else:
         new_unique_df = cleanup_history_df(new_unique_df)
 
         if new_unique_df.empty:
-            print("追加対象なし。")
             full_df = full_history_before_update
         else:
-            print(f"追加対象: {len(new_unique_df)} 行")
+            print(f"追加: {len(new_unique_df)} 行")
             if history_records:
                 active_num = history_records[-1]['num']
                 active_df = history_records[-1]['df']
@@ -434,355 +371,282 @@ else:
 
             remaining_df = new_unique_df.reset_index(drop=True)
             saved_parts = {}
-            save_ok = True
-
             while not remaining_df.empty:
-                active_filename = get_history_filename(active_num)
-                current_df = cleanup_history_df(active_df)
-                remaining_capacity = HISTORY_MAX_ROWS - len(current_df)
-                if remaining_capacity <= 0:
+                fn = get_history_filename(active_num)
+                cur = cleanup_history_df(active_df)
+                cap = HISTORY_MAX_ROWS - len(cur)
+                if cap <= 0:
                     active_num += 1
                     active_df = pd.DataFrame()
                     continue
-                append_part = remaining_df.iloc[:remaining_capacity].copy()
-                next_df = cleanup_history_df(pd.concat([current_df, append_part], ignore_index=True))
-                if save_df_to_gas_checked(active_filename, next_df, min_existing_rows=len(current_df)):
-                    print(f"[History] {active_filename} +{len(append_part)}行 → {len(next_df)}行")
-                    saved_parts[active_num] = next_df
-                    remaining_df = remaining_df.iloc[remaining_capacity:].reset_index(drop=True)
+                part = remaining_df.iloc[:cap].copy()
+                nxt = cleanup_history_df(pd.concat([cur, part], ignore_index=True))
+                if save_df_to_gas_checked(fn, nxt, min_existing_rows=len(cur)):
+                    saved_parts[active_num] = nxt
+                    remaining_df = remaining_df.iloc[cap:].reset_index(drop=True)
                     if not remaining_df.empty:
                         active_num += 1
                         active_df = pd.DataFrame()
                     else:
-                        active_df = next_df
+                        active_df = nxt
                 else:
-                    print(f"[STOP] {active_filename} 保存失敗。")
-                    save_ok = False
+                    print(f"[STOP] {fn}")
                     break
 
-            merged_history_by_num = {h['num']: h['df'] for h in history_records}
-            merged_history_by_num.update(saved_parts)
-            full_df = cleanup_history_df(pd.concat([merged_history_by_num[n] for n in sorted(merged_history_by_num)], ignore_index=True)) if merged_history_by_num else pd.DataFrame()
+            merged = {h['num']: h['df'] for h in history_records}
+            merged.update(saved_parts)
+            full_df = cleanup_history_df(pd.concat([merged[n] for n in sorted(merged)], ignore_index=True)) if merged else pd.DataFrame()
 
 if full_df is None or full_df.empty:
     full_df = pd.DataFrame()
 else:
     full_df = cleanup_history_df(full_df)
 
-print(f"全履歴データ合計: {len(full_df)} 行")
+print(f"全履歴: {len(full_df)} 行")
 
-# ==========================================
-# オフラインリスト読み込み
-# ==========================================
+# --- オフライン読込 ---
 offline_targets = []
-print(f"GitHubからオフラインリストを読み込み...")
-for filename in OFFLINE_FILES:
-    offline_df = load_df_from_github(filename)
-    if not offline_df.empty:
-        offline_df = offline_df.fillna("")
-        if '曲名' in offline_df.columns:
-            targets = [normalize_offline_text(str(x)) for x in offline_df['曲名'].tolist()]
-            offline_targets.extend(targets)
-            print(f"  -> {filename}: {len(targets)}件")
-print(f"オフライン合計: {len(offline_targets)}")
+for fn in OFFLINE_FILES:
+    odf = load_df_from_github(fn)
+    if not odf.empty and '曲名' in odf.columns:
+        offline_targets.extend([normalize_offline_text(str(x)) for x in odf['曲名'].fillna("").tolist()])
 
-
-# ==========================================
-# 集計データ作成
-# ==========================================
+# --- 集計用ソース ---
 analysis_source_df = full_df.copy()
 if not analysis_source_df.empty:
     analysis_source_df['dt_obj'] = pd.to_datetime(analysis_source_df['取得日'], errors='coerce')
     analysis_source_df = analysis_source_df.dropna(subset=['dt_obj'])
     analysis_source_df['norm_filename'] = analysis_source_df['曲名（ファイル名）'].apply(normalize_text)
 
-    def get_rescued_workname(row):
-        raw_work = str(row['作品名']) if pd.notna(row['作品名']) else ""
-        raw_song = str(row['曲名（ファイル名）']) if pd.notna(row['曲名（ファイル名）']) else ""
-        if raw_work.strip() in ["-", "−", "", "nan"]:
-            match = re.search(r'【(.*?)】', raw_song)
-            if match:
-                return normalize_text(match.group(1))
-        return normalize_text(raw_work)
+    def _resc(row):
+        rw = str(row['作品名']) if pd.notna(row['作品名']) else ""
+        rs = str(row['曲名（ファイル名）']) if pd.notna(row['曲名（ファイル名）']) else ""
+        if rw.strip() in ["-", "−", "", "nan"]:
+            m = re.search(r'【(.*?)】', rs)
+            if m:
+                return normalize_text(m.group(1))
+        return normalize_text(rw)
 
-    if '作品名' in analysis_source_df.columns:
-        analysis_source_df['norm_workname'] = analysis_source_df.apply(get_rescued_workname, axis=1)
-    else:
-        analysis_source_df['norm_workname'] = ""
-
-    exclude_keywords = ['test', 'テスト', 'システム', 'admin', 'System']
+    analysis_source_df['norm_workname'] = analysis_source_df.apply(_resc, axis=1) if '作品名' in analysis_source_df.columns else ""
+    excl = ['test', 'テスト', 'システム', 'admin', 'System']
     full_history = analysis_source_df[
-        (~analysis_source_df['歌った人'].astype(str).apply(lambda x: any(k in x for k in exclude_keywords)))
+        ~analysis_source_df['歌った人'].astype(str).apply(lambda x: any(k in x for k in excl))
     ].sort_values('dt_obj').reset_index(drop=True)
 else:
     full_history = pd.DataFrame()
 
 
-# --- Cool Analysis 読み込み ---
-cool_file = "cool_analysis.csv"
-raw_df = load_df_from_gas(cool_file, header=None)
-
+# --- Cool解析 ---
+raw_df = load_df_from_gas("cool_analysis.csv", header=None)
 categorized_data = {}
 if not raw_df.empty:
-    try:
-        raw_df = raw_df.fillna("").drop_duplicates(keep='last')
-        current_category = None
-        for idx, row in raw_df.iterrows():
-            if not any(str(x).strip() for x in row):
-                continue
-            col0 = str(row[0]).strip()
-            is_category_line = any(cat in col0 for cat in ALLOWED_CATEGORIES) and "作品名" not in col0
-            if is_category_line:
-                current_category = col0
-                if current_category not in categorized_data:
-                    categorized_data[current_category] = []
-                continue
-            if "作品名" in col0:
-                continue
-            if current_category is None:
-                continue
-            anime = str(row[0]).strip() if len(row) > 0 else ""
-            type_ = str(row[1]).strip() if len(row) > 1 else ""
-            artist = str(row[2]).strip() if len(row) > 2 else ""
-            song = str(row[3]).strip() if len(row) > 3 else ""
-            if not anime and not song:
-                continue
-            categorized_data[current_category].append({
-                "anime": anime, "type": type_, "artist": artist, "song": song
-            })
-    except Exception as e:
-        print(f"Cool解析エラー: {e}")
+    raw_df = raw_df.fillna("").drop_duplicates(keep='last')
+    cur_cat = None
+    for idx, row in raw_df.iterrows():
+        if not any(str(x).strip() for x in row):
+            continue
+        col0 = str(row[0]).strip()
+        is_cat = any(c in col0 for c in ALLOWED_CATEGORIES) and "作品名" not in col0
+        if is_cat:
+            cur_cat = col0
+            categorized_data.setdefault(cur_cat, [])
+            continue
+        if "作品名" in col0 or cur_cat is None:
+            continue
+        anime = str(row[0]).strip() if len(row) > 0 else ""
+        type_ = str(row[1]).strip() if len(row) > 1 else ""
+        artist = str(row[2]).strip() if len(row) > 2 else ""
+        song = str(row[3]).strip() if len(row) > 3 else ""
+        if not anime and not song:
+            continue
+        categorized_data[cur_cat].append({"anime": anime, "type": type_, "artist": artist, "song": song})
 
 
 def is_song_created(item):
-    target_song_norm = normalize_text(item["song"])
-    target_song_raw_norm = normalize_offline_text(item["song"])
-    target_anime_norm = normalize_text(item["anime"])
-    creation_count = 0
-    if target_song_norm:
-        for offline_str in offline_targets:
-            if (target_song_norm in offline_str) or (target_song_raw_norm in offline_str):
-                if target_anime_norm:
-                    if target_anime_norm in offline_str:
-                        creation_count += 1
+    sn = normalize_text(item["song"])
+    sr = normalize_offline_text(item["song"])
+    wn = normalize_text(item["anime"])
+    cnt = 0
+    if sn:
+        for s in offline_targets:
+            if (sn in s) or (sr in s):
+                if wn:
+                    if wn in s:
+                        cnt += 1
                 else:
-                    creation_count += 1
-    return creation_count
+                    cnt += 1
+    return cnt
 
 
-def compute_match_for_item(item, history_df):
-    """アイテム毎にhistory_df内のマッチ行のインデックスを返す"""
-    if history_df.empty:
+def compute_match_for_item(item, hdf):
+    if hdf.empty:
         return []
-    target_song_norm = normalize_text(item["song"])
-    target_anime_norm = normalize_text(item["anime"])
-    song_match_mask = check_match(target_song_norm, history_df['norm_filename'])
-    anime_match_mask = (
-        history_df['norm_filename'].str.contains(re.escape(target_anime_norm), case=False, na=False) |
-        history_df['norm_workname'].str.contains(re.escape(target_anime_norm), case=False, na=False)
-    ) if target_anime_norm else pd.Series([False] * len(history_df))
-    if target_song_norm and target_anime_norm:
-        final_mask = song_match_mask & anime_match_mask
-    elif target_song_norm:
-        final_mask = song_match_mask
-    elif target_anime_norm:
-        final_mask = anime_match_mask
+    sn = normalize_text(item["song"])
+    wn = normalize_text(item["anime"])
+    sm = check_match(sn, hdf['norm_filename'])
+    am = (
+        hdf['norm_filename'].str.contains(re.escape(wn), case=False, na=False) |
+        hdf['norm_workname'].str.contains(re.escape(wn), case=False, na=False)
+    ) if wn else pd.Series([False] * len(hdf))
+    if sn and wn:
+        mask = sm & am
+    elif sn:
+        mask = sm
+    elif wn:
+        mask = am
     else:
         return []
-    return history_df.index[final_mask].tolist()
+    return hdf.index[mask].tolist()
 
 
-# --- 集計対象期間 ---
 COOL_START = pd.to_datetime("2026/01/01")
 COOL_END = pd.to_datetime("2026/06/30")
 target_history = full_history[
     (full_history['dt_obj'] >= COOL_START) & (full_history['dt_obj'] <= COOL_END)
 ] if not full_history.empty else pd.DataFrame()
 
-
-# --- カテゴリごとに作品単位でグルーピング ---
 cool_data_for_js = {}
-
-for category in ALLOWED_CATEGORIES:
-    items = categorized_data.get(category, [])
+for cat in ALLOWED_CATEGORIES:
+    items = categorized_data.get(cat, [])
     if not items:
-        cool_data_for_js[category] = {"works": [], "max_count": 0, "max_user": 0}
+        cool_data_for_js[cat] = {"works": [], "max_count": 0, "max_user": 0}
         continue
-
-    # アイテムごとに count, user_count, creation 計算
-    items_enriched = []
-    for item in items:
-        match_idx = compute_match_for_item(item, target_history) if not target_history.empty else []
-        if match_idx:
-            matched = target_history.loc[match_idx]
-            count = len(matched)
-            user_count = matched['歌った人'].nunique()
+    enriched = []
+    for it in items:
+        idx = compute_match_for_item(it, target_history) if not target_history.empty else []
+        if idx:
+            mt = target_history.loc[idx]
+            cnt = len(mt)
+            uc = mt['歌った人'].nunique()
         else:
-            count = 0
-            user_count = 0
-        cc = is_song_created(item)
-        items_enriched.append({
-            **item,
-            "count": count,
-            "user_count": user_count,
-            "creation_count": cc
-        })
-
-    # 作品名でグループ化
-    items_enriched.sort(key=lambda x: x['anime'])
+            cnt = 0
+            uc = 0
+        enriched.append({**it, "count": cnt, "user_count": uc, "creation_count": is_song_created(it)})
+    enriched.sort(key=lambda x: x['anime'])
     works = []
-    for anime_name, group_iter in groupby(items_enriched, key=lambda x: x['anime']):
-        group = list(group_iter)
-        op_n = sum(1 for g in group if 'OP' in g['type'].upper())
-        ed_n = sum(1 for g in group if 'ED' in g['type'].upper())
-        in_n = sum(1 for g in group if 'IN' in g['type'].upper())
-        total_count = sum(g['count'] for g in group)
-        total_user = sum(g['user_count'] for g in group)
+    for anime_name, gi in groupby(enriched, key=lambda x: x['anime']):
+        g = list(gi)
         works.append({
             "anime": anime_name,
-            "songs": group,
-            "op_n": op_n, "ed_n": ed_n, "in_n": in_n,
-            "total_count": total_count,
-            "total_user": total_user
+            "songs": g,
+            "op_n": sum(1 for x in g if 'OP' in x['type'].upper()),
+            "ed_n": sum(1 for x in g if 'ED' in x['type'].upper()),
+            "in_n": sum(1 for x in g if 'IN' in x['type'].upper()),
+            "total_count": sum(x['count'] for x in g),
+            "total_user": sum(x['user_count'] for x in g)
         })
-
-    max_count = max([w['total_count'] for w in works], default=0)
-    max_user = max([w['total_user'] for w in works], default=0)
-    cool_data_for_js[category] = {
+    cool_data_for_js[cat] = {
         "works": works,
-        "max_count": max_count,
-        "max_user": max_user
+        "max_count": max([w['total_count'] for w in works], default=0),
+        "max_user": max([w['total_user'] for w in works], default=0)
     }
 
-print("クール集計データ生成完了。")
-
-
-# ==========================================
-# ランキング (歌唱数・歌唱人数)
-# ==========================================
+# --- ランキング ---
 ranking_data_by_cat = {}
-for category in ALLOWED_CATEGORIES:
-    cool = cool_data_for_js.get(category, {"works": []})
+for cat in ALLOWED_CATEGORIES:
     flat = []
-    for w in cool['works']:
+    for w in cool_data_for_js.get(cat, {"works": []})['works']:
         for s in w['songs']:
             if s['count'] > 0:
                 flat.append({
-                    "anime": w['anime'],
-                    "song": s['song'],
-                    "artist": s['artist'],
-                    "type": s['type'],
-                    "count": s['count'],
-                    "user_count": s['user_count']
+                    "anime": w['anime'], "song": s['song'], "artist": s['artist'],
+                    "type": s['type'], "count": s['count'], "user_count": s['user_count']
                 })
-    ranking_data_by_cat[category] = flat
+    ranking_data_by_cat[cat] = flat
 
 
-# ==========================================
-# 推移（急上昇）計算: 2026年春アニメのみ
-# ==========================================
+# --- 推移 ---
 trend_data_for_js = {}
-target_cool_works = cool_data_for_js.get(TREND_TARGET_CATEGORY, {"works": []})['works']
-
-# フラット化
+target_works = cool_data_for_js.get(TREND_TARGET_CATEGORY, {"works": []})['works']
 trend_items = []
-for w in target_cool_works:
+for w in target_works:
     for s in w['songs']:
-        trend_items.append({
-            "anime": w['anime'],
-            "song": s['song'],
-            "artist": s['artist'],
-            "type": s['type']
-        })
+        trend_items.append({"anime": w['anime'], "song": s['song'], "artist": s['artist'], "type": s['type']})
 
-now_dt = pd.Timestamp(now.replace(tzinfo=None).date()) + pd.Timedelta(days=1)  # exclusive end
+now_dt = pd.Timestamp(now.replace(tzinfo=None).date()) + pd.Timedelta(days=1)
 
-for period_days in TREND_PERIOD_OPTIONS:
-    cur_start = now_dt - pd.Timedelta(days=period_days)
-    cur_end = now_dt
-    prev_start = cur_start - pd.Timedelta(days=period_days)
-    prev_end = cur_start
-
+for pd_days in TREND_PERIOD_OPTIONS:
+    cs = now_dt - pd.Timedelta(days=pd_days)
+    ce = now_dt
+    ps = cs - pd.Timedelta(days=pd_days)
+    pe = cs
     if not full_history.empty:
-        cur_history = full_history[(full_history['dt_obj'] >= cur_start) & (full_history['dt_obj'] < cur_end)]
-        prev_history = full_history[(full_history['dt_obj'] >= prev_start) & (full_history['dt_obj'] < prev_end)]
-        all_history_for_rank = full_history[(full_history['dt_obj'] >= COOL_START) & (full_history['dt_obj'] <= COOL_END)]
+        cur_h = full_history[(full_history['dt_obj'] >= cs) & (full_history['dt_obj'] < ce)]
+        prv_h = full_history[(full_history['dt_obj'] >= ps) & (full_history['dt_obj'] < pe)]
+        all_h = full_history[(full_history['dt_obj'] >= COOL_START) & (full_history['dt_obj'] <= COOL_END)]
     else:
-        cur_history = pd.DataFrame()
-        prev_history = pd.DataFrame()
-        all_history_for_rank = pd.DataFrame()
+        cur_h = pd.DataFrame()
+        prv_h = pd.DataFrame()
+        all_h = pd.DataFrame()
 
-    item_stats = []
+    stats = []
     for it in trend_items:
-        cur_idx = compute_match_for_item(it, cur_history) if not cur_history.empty else []
-        prev_idx = compute_match_for_item(it, prev_history) if not prev_history.empty else []
-        all_idx = compute_match_for_item(it, all_history_for_rank) if not all_history_for_rank.empty else []
-        cur_count = len(cur_idx)
-        prev_count = len(prev_idx)
-        cur_user = cur_history.loc[cur_idx]['歌った人'].nunique() if cur_idx else 0
-        all_count = len(all_idx)
-        all_user = all_history_for_rank.loc[all_idx]['歌った人'].nunique() if all_idx else 0
-        delta = cur_count - prev_count
-        is_new = (cur_count > 0 and prev_count == 0)
-        item_stats.append({
-            **it,
-            "cur_count": cur_count,
-            "cur_user": cur_user,
-            "prev_count": prev_count,
-            "delta": delta,
-            "is_new": is_new,
-            "all_count": all_count,
-            "all_user": all_user
+        ci = compute_match_for_item(it, cur_h) if not cur_h.empty else []
+        pi = compute_match_for_item(it, prv_h) if not prv_h.empty else []
+        ai = compute_match_for_item(it, all_h) if not all_h.empty else []
+        cc = len(ci)
+        pc = len(pi)
+        cu = cur_h.loc[ci]['歌った人'].nunique() if ci else 0
+        ac = len(ai)
+        au = all_h.loc[ai]['歌った人'].nunique() if ai else 0
+        stats.append({
+            **it, "cur_count": cc, "cur_user": cu,
+            "prev_count": pc, "delta": cc - pc,
+            "is_new": (cc > 0 and pc == 0),
+            "all_count": ac, "all_user": au
         })
 
-    # 全体ランキング(歌唱数)で現在順位
-    sorted_for_rank = sorted([x for x in item_stats if x['all_count'] > 0],
-                             key=lambda x: (-x['all_count'], -x['all_user']))
-    rank_map = {}
-    prev_val = None
-    cur_rank = 0
-    for i, it in enumerate(sorted_for_rank):
+    sf = sorted([x for x in stats if x['all_count'] > 0],
+                key=lambda x: (-x['all_count'], -x['all_user']))
+    rmap = {}
+    pv = None
+    cr = 0
+    for i, it in enumerate(sf):
         v = it['all_count']
-        if v != prev_val:
-            cur_rank = i + 1
-            prev_val = v
-        rank_map[(it['anime'], it['song'])] = cur_rank
+        if v != pv:
+            cr = i + 1
+            pv = v
+        rmap[(it['anime'], it['song'])] = cr
+    for it in stats:
+        it['rank_now'] = rmap.get((it['anime'], it['song']), 0)
 
-    for it in item_stats:
-        it['rank_now'] = rank_map.get((it['anime'], it['song']), 0)
-
-    surge_count = sum(1 for x in item_stats if x['delta'] > 0)
-    new_in = sum(1 for x in item_stats if x['is_new'])
-    max_delta = max([x['delta'] for x in item_stats], default=0)
-
-    # 急上昇順
-    surge_sorted = sorted([x for x in item_stats if x['delta'] != 0 or x['cur_count'] > 0],
+    surge_count = sum(1 for x in stats if x['delta'] > 0)
+    new_in = sum(1 for x in stats if x['is_new'])
+    max_delta = max([x['delta'] for x in stats], default=0)
+    sorted_items = sorted([x for x in stats if x['delta'] != 0 or x['cur_count'] > 0],
                           key=lambda x: (-x['delta'], -x['cur_count']))
-
-    trend_data_for_js[str(period_days)] = {
+    trend_data_for_js[str(pd_days)] = {
         "kpi": {"surge_count": surge_count, "new_in": new_in, "max_delta": max_delta},
-        "items": surge_sorted
+        "items": sorted_items[:TREND_PICKUP_TOTAL]
     }
 
 
-# ==========================================
-# image_map.json 読み込み（Drive画像紐付け）
-# ==========================================
 image_map = load_json_from_gas("image_map.json")
 if not isinstance(image_map, dict):
     image_map = {}
-print(f"image_map: {sum(len(v) for v in image_map.values()) if isinstance(image_map, dict) else 0} entries")
 
 
-# ==========================================
-# 履歴データをJSへ埋め込む
-# ==========================================
+# --- ★修正: history_for_js は full_df 全行から構築（dt_obj filterしない） ---
 history_for_js = []
-if not full_history.empty:
-    h_subset = full_history[['取得日', '部屋主', '順番', '曲名（ファイル名）', '作品名', '歌手名', '歌った人', 'norm_filename', 'norm_workname']].copy()
-    h_subset = h_subset.fillna("")
-    h_subset['順番'] = h_subset['順番'].astype(str)
-    for _, r in h_subset.iterrows():
+if not full_df.empty:
+    h = full_df.copy().fillna("")
+    for c in ['取得日', '部屋主', '順番', '曲名（ファイル名）', '作品名', '歌手名', '歌った人']:
+        if c not in h.columns:
+            h[c] = ""
+    h['順番'] = h['���番'].astype(str)
+    h['_sn'] = h['曲名（ファイル名）'].apply(normalize_text)
+
+    def _resc2(row):
+        rw = str(row['作品名']) if pd.notna(row['作品名']) else ""
+        rs = str(row['曲名（ファイル名）']) if pd.notna(row['曲名（ファイル名）']) else ""
+        if rw.strip() in ["-", "−", "", "nan"]:
+            m = re.search(r'【(.*?)】', rs)
+            if m:
+                return normalize_text(m.group(1))
+        return normalize_text(rw)
+
+    h['_wn'] = h.apply(_resc2, axis=1)
+    for _, r in h.iterrows():
         history_for_js.append({
             "d": str(r['取得日']),
             "rm": str(r['部屋主']),
@@ -791,17 +655,14 @@ if not full_history.empty:
             "wk": str(r['作品名']),
             "ar": str(r['歌手名']),
             "u": str(r['歌った人']),
-            "sn": str(r['norm_filename']),
-            "wn": str(r['norm_workname'])
+            "sn": str(r['_sn']),
+            "wn": str(r['_wn'])
         })
 
-# 部屋一覧
+print(f"history_for_js件数: {len(history_for_js)}")
+
 unique_rooms = sorted(list(set(room_map.values())))
 
-
-# ==========================================
-# JSON シリアライズ
-# ==========================================
 cool_json = json.dumps(cool_data_for_js, ensure_ascii=False)
 ranking_json = json.dumps(ranking_data_by_cat, ensure_ascii=False)
 trend_json = json.dumps(trend_data_for_js, ensure_ascii=False, default=str)
@@ -813,382 +674,363 @@ trend_periods_json = json.dumps(TREND_PERIOD_OPTIONS, ensure_ascii=False)
 trend_target_json = json.dumps(TREND_TARGET_CATEGORY, ensure_ascii=False)
 
 
-# ==========================================
-# HTML 生成
-# ==========================================
 html_content = r"""<!DOCTYPE html>
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Karaoke Dashboard</title>
-<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root{
-  --primary:#1f2937; --accent:#6366f1; --accent-2:#7c3aed; --accent-soft:#a5b4fc;
+  --primary:#1f2937; --accent:#6366f1; --accent-2:#7c3aed; --accent-soft:#a5b4fc; --accent-bg:#eef2ff;
   --bg:#f5f5fa; --panel:#fff; --text:#1f2937; --text-sub:#6b7280; --text-mute:#9ca3af;
   --border:#e5e7eb; --border-soft:#eef0f3;
-  --green:#10b981; --green-bg:#ecfdf5; --red:#ef4444; --amber:#f59e0b;
+  --green:#10b981; --green-bg:#ecfdf5; --green-bd:#a7f3d0;
+  --orange:#f97316; --orange-bg:#fff7ed; --orange-bd:#fed7aa;
+  --red:#ef4444; --amber:#f59e0b;
   --gold:#f59e0b; --silver:#9ca3af; --bronze:#d97706;
-  --radius:10px; --radius-lg:14px;
-  --maxw:760px;
+  --radius:8px; --radius-lg:12px;
+  --maxw:600px;
 }
 *{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
 html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
-  font-family:"Inter","Noto Sans JP","Helvetica Neue",Arial,sans-serif;font-size:14px;line-height:1.45;
-  -webkit-font-smoothing:antialiased;}
-body{padding-bottom:20px}
+  font-family:"Inter","Noto Sans JP","Helvetica Neue",Arial,sans-serif;
+  font-size:15px;line-height:1.5;
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+  text-rendering:optimizeLegibility;
+  font-feature-settings:"palt" 1;
+}
+body{padding-bottom:24px}
+img{image-rendering:auto;-ms-interpolation-mode:bicubic}
+button{font-family:inherit;font-size:inherit}
+input,select{font-family:inherit;font-size:inherit}
 a{color:inherit;text-decoration:none}
-button{font-family:inherit}
 
-/* ---------- Header ---------- */
-.app-header{
-  max-width:var(--maxw);margin:0 auto;padding:14px 16px 0 16px;
-  display:flex;align-items:center;justify-content:space-between;
-}
-.brand{font-size:20px;font-weight:800;color:var(--primary);letter-spacing:0.01em}
-.bell{
-  width:34px;height:34px;border-radius:50%;background:#fff;border:1px solid var(--border);
-  display:flex;align-items:center;justify-content:center;color:var(--text-sub);position:relative;cursor:default;
-}
-.bell::after{content:"";position:absolute;top:8px;right:9px;width:7px;height:7px;background:var(--accent);border-radius:50%}
+/* Header */
+.app-header{max-width:var(--maxw);margin:0 auto;padding:16px 16px 0 16px}
+.brand{font-size:22px;font-weight:800;color:var(--primary);letter-spacing:-0.01em}
 
-/* Top settings cards */
+/* Top settings */
 .top-cards{
-  max-width:var(--maxw);margin:10px auto 0;padding:0 16px;
+  max-width:var(--maxw);margin:12px auto 0;padding:0 16px;
   display:grid;grid-template-columns:1fr 1fr;gap:10px;
 }
 .top-card{
-  background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;
+  background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 12px;
   display:flex;align-items:center;gap:10px;
 }
 .top-card .ico{
-  width:34px;height:34px;border-radius:50%;background:#eef2ff;color:var(--accent);
+  width:34px;height:34px;border-radius:8px;background:var(--accent-bg);color:var(--accent);
   display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;
 }
-.top-card .lbl{font-size:11.5px;color:var(--text-sub);margin-bottom:2px}
-.top-card .val{display:flex;align-items:center;gap:6px}
+.top-card .lbl{font-size:11.5px;color:var(--text-sub);margin-bottom:2px;font-weight:500}
 .top-card input,.top-card select{
-  border:none;background:transparent;font-weight:700;font-size:15px;color:var(--primary);outline:none;width:100%;
+  border:none;background:transparent;font-weight:700;font-size:15px;color:var(--primary);
+  outline:none;width:100%;cursor:pointer;
 }
-.top-card select{cursor:pointer;font-size:14px}
-.top-card input[type=number]{width:90px}
+.top-card input[type=number]{cursor:text}
 
 /* Tabs */
 .tabs-wrap{max-width:var(--maxw);margin:14px auto 0;padding:0 16px}
-.tabs{
-  display:flex;gap:0;background:transparent;border-bottom:1px solid var(--border);overflow-x:auto;
-  scrollbar-width:none;
-}
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
 .tabs::-webkit-scrollbar{display:none}
 .tab-btn{
-  padding:10px 12px;border:none;background:none;color:var(--text-sub);font-weight:600;font-size:13px;
-  white-space:nowrap;cursor:pointer;border-bottom:2px solid transparent;display:inline-flex;align-items:center;gap:5px;
+  padding:10px 12px;border:none;background:none;color:var(--text-sub);
+  font-weight:600;font-size:13.5px;white-space:nowrap;cursor:pointer;
+  border-bottom:2px solid transparent;display:inline-flex;align-items:center;gap:5px;
   transition:color .15s, border-color .15s;
 }
 .tab-btn:hover{color:var(--primary)}
 .tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
-.tab-btn i{font-size:13px}
 
-/* Toolbar (per-tab) */
+/* Toolbar */
 .tab-toolbar{max-width:var(--maxw);margin:12px auto 0;padding:0 16px;display:flex;flex-direction:column;gap:8px}
 .toolbar-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .search-pill{
-  flex:1;min-width:0;background:#fff;border:1px solid var(--border);border-radius:999px;padding:9px 14px;
+  flex:1;min-width:0;background:#fff;border:1px solid var(--border);border-radius:10px;padding:9px 14px;
   display:flex;align-items:center;gap:8px;
 }
-.search-pill input{flex:1;border:none;outline:none;font-size:13.5px;background:transparent;min-width:0}
+.search-pill input{flex:1;border:none;outline:none;font-size:14px;background:transparent;min-width:0}
 .search-pill i{color:var(--text-mute)}
 .icon-btn{
-  width:38px;height:38px;border-radius:10px;background:#fff;border:1px solid var(--border);
+  width:40px;height:40px;border-radius:10px;background:#fff;border:1px solid var(--border);
   display:flex;align-items:center;justify-content:center;color:var(--text-sub);cursor:pointer;flex-shrink:0;
+  font-size:14px;
 }
 .icon-btn:hover{color:var(--accent);border-color:var(--accent-soft)}
 .icon-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 
 .pill-select{
-  background:#fff;border:1px solid var(--border);border-radius:999px;padding:7px 14px;font-size:13px;
+  background:#fff;border:1px solid var(--border);border-radius:10px;padding:9px 14px;font-size:13.5px;
   display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-weight:600;color:var(--primary);
-  appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='3'><polyline points='6 9 12 15 18 9'/></svg>");
-  background-repeat:no-repeat;background-position:right 12px center;padding-right:30px;
+  appearance:none;-webkit-appearance:none;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+  background-repeat:no-repeat;background-position:right 12px center;padding-right:34px;
+}
+.pill-text{
+  background:#fff;border:1px solid var(--border);border-radius:10px;padding:9px 14px;font-size:13.5px;
+  font-weight:600;color:var(--primary);display:inline-flex;align-items:center;gap:6px;
 }
 
 .dl-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
 .dl-btn{
-  background:linear-gradient(180deg,var(--accent),var(--accent-2));color:#fff;border:none;border-radius:999px;
-  padding:7px 14px;font-size:12.5px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;
+  background:linear-gradient(180deg,var(--accent),var(--accent-2));color:#fff;border:none;border-radius:8px;
+  padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;
 }
 .dl-btn.ghost{background:#fff;color:var(--accent);border:1px solid var(--accent-soft)}
 .dl-btn:hover{filter:brightness(1.05)}
 
 .update-line{
-  max-width:var(--maxw);margin:6px auto 0;padding:0 16px;
+  max-width:var(--maxw);margin:8px auto 0;padding:0 16px;
   display:flex;justify-content:flex-end;font-size:11.5px;color:var(--text-mute);
 }
-
 .count-line{
-  max-width:var(--maxw);margin:8px auto 0;padding:0 16px;
-  font-size:13px;color:var(--text-sub);font-weight:600;display:flex;align-items:center;gap:6px;
+  max-width:var(--maxw);margin:10px auto 0;padding:0 16px;
+  font-size:13.5px;color:var(--text-sub);font-weight:600;display:flex;align-items:center;gap:6px;
 }
 .count-line i{color:var(--accent)}
 
-/* ---------- Tab content container ---------- */
-.tab-content{display:none;max-width:var(--maxw);margin:0 auto;padding:8px 16px 80px 16px}
+/* Tab content */
+.tab-content{display:none;max-width:var(--maxw);margin:0 auto;padding:8px 16px 80px}
 .tab-content.active{display:block}
 
-/* ---------- Card (common) ---------- */
+/* ===== Type pills (OP/ED/IN unified colors) ===== */
+.type-pill{
+  display:inline-flex;align-items:center;gap:4px;padding:2px 8px;font-size:10.5px;font-weight:700;
+  border-radius:4px;letter-spacing:.02em;
+}
+.type-pill b{font-weight:800}
+.type-pill.tp-op{background:var(--accent-bg);border:1px solid #e0e7ff;color:var(--accent)}
+.type-pill.tp-ed{background:var(--orange-bg);border:1px solid var(--orange-bd);color:var(--orange)}
+.type-pill.tp-in{background:var(--green-bg);border:1px solid var(--green-bd);color:var(--green)}
+.type-pill.tp-none{background:#f3f4f6;border:1px solid var(--border);color:var(--text-sub)}
+
+/* Card common */
 .card{
   background:#fff;border:1px solid var(--border);border-radius:var(--radius);
-  margin-top:8px;overflow:hidden;
-  transition:border-color .15s, box-shadow .15s;
+  margin-top:8px;overflow:hidden;transition:border-color .15s, box-shadow .15s;
 }
 .card.expanded{border-color:var(--accent-soft);box-shadow:0 4px 12px rgba(99,102,241,.08)}
-.card-head{
-  padding:12px;display:flex;align-items:flex-start;gap:10px;cursor:pointer;
-}
 .num-badge{
-  width:28px;height:28px;border-radius:50%;background:linear-gradient(180deg,var(--accent),var(--accent-2));
-  color:#fff;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0;
-  box-shadow:0 2px 6px rgba(99,102,241,.3);
+  width:30px;height:30px;border-radius:50%;background:linear-gradient(180deg,var(--accent),var(--accent-2));
+  color:#fff;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;box-shadow:0 2px 6px rgba(99,102,241,.25);
 }
 .num-badge.gold{background:linear-gradient(180deg,#fde68a,#f59e0b);color:#78350f;box-shadow:0 2px 6px rgba(245,158,11,.3)}
 .num-badge.silver{background:linear-gradient(180deg,#e5e7eb,#9ca3af);color:#1f2937}
 .num-badge.bronze{background:linear-gradient(180deg,#fed7aa,#d97706);color:#7c2d12}
-.card-body{flex:1;min-width:0}
 .card-chev{color:var(--text-mute);transition:transform .2s;font-size:12px;align-self:center}
 .card.expanded .card-chev{transform:rotate(180deg)}
-.card-detail{display:none;border-top:1px solid var(--border-soft);background:#fafbff}
+.card-detail{display:none;border-top:1px solid var(--border-soft);background:#fbfbfd}
 .card.expanded .card-detail{display:block}
 
-/* ---------- Setlist card ---------- */
-.sl-top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:2px}
+/* ===== Setlist card ===== */
+.sl-card-head{padding:12px 14px;display:flex;align-items:flex-start;gap:12px;cursor:pointer}
+.sl-body{flex:1;min-width:0}
+.sl-top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px}
 .room-tag{
-  display:inline-block;padding:2px 8px;font-size:11px;font-weight:600;color:var(--accent);
-  background:#eef2ff;border:1px solid #e0e7ff;border-radius:5px;line-height:1.3;
+  display:inline-block;padding:2px 8px;font-size:11px;font-weight:600;
+  border-radius:5px;line-height:1.4;border:1px solid;
 }
 .sl-date{font-size:12px;color:var(--text-mute);white-space:nowrap;font-variant-numeric:tabular-nums}
-.sl-song{font-weight:700;font-size:15px;color:var(--primary);margin:4px 0 2px;
+.sl-song{font-weight:700;font-size:15.5px;color:var(--primary);margin:2px 0 2px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sl-meta{font-size:12px;color:var(--text-sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sl-meta .sep{margin:0 6px;color:var(--text-mute)}
 
-/* card-detail rows */
-.detail-table{padding:8px 12px}
+.detail-table{padding:10px 14px}
 .detail-row{
-  display:grid;grid-template-columns:90px 1fr;gap:8px;padding:6px 8px;
-  background:#fff;border-radius:6px;margin-bottom:4px;align-items:start;
+  display:grid;grid-template-columns:88px 1fr;gap:8px;padding:7px 10px;
+  background:#fff;border-radius:6px;margin-bottom:5px;align-items:start;
+  border:1px solid var(--border-soft);
 }
 .detail-row .lbl{font-size:11.5px;color:var(--accent);font-weight:600;display:flex;align-items:center;gap:5px}
-.detail-row .lbl i{font-size:11px}
-.detail-row .val{font-size:13px;color:var(--primary);word-break:break-word;line-height:1.4}
+.detail-row .val{font-size:13.5px;color:var(--primary);word-break:break-word;line-height:1.45}
+
+/* 控えめなボタン (modal trigger) */
 .confirm-btn{
   display:flex;align-items:center;justify-content:center;gap:8px;
-  margin:8px 12px 12px;padding:11px 16px;
-  background:linear-gradient(180deg,var(--accent),var(--accent-2));color:#fff;
-  border:none;border-radius:8px;font-weight:600;font-size:13.5px;cursor:pointer;width:calc(100% - 24px);
+  margin:8px 14px 12px;padding:8px 14px;
+  background:#f3f4f6;color:var(--text-sub);
+  border:1px solid var(--border);border-radius:8px;
+  font-weight:600;font-size:12.5px;cursor:pointer;width:calc(100% - 28px);
 }
-.confirm-btn i.fa-arrow-right,.confirm-btn i.fa-chevron-right{margin-left:auto}
-.confirm-btn:hover{filter:brightness(1.05)}
+.confirm-btn:hover{background:#eef2ff;color:var(--accent);border-color:var(--accent-soft)}
+.confirm-btn i.fa-chevron-right{margin-left:auto;font-size:10px}
 
-/* ---------- Cool ---------- */
-.cool-head-row{display:flex;align-items:flex-start;gap:10px}
-.cool-anime-block{flex:1;min-width:0}
-.cool-anime{font-weight:700;font-size:14.5px;color:var(--primary);line-height:1.35;
-  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.cool-types{margin-top:6px;display:flex;gap:5px;flex-wrap:wrap}
-.type-pill{
-  display:inline-flex;align-items:center;gap:4px;padding:2px 8px;font-size:10.5px;font-weight:700;
-  border-radius:4px;color:var(--text-sub);background:#f3f4f6;border:1px solid var(--border);
+/* Pagination */
+.pager{
+  display:flex;justify-content:center;align-items:center;gap:6px;margin-top:14px;flex-wrap:wrap;
 }
-.type-pill b{color:var(--primary)}
-.type-pill.has{background:#eef2ff;border-color:#e0e7ff;color:var(--accent)}
-
-.metric-block{display:flex;gap:10px;align-items:center}
-.metric{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:46px}
-.metric .lbl{font-size:10.5px;color:var(--text-sub);font-weight:600}
-.metric .val{font-size:13px;font-weight:800;color:var(--primary)}
-.dot-grid{
-  display:grid;grid-template-columns:repeat(3,6px);grid-template-rows:repeat(3,6px);gap:2px;
+.pager button{
+  background:#fff;border:1px solid var(--border);border-radius:8px;padding:6px 12px;
+  font-size:13px;font-weight:600;color:var(--text-sub);cursor:pointer;min-width:36px;
 }
-.dot{width:6px;height:6px;background:#e5e7eb;border-radius:1px}
-.dot.fu{background:var(--green)}
-.dot.fc{background:var(--accent)}
+.pager button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.pager button:disabled{opacity:.4;cursor:not-allowed}
+.pager .info{font-size:12px;color:var(--text-mute);margin:0 8px}
 
-/* Cool detail (songs) */
+/* ===== Cool ===== */
+.cool-head{
+  padding:10px 12px;display:grid;grid-template-columns:30px 50px 1fr auto;gap:12px;align-items:center;cursor:pointer;
+}
+.cool-thumb{
+  width:50px;height:50px;border-radius:8px;background:#e5e7eb;overflow:hidden;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;color:var(--text-mute);font-size:18px;
+}
+.cool-thumb img{width:100%;height:100%;object-fit:cover}
+.cool-info{min-width:0}
+.cool-anime{font-weight:700;font-size:14.5px;color:var(--primary);line-height:1.3;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cool-types{margin-top:5px;display:flex;gap:4px;flex-wrap:wrap}
+.cool-metrics{display:flex;gap:14px;align-items:center;padding-left:6px}
+.flat-metric{display:flex;align-items:center;gap:6px}
+.flat-metric .icon-circle{
+  width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:13px;flex-shrink:0;
+}
+.flat-metric .icon-circle.user{background:var(--accent-bg);color:var(--accent)}
+.flat-metric .icon-circle.song{background:var(--orange-bg);color:var(--orange)}
+.flat-metric .v{display:flex;flex-direction:column;line-height:1.05}
+.flat-metric .v b{font-size:17px;font-weight:800;color:var(--primary);font-variant-numeric:tabular-nums}
+.flat-metric .v small{font-size:10px;color:var(--text-sub);font-weight:600}
+
+/* Cool detail (songs list) */
 .song-row{
-  display:grid;grid-template-columns:36px 1fr auto;gap:10px;padding:8px 12px;
+  display:grid;grid-template-columns:40px 1fr auto;gap:10px;padding:9px 14px;
   border-bottom:1px solid var(--border-soft);align-items:center;
 }
 .song-row:last-child{border-bottom:none}
-.song-type{
-  display:inline-flex;align-items:center;justify-content:center;
-  min-width:32px;padding:3px 6px;font-size:10.5px;font-weight:800;
-  border-radius:4px;color:var(--accent);background:#eef2ff;border:1px solid #e0e7ff;
-}
-.song-info{min-width:0}
+.song-info-wrap{min-width:0}
 .song-name{font-weight:700;font-size:13.5px;color:var(--primary);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3}
 .song-artist{font-size:11.5px;color:var(--text-sub);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
-.song-metrics{display:flex;gap:8px;align-items:center}
-.song-confirm{
-  text-align:center;padding:10px 12px 12px;
-}
-.show-all-link{
-  display:flex;align-items:center;justify-content:center;gap:8px;padding:9px 12px;
-  border-top:1px solid var(--border-soft);font-size:12.5px;color:var(--text-sub);font-weight:600;cursor:pointer;
-  background:#fff;
-}
-.show-all-link:hover{color:var(--accent)}
+.song-metrics{display:flex;gap:10px;align-items:center}
+.song-metrics .flat-metric .icon-circle{width:26px;height:26px;font-size:11.5px}
+.song-metrics .flat-metric .v b{font-size:14px}
 
-/* ---------- Ranking ---------- */
+/* ===== Ranking ===== */
 .rank-card-top3{
-  background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);margin-top:10px;overflow:hidden;
+  background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);margin-top:10px;padding:16px 18px;
 }
-.rank-card-top3.gold{background:linear-gradient(180deg,#fffbeb 0%,#fff 60%)}
+.rank-card-top3.gold{background:linear-gradient(180deg,#fffbeb 0%,#fff 60%);border-color:#fde68a}
 .rank-card-top3.silver{background:linear-gradient(180deg,#f9fafb 0%,#fff 60%)}
-.rank-card-top3.bronze{background:linear-gradient(180deg,#fff7ed 0%,#fff 60%)}
-.rank-top3-head{padding:14px;display:flex;gap:12px;align-items:flex-start;cursor:pointer}
-.rank-crown{font-size:18px;margin-bottom:2px}
+.rank-card-top3.bronze{background:linear-gradient(180deg,#fff7ed 0%,#fff 60%);border-color:#fed7aa}
+.rank-top3-row{display:grid;grid-template-columns:64px 1fr;gap:18px;align-items:start}
+.rank-top3-badgewrap{display:flex;flex-direction:column;align-items:center;gap:4px;position:relative}
+.rank-crown{font-size:20px;line-height:1}
 .rank-crown.gold{color:var(--gold)}
 .rank-crown.silver{color:var(--silver)}
 .rank-crown.bronze{color:var(--bronze)}
 .rank-top3-num{
-  width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-  font-weight:800;font-size:18px;color:#fff;flex-shrink:0;
-  border:3px solid #fff;box-shadow:0 0 0 2px var(--accent),0 4px 8px rgba(99,102,241,.3);
+  width:50px;height:50px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-weight:800;font-size:20px;color:#fff;
+  border:3px solid #fff;box-shadow:0 0 0 2px var(--accent),0 4px 10px rgba(99,102,241,.3);
   background:linear-gradient(180deg,var(--accent),var(--accent-2));
 }
-.rank-top3-num.gold{box-shadow:0 0 0 2px var(--gold),0 4px 8px rgba(245,158,11,.3);background:linear-gradient(180deg,#fbbf24,#f59e0b)}
-.rank-top3-num.silver{box-shadow:0 0 0 2px var(--silver),0 4px 8px rgba(156,163,175,.3);background:linear-gradient(180deg,#d1d5db,#9ca3af)}
-.rank-top3-num.bronze{box-shadow:0 0 0 2px var(--bronze),0 4px 8px rgba(217,119,6,.3);background:linear-gradient(180deg,#f97316,#d97706)}
-.rank-top3-info{flex:1;min-width:0}
-.rank-top3-song{font-weight:800;font-size:18px;color:var(--primary);
-  word-break:break-word;line-height:1.3}
-.rank-top3-anime{font-size:12.5px;color:var(--text-sub);margin-top:2px;line-height:1.3}
-.rank-top3-artist{font-size:12.5px;color:var(--text-sub);margin-top:1px}
+.rank-top3-num.gold{box-shadow:0 0 0 2px var(--gold),0 4px 10px rgba(245,158,11,.3);background:linear-gradient(180deg,#fbbf24,#f59e0b)}
+.rank-top3-num.silver{box-shadow:0 0 0 2px var(--silver),0 4px 10px rgba(156,163,175,.3);background:linear-gradient(180deg,#d1d5db,#9ca3af)}
+.rank-top3-num.bronze{box-shadow:0 0 0 2px var(--bronze),0 4px 10px rgba(217,119,6,.3);background:linear-gradient(180deg,#f97316,#d97706)}
+.rank-top3-info{min-width:0}
+.rank-top3-song{font-weight:800;font-size:18px;color:var(--primary);word-break:break-word;line-height:1.3}
+.rank-top3-anime{font-size:13px;color:var(--text-sub);margin-top:3px;line-height:1.35;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.rank-top3-artist{font-size:13px;color:var(--text-sub);margin-top:1px}
 .rank-top3-types{margin-top:8px;display:flex;gap:5px;flex-wrap:wrap}
 .rank-top3-metrics{
-  display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 14px 14px;
+  margin-top:14px;display:flex;gap:24px;align-items:center;padding-left:82px;
 }
-.rank-top3-metric{
-  background:#f9fafb;border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center;
-}
-.rank-top3-metric .ico{
-  width:32px;height:32px;border-radius:50%;background:#eef2ff;color:var(--accent);
-  display:flex;align-items:center;justify-content:center;margin:0 auto 4px;
-}
-.rank-top3-metric .ico.user{background:var(--green-bg);color:var(--green)}
-.rank-top3-metric .ico.song{background:#fff7ed;color:var(--amber)}
-.rank-top3-metric .lbl{font-size:11px;color:var(--text-sub);font-weight:600;margin-bottom:2px}
-.rank-top3-metric .val{font-size:22px;font-weight:800;color:var(--primary);font-variant-numeric:tabular-nums}
+.rank-top3-metrics .flat-metric .icon-circle{width:38px;height:38px;font-size:15px}
+.rank-top3-metrics .flat-metric .v b{font-size:22px}
 
-/* Normal rank card (4位以下) */
-.rank-card{
-  background:#fff;border:1px solid var(--border);border-radius:var(--radius);margin-top:8px;overflow:hidden;
+/* Normal rank (4位以下) - フラット */
+.rank-row-flat{
+  background:#fff;border:1px solid var(--border);border-radius:var(--radius);margin-top:8px;
+  padding:12px 16px;display:grid;grid-template-columns:36px 1fr auto auto;gap:16px;align-items:center;
 }
-.rank-card.expanded{border-color:var(--accent-soft);box-shadow:0 4px 12px rgba(99,102,241,.08)}
-.rank-row{padding:10px 12px;display:grid;grid-template-columns:36px 1fr auto auto auto;gap:10px;align-items:center;cursor:pointer}
-.rank-info{min-width:0}
-.rank-anime{font-weight:700;font-size:14px;color:var(--primary);line-height:1.3;
+.rank-row-flat .rank-info{min-width:0}
+.rank-row-flat .rank-anime{font-weight:700;font-size:14px;color:var(--primary);line-height:1.3;
+  display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+.rank-row-flat .rank-sub{font-size:11.5px;color:var(--text-sub);margin-top:2px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.rank-sub{font-size:11.5px;color:var(--text-sub);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
-.rank-types-inline{margin-top:4px;display:flex;gap:4px;flex-wrap:wrap}
-.rank-mini-metric{
-  background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:5px 9px;text-align:center;min-width:54px;
-}
-.rank-mini-metric .lbl{font-size:9.5px;color:var(--text-sub);font-weight:600;display:flex;align-items:center;justify-content:center;gap:3px}
-.rank-mini-metric .lbl i{font-size:9.5px;color:var(--accent)}
-.rank-mini-metric .lbl i.user{color:var(--green)}
-.rank-mini-metric .lbl i.song{color:var(--amber)}
-.rank-mini-metric .val{font-size:14px;font-weight:800;color:var(--primary);font-variant-numeric:tabular-nums}
+.rank-row-flat .rank-types-inline{margin-top:4px;display:flex;gap:4px;flex-wrap:wrap}
 
-/* ---------- Trend ---------- */
+/* ===== Trend ===== */
 .trend-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
 .trend-stat{
-  background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:10px;text-align:center;
+  background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:11px 8px;text-align:center;
 }
 .trend-stat .ico{
-  width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;margin:0 auto 4px;
-  font-size:13px;
+  width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;margin:0 auto 5px;
+  font-size:14px;
 }
-.trend-stat .ico.up{background:#eef2ff;color:var(--accent)}
+.trend-stat .ico.up{background:var(--accent-bg);color:var(--accent)}
 .trend-stat .ico.new{background:var(--green-bg);color:var(--green)}
-.trend-stat .ico.max{background:#fff7ed;color:var(--amber)}
+.trend-stat .ico.max{background:var(--orange-bg);color:var(--orange)}
 .trend-stat .lbl{font-size:11px;color:var(--text-sub);font-weight:600}
-.trend-stat .val{font-size:18px;font-weight:800;color:var(--primary)}
+.trend-stat .val{font-size:18px;font-weight:800;color:var(--primary);margin-top:2px}
 .trend-stat .val small{font-size:11px;font-weight:600;color:var(--text-sub);margin-left:2px}
 
 .trend-pickup{
   background:linear-gradient(135deg,#eef2ff 0%,#fff 50%,#fef3c7 100%);
   border:1px solid var(--accent-soft);border-radius:var(--radius-lg);
-  margin-top:14px;padding:14px;position:relative;overflow:hidden;
+  margin-top:14px;padding:16px;
 }
-.trend-pickup-icon{
-  position:absolute;top:8px;right:10px;font-size:48px;color:rgba(99,102,241,.15);
-}
-.trend-pickup-head{display:flex;align-items:center;gap:6px;margin-bottom:8px;font-weight:700;font-size:13.5px;color:var(--primary)}
+.trend-pickup-head{display:flex;align-items:center;gap:6px;margin-bottom:10px;font-weight:700;font-size:13.5px;color:var(--primary)}
 .trend-pickup-head i{color:var(--red)}
-.trend-pickup-body{display:grid;grid-template-columns:80px 1fr auto;gap:12px;align-items:flex-start}
+.trend-pickup-body{display:grid;grid-template-columns:96px 1fr;gap:14px;align-items:flex-start}
 .thumb-square{
-  width:80px;height:80px;border-radius:10px;background:#e5e7eb;overflow:hidden;flex-shrink:0;
+  width:96px;height:96px;border-radius:10px;background:#e5e7eb;overflow:hidden;flex-shrink:0;
   display:flex;align-items:center;justify-content:center;color:var(--text-mute);font-size:24px;position:relative;
 }
 .thumb-square img{width:100%;height:100%;object-fit:cover}
-.thumb-square.large{width:96px;height:96px}
 .thumb-tag{
   position:absolute;top:0;left:0;background:linear-gradient(180deg,#fbbf24,#f59e0b);color:#78350f;
-  padding:2px 7px;font-size:10px;font-weight:800;border-radius:0 0 6px 0;letter-spacing:.05em;
+  padding:2px 7px;font-size:10px;font-weight:800;border-radius:0 0 6px 0;letter-spacing:.04em;
 }
 .tp-info{min-width:0}
-.tp-anime{font-weight:800;font-size:18px;color:var(--primary);line-height:1.25;word-break:break-word}
-.tp-artist{font-size:12px;color:var(--text-sub);margin-top:3px}
+.tp-song{font-weight:800;font-size:18px;color:var(--primary);line-height:1.25;word-break:break-word}
+.tp-anime{font-size:13px;color:var(--text-sub);margin-top:3px;font-weight:600;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.35}
+.tp-artist{font-size:12.5px;color:var(--text-sub);margin-top:1px}
 .tp-type{margin-top:6px}
-.tp-side{
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;text-align:center;
-}
-.tp-side .arrow{font-size:32px;color:var(--accent)}
-.tp-side .pre-label{font-size:10px;color:var(--text-sub);font-weight:600}
-.tp-side .delta{font-size:18px;font-weight:800;color:var(--accent)}
 
-.tp-stats{
-  display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:12px;
+.tp-metrics{
+  margin-top:14px;display:flex;gap:20px;align-items:center;padding-left:110px;
 }
-.tp-stat{background:#fff;border:1px solid var(--border);border-radius:10px;padding:8px;text-align:center}
-.tp-stat .lbl{font-size:10.5px;color:var(--text-sub);font-weight:600;display:flex;align-items:center;justify-content:center;gap:3px}
-.tp-stat .val{font-size:18px;font-weight:800;color:var(--primary);font-variant-numeric:tabular-nums}
-.tp-stat .lbl i{color:var(--accent)}
+.tp-metrics .flat-metric .icon-circle{width:36px;height:36px;font-size:14px}
+.tp-metrics .flat-metric .v b{font-size:20px}
 
 .notable-head{
   margin-top:18px;font-size:14px;font-weight:700;color:var(--primary);display:flex;align-items:center;gap:6px;
 }
 .notable-head i{color:var(--accent)}
 
-.notable-card{
-  background:#fff;border:1px solid var(--border);border-radius:var(--radius);margin-top:8px;overflow:hidden;
+.notable-row{
+  background:#fff;border:1px solid var(--border);border-radius:var(--radius);margin-top:8px;
+  padding:10px 14px;display:grid;grid-template-columns:30px 52px 1fr auto auto;gap:12px;align-items:center;
 }
-.notable-card.expanded{border-color:var(--accent-soft);box-shadow:0 4px 12px rgba(99,102,241,.08)}
-.notable-row{padding:10px 12px;display:grid;grid-template-columns:32px 56px 1fr auto auto auto auto;gap:8px;align-items:center;cursor:pointer}
-.notable-num{width:28px;height:28px;border-radius:50%;background:linear-gradient(180deg,var(--accent),var(--accent-2));color:#fff;font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center}
-.thumb-mini{width:48px;height:48px;border-radius:8px;background:#e5e7eb;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--text-mute)}
+.notable-num{
+  width:28px;height:28px;border-radius:50%;background:linear-gradient(180deg,var(--accent),var(--accent-2));
+  color:#fff;font-weight:800;font-size:12.5px;display:flex;align-items:center;justify-content:center;
+}
+.thumb-mini{width:50px;height:50px;border-radius:8px;background:#e5e7eb;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--text-mute);font-size:16px}
 .thumb-mini img{width:100%;height:100%;object-fit:cover}
 .notable-info{min-width:0}
-.notable-anime{font-weight:700;font-size:13px;color:var(--primary);
+.notable-anime{font-weight:700;font-size:13.5px;color:var(--primary);line-height:1.3;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.notable-artist{font-size:11px;color:var(--text-sub);
+.notable-artist{font-size:11.5px;color:var(--text-sub);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
-.notable-delta{font-size:13px;font-weight:800;color:var(--accent);background:#eef2ff;padding:3px 8px;border-radius:6px;white-space:nowrap}
-.notable-delta.new{color:var(--green);background:var(--green-bg)}
-.notable-mini-metric{
-  background:transparent;text-align:center;min-width:42px;
-}
-.notable-mini-metric .lbl{font-size:9.5px;color:var(--text-sub);display:flex;align-items:center;justify-content:center;gap:3px}
-.notable-mini-metric .val{font-size:13px;font-weight:800;color:var(--primary)}
-.notable-chev{color:var(--text-mute);font-size:11px}
+.notable-types{margin-top:4px;display:flex;gap:4px;flex-wrap:wrap}
 
-/* ---------- Modal ---------- */
+.notable-row .flat-metric .icon-circle{width:30px;height:30px;font-size:13px}
+.notable-row .flat-metric .v b{font-size:15px}
+
+/* Modal */
 .modal-overlay{
   display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(15,23,42,.6);
   z-index:1000;align-items:flex-end;justify-content:center;
@@ -1208,7 +1050,7 @@ button{font-family:inherit}
 }
 .modal-body{flex:1;overflow-y:auto;padding:8px 12px 16px;-webkit-overflow-scrolling:touch}
 .modal-summary{
-  background:#eef2ff;border-radius:8px;padding:9px 12px;margin:6px 0 10px;font-size:12.5px;color:var(--accent);font-weight:600;
+  background:var(--accent-bg);border-radius:8px;padding:9px 12px;margin:6px 0 10px;font-size:12.5px;color:var(--accent);font-weight:600;
 }
 .modal-row{
   background:#fff;border:1px solid var(--border-soft);border-radius:8px;padding:9px 12px;margin-bottom:6px;
@@ -1220,69 +1062,72 @@ button{font-family:inherit}
 .modal-row .meta{font-size:11.5px;color:var(--text-sub);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
-/* ---------- Filter popover ---------- */
+/* Filter popover (Setlist room filter) - 角丸長方形デザイン */
 .popover{
   display:none;position:absolute;top:100%;right:0;margin-top:6px;background:#fff;
   border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.1);
-  padding:12px;min-width:280px;max-width:320px;z-index:50;
+  padding:14px;width:300px;z-index:50;
 }
 .popover.open{display:block}
-.popover h4{margin:0 0 6px;font-size:12px;color:var(--text-sub);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
-.popover .opt{padding:7px 10px;border-radius:6px;cursor:pointer;font-size:13px;color:var(--primary)}
-.popover .opt:hover,.popover .opt.selected{background:#eef2ff;color:var(--accent);font-weight:600}
-.popover .opt.selected::before{content:"✓ ";color:var(--accent);font-weight:800}
-.popover hr{border:none;border-top:1px solid var(--border-soft);margin:10px 0}
-.room-chips{display:flex;flex-wrap:wrap;gap:5px;max-height:180px;overflow-y:auto}
-.room-chip{
-  display:inline-block;padding:4px 10px;font-size:11.5px;border-radius:999px;border:1px solid var(--border);
-  background:#fff;color:var(--text-sub);cursor:pointer;
+.popover h4{margin:0 0 8px;font-size:11.5px;color:var(--text-sub);font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+.popover .room-search{
+  width:100%;border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:13px;outline:none;margin-bottom:8px;
 }
-.room-chip.selected{background:var(--accent);color:#fff;border-color:var(--accent)}
-.popover .actions{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}
-.popover .btn-clear{background:#f3f4f6;color:var(--text-sub);border:none;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer}
-.popover .btn-apply{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer}
-
+.room-grid{
+  display:grid;grid-template-columns:1fr 1fr;gap:6px;max-height:240px;overflow-y:auto;
+}
+.room-chip{
+  display:flex;align-items:center;justify-content:center;padding:8px 10px;font-size:12px;
+  border-radius:8px;border:1px solid var(--border);background:#fff;color:var(--text-sub);cursor:pointer;
+  text-align:center;font-weight:500;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.room-chip:hover{border-color:var(--accent-soft)}
+.room-chip.selected{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
+.popover .actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
+.btn-clear{background:#f3f4f6;color:var(--text-sub);border:none;border-radius:8px;padding:7px 14px;font-size:12.5px;cursor:pointer;font-weight:600}
+.btn-apply{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12.5px;cursor:pointer;font-weight:600}
 .toolbar-rel{position:relative}
 
-/* ---------- Empty state ---------- */
-.empty{padding:30px 16px;text-align:center;color:var(--text-mute);font-size:13px}
+/* Empty */
+.empty{padding:30px 16px;text-align:center;color:var(--text-mute);font-size:13.5px}
 
-/* ---------- Env tab ---------- */
+/* ===== Env ===== */
 .env-section{margin-top:14px}
-.env-section h3{font-size:14px;font-weight:700;color:var(--primary);margin:0 0 8px;padding-left:8px;border-left:3px solid var(--accent)}
 .env-work-row{
   background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:6px;
   display:flex;gap:10px;align-items:center;
 }
-.env-work-thumb{width:48px;height:48px;border-radius:8px;background:#e5e7eb;overflow:hidden;display:flex;align-items:center;justify-content:center;color:var(--text-mute);flex-shrink:0}
+.env-work-thumb{width:50px;height:50px;border-radius:8px;background:#e5e7eb;overflow:hidden;display:flex;align-items:center;justify-content:center;color:var(--text-mute);flex-shrink:0;font-size:16px}
 .env-work-thumb img{width:100%;height:100%;object-fit:cover}
-.env-work-name{flex:1;font-weight:600;font-size:13px;color:var(--primary);min-width:0;
+.env-work-name{flex:1;font-weight:600;font-size:13.5px;color:var(--primary);min-width:0;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .env-upload-btn{
-  background:var(--accent);color:#fff;border:none;border-radius:8px;padding:7px 12px;font-size:12px;cursor:pointer;
+  background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 12px;font-size:12px;cursor:pointer;
   display:inline-flex;align-items:center;gap:5px;
 }
 .env-upload-btn:hover{filter:brightness(1.05)}
 .env-upload-btn input{display:none}
-.env-status{margin-top:6px;padding:8px 12px;background:#eef2ff;border-radius:6px;color:var(--accent);font-size:12px;display:none}
+.env-status{margin:8px 0;padding:9px 12px;background:var(--accent-bg);border-radius:8px;color:var(--accent);font-size:12.5px;display:none;font-weight:600}
 .env-status.show{display:block}
 
-/* ---------- Print ---------- */
+/* Print */
 @media print{
   *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
-  .app-header,.top-cards,.tabs-wrap,.tab-toolbar,.update-line,.count-line,.confirm-btn,.dl-row{display:none !important}
+  .app-header,.top-cards,.tabs-wrap,.tab-toolbar,.update-line,.count-line,.confirm-btn,.dl-row,.pager{display:none !important}
   body{padding:0}
   .tab-content{display:block !important;max-width:none}
-  .card,.rank-card,.notable-card{break-inside:avoid;page-break-inside:avoid}
+  .card{break-inside:avoid;page-break-inside:avoid}
   .card-detail{display:block !important}
-  .card.expanded .card-chev{transform:none}
   .card-chev{display:none}
 }
 
 @media (max-width:420px){
-  .top-cards{grid-template-columns:1fr 1fr}
-  .top-card{padding:8px 10px}
+  body{font-size:14.5px}
+  .top-cards{grid-template-columns:1fr 1fr;gap:8px}
   .tabs{padding:0}
+  .rank-top3-metrics{padding-left:0;justify-content:space-around}
+  .tp-metrics{padding-left:0;justify-content:space-around}
 }
 </style>
 </head>
@@ -1290,7 +1135,6 @@ button{font-family:inherit}
 
 <div class="app-header">
   <div class="brand">Karaoke Dashboard</div>
-  <div class="bell" title="通知"><i class="far fa-bell"></i></div>
 </div>
 
 <div class="top-cards">
@@ -1298,19 +1142,17 @@ button{font-family:inherit}
     <div class="ico"><i class="fas fa-network-wired"></i></div>
     <div style="flex:1;min-width:0">
       <div class="lbl">保存時ポート</div>
-      <div class="val"><input type="number" id="exportPort" value="11059"></div>
+      <input type="number" id="exportPort" value="11059">
     </div>
   </div>
   <div class="top-card">
     <div class="ico"><i class="fas fa-link"></i></div>
     <div style="flex:1;min-width:0">
       <div class="lbl">検索リンク</div>
-      <div class="val">
-        <select id="exportLinkType">
-          <option value="eve">Everything</option>
-          <option value="ykr">ゆかりすたー</option>
-        </select>
-      </div>
+      <select id="exportLinkType">
+        <option value="eve">Everything</option>
+        <option value="ykr">ゆかりすたー</option>
+      </select>
     </div>
   </div>
 </div>
@@ -1327,24 +1169,20 @@ button{font-family:inherit}
 
 <div class="update-line"><i class="far fa-clock" style="margin-right:4px"></i><span id="updateLine">__UPDATE__ 更新</span></div>
 
-<!-- ============ Setlist ============ -->
+<!-- Setlist -->
 <div class="tab-content active" id="tab-setlist">
   <div class="tab-toolbar">
     <div class="toolbar-row">
       <div class="search-pill">
         <i class="fas fa-search"></i>
-        <input type="text" id="slSearch" placeholder="曲名・作品名・歌手名・歌った人で検索">
+        <input type="text" id="slSearch" placeholder="曲名・作品名・歌手・歌った人で検索">
       </div>
       <div class="toolbar-rel">
-        <button class="icon-btn" id="slFilterBtn"><i class="fas fa-sliders-h"></i></button>
+        <button class="icon-btn" id="slFilterBtn"><i class="fas fa-filter"></i></button>
         <div class="popover" id="slPopover">
-          <h4>並び替え</h4>
-          <div class="opt selected" data-sort="date_desc">日付（新しい順） × 順番（大きい順）</div>
-          <div class="opt" data-sort="date_asc">日付（古い順） × 順番（小さい順）</div>
-          <div class="opt" data-sort="date_desc_order_asc">日付（新しい順） × 順番（小さい順）</div>
-          <hr>
-          <h4>部屋でフィルタ（複数選択可）</h4>
-          <div class="room-chips" id="slRoomChips"></div>
+          <h4>部屋でフィルタ</h4>
+          <input type="text" id="roomSearch" class="room-search" placeholder="部屋名で絞り込み">
+          <div class="room-grid" id="slRoomChips"></div>
           <div class="actions">
             <button class="btn-clear" id="slClearFilter">クリア</button>
             <button class="btn-apply" id="slApplyFilter">適用</button>
@@ -1353,14 +1191,15 @@ button{font-family:inherit}
       </div>
     </div>
     <div class="dl-row">
-      <button class="dl-btn ghost" onclick="downloadSetlistHTML()"><i class="fas fa-file-download"></i> セットリストHTML保存</button>
+      <button class="dl-btn ghost" onclick="downloadSetlistHTML()"><i class="fas fa-file-download"></i> HTML保存</button>
     </div>
   </div>
   <div class="count-line"><i class="fas fa-clipboard-list"></i><span id="slCount">0</span> 件</div>
   <div id="slList"></div>
+  <div class="pager" id="slPager"></div>
 </div>
 
-<!-- ============ Cool ============ -->
+<!-- Cool -->
 <div class="tab-content" id="tab-cool">
   <div class="tab-toolbar">
     <div class="toolbar-row">
@@ -1373,7 +1212,7 @@ button{font-family:inherit}
       </select>
     </div>
     <div class="dl-row">
-      <button class="dl-btn ghost" onclick="downloadCoolHTML('current')"><i class="fas fa-file-download"></i> このクールを保存</button>
+      <button class="dl-btn ghost" onclick="downloadCoolHTML('current')"><i class="fas fa-file-download"></i> このクール保存</button>
       <button class="dl-btn" onclick="downloadCoolHTML('all')"><i class="fas fa-file-download"></i> 全クール保存</button>
     </div>
   </div>
@@ -1381,7 +1220,7 @@ button{font-family:inherit}
   <div id="coolList"></div>
 </div>
 
-<!-- ============ Ranking ============ -->
+<!-- Ranking -->
 <div class="tab-content" id="tab-ranking">
   <div class="tab-toolbar">
     <div class="toolbar-row">
@@ -1392,7 +1231,7 @@ button{font-family:inherit}
       </select>
     </div>
     <div class="dl-row">
-      <button class="dl-btn ghost" onclick="downloadRankingHTML('current')"><i class="fas fa-file-download"></i> このクールを保存</button>
+      <button class="dl-btn ghost" onclick="downloadRankingHTML('current')"><i class="fas fa-file-download"></i> このクール保存</button>
       <button class="dl-btn" onclick="downloadRankingHTML('all')"><i class="fas fa-file-download"></i> 全クール保存</button>
     </div>
   </div>
@@ -1400,13 +1239,11 @@ button{font-family:inherit}
   <div id="rankList"></div>
 </div>
 
-<!-- ============ Trend ============ -->
+<!-- Trend -->
 <div class="tab-content" id="tab-trend">
   <div class="tab-toolbar">
     <div class="toolbar-row">
-      <select class="pill-select" id="trendCat" disabled></select>
-    </div>
-    <div class="toolbar-row">
+      <span class="pill-text"><i class="fas fa-snowflake" style="color:var(--accent)"></i> __TREND_CAT__</span>
       <select class="pill-select" id="trendPeriod"></select>
       <select class="pill-select" id="trendSort">
         <option value="surge">急上昇順</option>
@@ -1415,24 +1252,29 @@ button{font-family:inherit}
       </select>
     </div>
     <div class="dl-row">
-      <button class="dl-btn ghost" onclick="downloadTrendHTML()"><i class="fas fa-file-download"></i> 推移HTML保存</button>
+      <button class="dl-btn ghost" onclick="downloadTrendHTML()"><i class="fas fa-file-download"></i> HTML保存</button>
     </div>
   </div>
   <div id="trendBody"></div>
 </div>
 
-<!-- ============ Env ============ -->
+<!-- Env -->
 <div class="tab-content" id="tab-env">
-  <div class="count-line" style="margin-top:12px"><i class="fas fa-cog"></i> 作品サムネイル管理（クール毎にDriveフォルダへアップロード）</div>
+  <div class="tab-toolbar">
+    <div class="toolbar-row">
+      <select class="pill-select" id="envCat"></select>
+    </div>
+  </div>
+  <div class="count-line" style="margin-top:12px"><i class="fas fa-cog"></i> 作品サムネイル管理</div>
   <div class="env-status" id="envStatus"></div>
   <div id="envList"></div>
 </div>
 
-<!-- Modal -->
+<!-- Modal (setlist + cool only) -->
 <div class="modal-overlay" id="modalOverlay">
   <div class="modal">
     <div class="modal-head">
-      <div class="ttl" id="modalTitle">この曲を歌った人</div>
+      <div class="ttl" id="modalTitle"></div>
       <button class="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
     </div>
     <div class="modal-body" id="modalBody"></div>
@@ -1440,7 +1282,6 @@ button{font-family:inherit}
 </div>
 
 <script>
-// ====== Inline data ======
 const COOL_DATA = __COOL_JSON__;
 const RANK_DATA = __RANK_JSON__;
 const TREND_DATA = __TREND_JSON__;
@@ -1452,11 +1293,11 @@ const TREND_PERIODS = __TREND_PERIODS_JSON__;
 const TREND_TARGET_CAT = __TREND_TARGET_JSON__;
 const GAS_URL = "__GAS_URL__";
 const UPDATE_TS = "__UPDATE_TS__";
-const CURRENT_DATE = "__CURRENT_DATE__";
+const PAGE_SIZE = 200;
 
 document.getElementById('updateLine').innerText = UPDATE_TS + ' 更新';
 
-// ====== Utility ======
+// === Utility ===
 function jsNormalize(s){
   if(!s) return "";
   s = String(s).normalize('NFKC');
@@ -1469,18 +1310,39 @@ function jsNormalize(s){
   s = s.replace(/\s+/g, ' ').trim();
   return s.toUpperCase();
 }
-function escHtml(s){
-  return String(s||"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function escHtml(s){return String(s||"").replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function escAttr(s){return String(s||"").replace(/'/g,"&#39;").replace(/"/g,'&quot;');}
+
+// 部屋ハッシュ→HSL色
+function roomColor(name){
+  let h = 0;
+  for(let i=0;i<name.length;i++) h = (h*31 + name.charCodeAt(i)) & 0xffffffff;
+  const hue = Math.abs(h) % 360;
+  return {bg:`hsl(${hue},70%,95%)`, fg:`hsl(${hue},55%,38%)`, bd:`hsl(${hue},60%,85%)`};
 }
-function dotGrid(value, max, color){
-  const filled = max>0 ? Math.min(9, Math.round((value/max)*9)) : 0;
-  let h = '<span class="dot-grid">';
-  for(let i=0;i<9;i++){
-    h += `<span class="dot${i<filled?' '+color:''}"></span>`;
+function roomTagHtml(name){
+  const c = roomColor(name);
+  return `<span class="room-tag" style="background:${c.bg};color:${c.fg};border-color:${c.bd}">${escHtml(name)}</span>`;
+}
+
+// type → CSS class
+function typeClass(t){
+  if(!t) return 'tp-none';
+  const u = String(t).toUpperCase();
+  if(u.indexOf('OP')>=0) return 'tp-op';
+  if(u.indexOf('ED')>=0) return 'tp-ed';
+  if(u.indexOf('IN')>=0) return 'tp-in';
+  return 'tp-none';
+}
+function typePillHtml(t, count){
+  if(typeof count === 'number'){
+    const cls = typeClass(t);
+    return `<span class="type-pill ${cls}">${escHtml(t)} <b>${count}</b></span>`;
   }
-  h += '</span>';
-  return h;
+  const lbl = t || '-';
+  return `<span class="type-pill ${typeClass(t)}">${escHtml(lbl)}</span>`;
 }
+
 function getThumbUrl(cat, work){
   const m = IMAGE_MAP[cat];
   if(!m) return null;
@@ -1488,76 +1350,51 @@ function getThumbUrl(cat, work){
   if(!fid) return null;
   return `https://drive.google.com/thumbnail?id=${fid}&sz=w200`;
 }
-function buildSearchHref(word){
-  const port = document.getElementById('exportPort').value || '11059';
-  const linkType = document.getElementById('exportLinkType').value;
-  const path = linkType === 'ykr' ? 'search_listerdb_filelist.php?anyword=' : 'search.php?searchword=';
-  return `http://ykr.moe:${port}/${path}${encodeURIComponent(word)}`;
-}
-function findHistoryMatches(workName, songName){
-  const sn = jsNormalize(songName);
-  const wn = jsNormalize(workName);
-  if(!sn && !wn) return [];
+
+// History match
+function findHistoryMatches(workName,songName){
+  const sn=jsNormalize(songName);const wn=jsNormalize(workName);
+  if(!sn&&!wn) return [];
   return HISTORY.filter(h=>{
-    let songOk = false, workOk = false;
+    let songOk=false,workOk=false;
     if(sn){
-      // 同じ単語境界判定（簡易: アルファベットなら境界、それ以外は包含）
       if(/^[A-Z0-9 ]+$/.test(sn)){
-        const re = new RegExp('(?:^|[^A-Z0-9])' + sn.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + '(?:[^A-Z0-9]|$)','i');
-        songOk = re.test(h.sn);
-      } else {
-        songOk = h.sn.indexOf(sn) >= 0;
-      }
+        const re=new RegExp('(?:^|[^A-Z0-9])'+sn.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'(?:[^A-Z0-9]|$)','i');
+        songOk=re.test(h.sn);
+      } else songOk=h.sn.indexOf(sn)>=0;
     }
-    if(wn){
-      workOk = (h.sn.indexOf(wn) >= 0) || (h.wn.indexOf(wn) >= 0);
-    }
-    if(sn && wn) return songOk && workOk;
+    if(wn) workOk=(h.sn.indexOf(wn)>=0)||(h.wn.indexOf(wn)>=0);
+    if(sn&&wn) return songOk&&workOk;
     if(sn) return songOk;
     if(wn) return workOk;
     return false;
   });
 }
 
-// ====== Modal: 「この曲を歌った人」 ======
 function openSingersModal(workName, songName){
   const matches = findHistoryMatches(workName, songName);
   const userCounts = {};
   matches.forEach(m=>{
-    if(!userCounts[m.u]) userCounts[m.u] = {count:0, last:m.d, room:m.rm};
+    if(!userCounts[m.u]) userCounts[m.u]={count:0,last:m.d,room:m.rm};
     userCounts[m.u].count++;
-    if(m.d > userCounts[m.u].last) userCounts[m.u].last = m.d;
+    if(m.d>userCounts[m.u].last){userCounts[m.u].last=m.d;userCounts[m.u].room=m.rm;}
   });
-  const users = Object.entries(userCounts).sort((a,b)=>b[1].count - a[1].count);
-  const ttl = `${escHtml(songName)}<small>${escHtml(workName)} - ${matches.length}件 / ${users.length}人</small>`;
-  document.getElementById('modalTitle').innerHTML = ttl;
+  const users = Object.entries(userCounts).sort((a,b)=>b[1].count-a[1].count);
+  document.getElementById('modalTitle').innerHTML = escHtml(songName)+'<small>'+escHtml(workName)+' - '+matches.length+'件 / '+users.length+'人</small>';
   let body = `<div class="modal-summary"><i class="fas fa-users"></i> ${users.length}人がこの曲を歌っています（合計${matches.length}回）</div>`;
-  if(users.length === 0){
-    body += '<div class="empty">履歴が見つかりませんでした</div>';
-  } else {
-    users.forEach(([u, info])=>{
-      body += `<div class="modal-row">
-        <div class="top">
-          <div class="user"><i class="fas fa-microphone"></i> ${escHtml(u)} <span style="color:var(--accent);font-size:11.5px;margin-left:4px">×${info.count}</span></div>
-          <div class="date">${escHtml(info.last)}</div>
-        </div>
-        <div class="meta">最新: ${escHtml(info.room)}</div>
-      </div>`;
-    });
-  }
+  if(users.length===0) body += '<div class="empty">履歴が見つかりませんでした</div>';
+  else users.forEach(([u,info])=>{
+    body += `<div class="modal-row"><div class="top"><div class="user"><i class="fas fa-microphone"></i> ${escHtml(u)} <span style="color:var(--accent);font-size:11.5px;margin-left:4px">×${info.count}</span></div><div class="date">${escHtml(info.last)}</div></div><div class="meta">最新: ${escHtml(info.room)}</div></div>`;
+  });
   document.getElementById('modalBody').innerHTML = body;
   document.getElementById('modalOverlay').classList.add('active');
 }
-function closeModal(){
-  document.getElementById('modalOverlay').classList.remove('active');
-}
-document.getElementById('modalOverlay').addEventListener('click',e=>{
-  if(e.target.id === 'modalOverlay') closeModal();
-});
+function closeModal(){document.getElementById('modalOverlay').classList.remove('active');}
+document.getElementById('modalOverlay').addEventListener('click',e=>{if(e.target.id==='modalOverlay') closeModal();});
 
-// ====== Tabs ======
+// Tabs
 document.querySelectorAll('.tab-btn').forEach(b=>{
-  b.addEventListener('click', ()=>{
+  b.addEventListener('click',()=>{
     document.querySelectorAll('.tab-btn').forEach(x=>x.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(x=>x.classList.remove('active'));
     b.classList.add('active');
@@ -1565,17 +1402,15 @@ document.querySelectorAll('.tab-btn').forEach(b=>{
   });
 });
 
-// ====== Setlist ======
-const SETLIST = HISTORY.map((h,i)=>({...h, idx:i, _orderNum: parseFloat(h.o) || -Infinity}));
-let slState = {sort:'date_desc', rooms:new Set(), keyword:''};
+function toggleCard(headEl){headEl.parentElement.classList.toggle('expanded');}
 
-function renderSetlist(){
+// === Setlist ===
+const SETLIST = HISTORY.map((h,i)=>({...h, idx:i, _orderNum: parseFloat(h.o) || -Infinity}));
+let slState = {rooms:new Set(), keyword:'', page:1, filtered:[]};
+
+function applySlFilter(){
   let arr = SETLIST.slice();
-  // 部屋フィルタ
-  if(slState.rooms.size > 0){
-    arr = arr.filter(x => slState.rooms.has(x.rm));
-  }
-  // キーワード
+  if(slState.rooms.size>0) arr = arr.filter(x=>slState.rooms.has(x.rm));
   if(slState.keyword){
     const kws = slState.keyword.toUpperCase().replace(/　/g,' ').split(/\s+/).filter(Boolean);
     arr = arr.filter(x=>{
@@ -1583,39 +1418,42 @@ function renderSetlist(){
       return kws.every(k=>t.indexOf(k)>=0);
     });
   }
-  // ソート
+  // 固定ソート: 日付↓, 順番↓
   arr.sort((a,b)=>{
-    if(slState.sort==='date_desc'){
-      if(a.d!==b.d) return a.d<b.d?1:-1;
-      return b._orderNum - a._orderNum;
-    } else if(slState.sort==='date_asc'){
-      if(a.d!==b.d) return a.d<b.d?-1:1;
-      return a._orderNum - b._orderNum;
-    } else if(slState.sort==='date_desc_order_asc'){
-      if(a.d!==b.d) return a.d<b.d?1:-1;
-      return a._orderNum - b._orderNum;
-    }
-    return 0;
+    if(a.d!==b.d) return a.d<b.d?1:-1;
+    return b._orderNum - a._orderNum;
   });
+  slState.filtered = arr;
+  slState.page = 1;
+}
 
+function renderSetlist(){
+  applySlFilter();
+  drawSetlistPage();
+}
+function drawSetlistPage(){
+  const arr = slState.filtered;
   document.getElementById('slCount').innerText = arr.length.toLocaleString();
   const list = document.getElementById('slList');
-  if(arr.length === 0){
+  if(arr.length===0){
     list.innerHTML = '<div class="empty">該当データがありません</div>';
+    document.getElementById('slPager').innerHTML = '';
     return;
   }
-  // 描画上限（パフォーマンス）
-  const cap = 1000;
-  const slice = arr.slice(0, cap);
+  const totalPages = Math.ceil(arr.length / PAGE_SIZE);
+  if(slState.page > totalPages) slState.page = totalPages;
+  const startIdx = (slState.page - 1) * PAGE_SIZE;
+  const slice = arr.slice(startIdx, startIdx + PAGE_SIZE);
+
   let html = '';
-  slice.forEach((x,i)=>{
+  slice.forEach(x=>{
     const orderDisp = x.o || '';
-    html += `<div class="card" data-cardidx="${x.idx}">
-      <div class="card-head" onclick="toggleCard(this)">
+    html += `<div class="card">
+      <div class="sl-card-head" onclick="toggleCard(this)">
         <div class="num-badge">${escHtml(orderDisp)}</div>
-        <div class="card-body">
+        <div class="sl-body">
           <div class="sl-top">
-            <span class="room-tag">${escHtml(x.rm)}</span>
+            ${roomTagHtml(x.rm)}
             <span class="sl-date">${escHtml(x.d)}</span>
           </div>
           <div class="sl-song">${escHtml(x.sg)}</div>
@@ -1632,24 +1470,41 @@ function renderSetlist(){
           <div class="detail-row"><div class="lbl"><i class="fas fa-door-open"></i>部屋</div><div class="val">${escHtml(x.rm)}</div></div>
         </div>
         <button class="confirm-btn" onclick="event.stopPropagation();openSingersModal('${escAttr(x.wk)}','${escAttr(x.sg)}')">
-          <i class="fas fa-microphone"></i> この曲を歌った人を確認する <i class="fas fa-chevron-right"></i>
+          <i class="fas fa-users"></i> この曲を歌った人を確認 <i class="fas fa-chevron-right"></i>
         </button>
       </div>
     </div>`;
   });
-  if(arr.length > cap){
-    html += `<div class="empty">（表示上限 ${cap} 件 / 全 ${arr.length} 件）絞り込みで全件確認できます</div>`;
-  }
   list.innerHTML = html;
+  drawPager(totalPages);
+  window.scrollTo({top:0, behavior:'smooth'});
 }
-function escAttr(s){
-  return String(s||"").replace(/'/g,"&#39;").replace(/"/g,'&quot;');
+function drawPager(totalPages){
+  const p = document.getElementById('slPager');
+  if(totalPages<=1){p.innerHTML='';return;}
+  const cur = slState.page;
+  const win = 2;
+  let h = '';
+  h += `<button onclick="slGoPage(1)" ${cur===1?'disabled':''}>« 最初</button>`;
+  h += `<button onclick="slGoPage(${cur-1})" ${cur===1?'disabled':''}>‹</button>`;
+  let start = Math.max(1, cur-win);
+  let end = Math.min(totalPages, cur+win);
+  if(start>1) h += `<span class="info">…</span>`;
+  for(let i=start;i<=end;i++){
+    h += `<button onclick="slGoPage(${i})" class="${i===cur?'active':''}">${i}</button>`;
+  }
+  if(end<totalPages) h += `<span class="info">…</span>`;
+  h += `<button onclick="slGoPage(${cur+1})" ${cur===totalPages?'disabled':''}>›</button>`;
+  h += `<button onclick="slGoPage(${totalPages})" ${cur===totalPages?'disabled':''}>最後 »</button>`;
+  h += `<span class="info">${cur}/${totalPages}</span>`;
+  p.innerHTML = h;
 }
-function toggleCard(headEl){
-  headEl.parentElement.classList.toggle('expanded');
+function slGoPage(n){
+  slState.page = n;
+  drawSetlistPage();
 }
 
-// Setlist filter popover
+// Setlist popover
 const slPopover = document.getElementById('slPopover');
 const slFilterBtn = document.getElementById('slFilterBtn');
 slFilterBtn.addEventListener('click',e=>{
@@ -1658,36 +1513,31 @@ slFilterBtn.addEventListener('click',e=>{
   slFilterBtn.classList.toggle('active');
 });
 document.addEventListener('click',e=>{
-  if(!slPopover.contains(e.target) && e.target!==slFilterBtn){
+  if(!slPopover.contains(e.target) && e.target!==slFilterBtn && !slFilterBtn.contains(e.target)){
     slPopover.classList.remove('open');
     slFilterBtn.classList.remove('active');
   }
 });
-slPopover.querySelectorAll('.opt').forEach(o=>{
-  o.addEventListener('click',()=>{
-    slPopover.querySelectorAll('.opt').forEach(x=>x.classList.remove('selected'));
-    o.classList.add('selected');
-    slState.sort = o.dataset.sort;
-  });
-});
-// Build room chips
+
 const slRoomChips = document.getElementById('slRoomChips');
-ROOMS.forEach(r=>{
-  const c = document.createElement('span');
-  c.className = 'room-chip';
-  c.innerText = r;
-  c.addEventListener('click',()=>{
-    if(slState.rooms.has(r)){slState.rooms.delete(r); c.classList.remove('selected');}
-    else {slState.rooms.add(r); c.classList.add('selected');}
+function buildRoomChips(filter){
+  slRoomChips.innerHTML = '';
+  ROOMS.filter(r=>!filter || r.indexOf(filter)>=0).forEach(r=>{
+    const c = document.createElement('div');
+    c.className = 'room-chip' + (slState.rooms.has(r)?' selected':'');
+    c.innerText = r;
+    c.addEventListener('click',()=>{
+      if(slState.rooms.has(r)){slState.rooms.delete(r);c.classList.remove('selected');}
+      else{slState.rooms.add(r);c.classList.add('selected');}
+    });
+    slRoomChips.appendChild(c);
   });
-  slRoomChips.appendChild(c);
-});
+}
+buildRoomChips('');
+document.getElementById('roomSearch').addEventListener('input',e=>buildRoomChips(e.target.value.trim()));
 document.getElementById('slClearFilter').addEventListener('click',()=>{
   slState.rooms.clear();
-  slRoomChips.querySelectorAll('.room-chip').forEach(c=>c.classList.remove('selected'));
-  slPopover.querySelectorAll('.opt').forEach(x=>x.classList.remove('selected'));
-  slPopover.querySelector('[data-sort="date_desc"]').classList.add('selected');
-  slState.sort = 'date_desc';
+  buildRoomChips('');
   renderSetlist();
 });
 document.getElementById('slApplyFilter').addEventListener('click',()=>{
@@ -1695,193 +1545,159 @@ document.getElementById('slApplyFilter').addEventListener('click',()=>{
   slFilterBtn.classList.remove('active');
   renderSetlist();
 });
+let slSearchTimer = null;
 document.getElementById('slSearch').addEventListener('input',e=>{
   slState.keyword = e.target.value.trim();
-  renderSetlist();
+  clearTimeout(slSearchTimer);
+  slSearchTimer = setTimeout(renderSetlist, 200);
 });
 
-// ====== Cool ======
+// === Cool ===
 const coolCatSel = document.getElementById('coolCat');
 const coolSortSel = document.getElementById('coolSort');
-CATS.forEach(c=>{
-  const o = document.createElement('option');o.value=c;o.innerText=c;coolCatSel.appendChild(o);
-});
+CATS.forEach(c=>{const o=document.createElement('option');o.value=c;o.innerText=c;coolCatSel.appendChild(o);});
 coolCatSel.addEventListener('change', renderCool);
 coolSortSel.addEventListener('change', renderCool);
+
+function flatMetricHtml(label, value, kind){
+  const ic = kind==='user' ? '<i class="fas fa-users"></i>' : '<i class="fas fa-microphone"></i>';
+  return `<div class="flat-metric"><div class="v"><b>${value}</b><small>${label}</small></div><div class="icon-circle ${kind}">${ic}</div></div>`;
+}
+
+function buildCoolCard(w, rank, cat){
+  const thumbUrl = getThumbUrl(cat, w.anime);
+  const opTag = `<span class="type-pill tp-op">OP <b>${w.op_n}</b></span>`;
+  const edTag = `<span class="type-pill tp-ed">ED <b>${w.ed_n}</b></span>`;
+  const inTag = `<span class="type-pill tp-in">IN <b>${w.in_n}</b></span>`;
+  let songsHtml = '';
+  w.songs.forEach(s=>{
+    const sm = `${flatMetricHtml('人数',s.user_count,'user')}${flatMetricHtml('歌唱',s.count,'song')}`;
+    songsHtml += `<div class="song-row">
+      ${typePillHtml(s.type)}
+      <div class="song-info-wrap">
+        <div class="song-name">${escHtml(s.song)}</div>
+        <div class="song-artist">${escHtml(s.artist)}</div>
+      </div>
+      <div class="song-metrics">${sm}</div>
+    </div>`;
+  });
+  return `<div class="card">
+    <div class="cool-head" onclick="toggleCard(this)">
+      <div class="num-badge${rank===1?' gold':rank===2?' silver':rank===3?' bronze':''}">${rank}</div>
+      <div class="cool-thumb">${thumbUrl?`<img src="${thumbUrl}" alt="">`:'<i class="far fa-image"></i>'}</div>
+      <div class="cool-info">
+        <div class="cool-anime">${escHtml(w.anime)}</div>
+        <div class="cool-types">${opTag}${edTag}${inTag}</div>
+      </div>
+      <div class="cool-metrics">
+        ${flatMetricHtml('人数',w.total_user,'user')}
+        ${flatMetricHtml('歌唱数',w.total_count,'song')}
+      </div>
+    </div>
+    <div class="card-detail">${songsHtml}</div>
+  </div>`;
+}
 
 function renderCool(){
   const cat = coolCatSel.value;
   const sort = coolSortSel.value;
-  const data = COOL_DATA[cat] || {works:[], max_count:0, max_user:0};
+  const data = COOL_DATA[cat] || {works:[]};
   const works = data.works.slice();
-  if(sort === 'count') works.sort((a,b)=>b.total_count-a.total_count || b.total_user-a.total_user);
-  else if(sort === 'user') works.sort((a,b)=>b.total_user-a.total_user || b.total_count-a.total_count);
-  else if(sort === 'name') works.sort((a,b)=>a.anime.localeCompare(b.anime,'ja'));
-  else if(sort === 'created') works.sort((a,b)=>{
+  if(sort==='count') works.sort((a,b)=>b.total_count-a.total_count || b.total_user-a.total_user);
+  else if(sort==='user') works.sort((a,b)=>b.total_user-a.total_user || b.total_count-a.total_count);
+  else if(sort==='name') works.sort((a,b)=>a.anime.localeCompare(b.anime,'ja'));
+  else if(sort==='created') works.sort((a,b)=>{
     const ac = a.songs.reduce((s,x)=>s+(x.creation_count||0),0);
     const bc = b.songs.reduce((s,x)=>s+(x.creation_count||0),0);
-    return bc - ac;
+    return bc-ac;
   });
-  const maxC = data.max_count, maxU = data.max_user;
   document.getElementById('coolCount').innerText = works.length;
   const list = document.getElementById('coolList');
-  if(works.length === 0){
-    list.innerHTML = '<div class="empty">データがありません</div>';
-    return;
-  }
+  if(works.length===0){list.innerHTML='<div class="empty">データがありません</div>';return;}
   let html = '';
-  works.forEach((w,i)=>{
-    const rank = i+1;
-    const opTag = `<span class="type-pill${w.op_n>0?' has':''}">OP <b>${w.op_n}</b></span>`;
-    const edTag = `<span class="type-pill${w.ed_n>0?' has':''}">ED <b>${w.ed_n}</b></span>`;
-    const inTag = `<span class="type-pill${w.in_n>0?' has':''}">IN <b>${w.in_n}</b></span>`;
-    let songsHtml = '';
-    w.songs.forEach(s=>{
-      const sm = `<div class="metric"><div class="lbl">人数</div>${dotGrid(s.user_count,maxU,'fu')}<div class="val">${s.user_count}</div></div>
-                  <div class="metric"><div class="lbl">歌唱</div>${dotGrid(s.count,maxC,'fc')}<div class="val">${s.count}</div></div>`;
-      const tagShort = s.type ? s.type.toUpperCase().replace(/[^A-Z]/g,'').slice(0,2) || s.type : '';
-      songsHtml += `<div class="song-row">
-        <div class="song-type">${escHtml(tagShort||'-')}</div>
-        <div class="song-info">
-          <div class="song-name">${escHtml(s.song)}</div>
-          <div class="song-artist">${escHtml(s.artist)}</div>
-        </div>
-        <div class="song-metrics">${sm}</div>
-      </div>
-      <div class="song-confirm">
-        <button class="confirm-btn" style="margin:0;width:100%" onclick="event.stopPropagation();openSingersModal('${escAttr(w.anime)}','${escAttr(s.song)}')">
-          <i class="fas fa-microphone"></i> この曲を歌った人を確認する <i class="fas fa-chevron-right"></i>
-        </button>
-      </div>`;
-    });
-    html += `<div class="card">
-      <div class="card-head" onclick="toggleCard(this)">
-        <div class="num-badge${rank===1?' gold':rank===2?' silver':rank===3?' bronze':''}">${rank}</div>
-        <div class="card-body">
-          <div class="cool-head-row">
-            <div class="cool-anime-block">
-              <div class="cool-anime">${escHtml(w.anime)}</div>
-              <div class="cool-types">${opTag}${edTag}${inTag}</div>
-            </div>
-            <div class="metric-block">
-              <div class="metric"><div class="lbl">人数</div>${dotGrid(w.total_user,maxU,'fu')}<div class="val">${w.total_user}</div></div>
-              <div class="metric"><div class="lbl">歌唱数</div>${dotGrid(w.total_count,maxC,'fc')}<div class="val">${w.total_count}</div></div>
-            </div>
-          </div>
-        </div>
-        <i class="fas fa-chevron-down card-chev"></i>
-      </div>
-      <div class="card-detail">${songsHtml}</div>
-    </div>`;
-  });
+  works.forEach((w,i)=>html += buildCoolCard(w, i+1, cat));
   list.innerHTML = html;
 }
 
-// ====== Ranking ======
+// === Ranking (no folding, no modal) ===
 const rankCatSel = document.getElementById('rankCat');
 const rankModeSel = document.getElementById('rankMode');
-CATS.forEach(c=>{
-  const o = document.createElement('option');o.value=c;o.innerText=c;rankCatSel.appendChild(o);
-});
+CATS.forEach(c=>{const o=document.createElement('option');o.value=c;o.innerText=c;rankCatSel.appendChild(o);});
 rankCatSel.addEventListener('change', renderRanking);
 rankModeSel.addEventListener('change', renderRanking);
 
+function buildRankingTop20(cat, mode){
+  const all = (RANK_DATA[cat]||[]).slice();
+  if(mode==='count') all.sort((a,b)=>b.count-a.count || b.user_count-a.user_count);
+  else all.sort((a,b)=>b.user_count-a.user_count || b.count-a.count);
+  const top20=[];let pv=null,cr=0;
+  for(let i=0;i<all.length;i++){
+    const v = mode==='count' ? all[i].count : all[i].user_count;
+    if(v!==pv){cr=i+1;pv=v;}
+    if(cr>20) break;
+    top20.push({...all[i],rank:cr});
+  }
+  return top20;
+}
+function buildRankCardHtml(r){
+  const isTop3 = r.rank<=3;
+  const grade = r.rank===1?'gold':r.rank===2?'silver':r.rank===3?'bronze':'';
+  if(isTop3){
+    return `<div class="rank-card-top3 ${grade}">
+      <div class="rank-top3-row">
+        <div class="rank-top3-badgewrap">
+          <div class="rank-crown ${grade}"><i class="fas fa-crown"></i></div>
+          <div class="rank-top3-num ${grade}">${r.rank}</div>
+        </div>
+        <div class="rank-top3-info">
+          <div class="rank-top3-song">${escHtml(r.song)}</div>
+          <div class="rank-top3-anime">${escHtml(r.anime)}</div>
+          <div class="rank-top3-artist">${escHtml(r.artist)}</div>
+          <div class="rank-top3-types">${typePillHtml(r.type)}</div>
+        </div>
+      </div>
+      <div class="rank-top3-metrics">
+        ${flatMetricHtml('人数',r.user_count,'user')}
+        ${flatMetricHtml('歌唱数',r.count,'song')}
+      </div>
+    </div>`;
+  } else {
+    return `<div class="rank-row-flat">
+      <div class="num-badge">${r.rank}</div>
+      <div class="rank-info">
+        <div class="rank-anime">${escHtml(r.anime)}</div>
+        <div class="rank-sub">${escHtml(r.song)} / ${escHtml(r.artist)}</div>
+        <div class="rank-types-inline">${typePillHtml(r.type)}</div>
+      </div>
+      ${flatMetricHtml('人数',r.user_count,'user')}
+      ${flatMetricHtml('歌唱数',r.count,'song')}
+    </div>`;
+  }
+}
 function renderRanking(){
   const cat = rankCatSel.value;
   const mode = rankModeSel.value;
-  const all = (RANK_DATA[cat]||[]).slice();
-  if(mode === 'count') all.sort((a,b)=>b.count-a.count || b.user_count-a.user_count);
-  else all.sort((a,b)=>b.user_count-a.user_count || b.count-a.count);
-
-  const top20 = [];
-  let prevVal = null, curRank = 0;
-  for(let i=0;i<all.length;i++){
-    const v = mode==='count' ? all[i].count : all[i].user_count;
-    if(v !== prevVal){ curRank = i+1; prevVal = v; }
-    if(curRank > 20) break;
-    top20.push({...all[i], rank:curRank});
-  }
+  const top20 = buildRankingTop20(cat, mode);
   document.getElementById('rankCount').innerText = top20.length;
-
   const list = document.getElementById('rankList');
-  if(top20.length === 0){
-    list.innerHTML = '<div class="empty">ランキング対象データがありません</div>';
-    return;
-  }
-  let html = '';
-  top20.forEach((r,idx)=>{
-    const isTop3 = r.rank <= 3;
-    const grade = r.rank===1?'gold':r.rank===2?'silver':r.rank===3?'bronze':'';
-    if(isTop3){
-      html += `<div class="rank-card-top3 ${grade}">
-        <div class="rank-top3-head" onclick="toggleCard(this)">
-          <div style="display:flex;flex-direction:column;align-items:center">
-            <div class="rank-crown ${grade}"><i class="fas fa-crown"></i></div>
-            <div class="rank-top3-num ${grade}">${r.rank}</div>
-          </div>
-          <div class="rank-top3-info">
-            <div class="rank-top3-song">${escHtml(r.song)}</div>
-            <div class="rank-top3-anime">${escHtml(r.anime)}</div>
-            <div class="rank-top3-artist">${escHtml(r.artist)}</div>
-            <div class="rank-top3-types"><span class="type-pill has">${escHtml(r.type||'-')}</span></div>
-          </div>
-          <i class="fas fa-chevron-down card-chev"></i>
-        </div>
-        <div class="rank-top3-metrics">
-          <div class="rank-top3-metric"><div class="ico user"><i class="fas fa-users"></i></div><div class="lbl">人数</div><div class="val">${r.user_count}</div></div>
-          <div class="rank-top3-metric"><div class="ico song"><i class="fas fa-microphone"></i></div><div class="lbl">歌唱数</div><div class="val">${r.count}</div></div>
-        </div>
-        <div class="card-detail">
-          <button class="confirm-btn" onclick="event.stopPropagation();openSingersModal('${escAttr(r.anime)}','${escAttr(r.song)}')">
-            <i class="fas fa-users"></i> この曲を歌った人を確認する <i class="fas fa-chevron-right"></i>
-          </button>
-        </div>
-      </div>`;
-    } else {
-      html += `<div class="rank-card">
-        <div class="rank-row" onclick="toggleCard(this)">
-          <div class="num-badge">${r.rank}</div>
-          <div class="rank-info">
-            <div class="rank-anime">${escHtml(r.anime)}</div>
-            <div class="rank-sub">${escHtml(r.song)} / ${escHtml(r.artist)}</div>
-          </div>
-          <div class="rank-mini-metric"><div class="lbl"><i class="fas fa-users user"></i>人数</div><div class="val">${r.user_count}</div></div>
-          <div class="rank-mini-metric"><div class="lbl"><i class="fas fa-microphone song"></i>歌唱数</div><div class="val">${r.count}</div></div>
-          <i class="fas fa-chevron-down card-chev"></i>
-        </div>
-        <div class="card-detail">
-          <div class="detail-table">
-            <div class="detail-row"><div class="lbl"><i class="fas fa-music"></i>曲名</div><div class="val">${escHtml(r.song)}</div></div>
-            <div class="detail-row"><div class="lbl"><i class="fas fa-film"></i>作品名</div><div class="val">${escHtml(r.anime)}</div></div>
-            <div class="detail-row"><div class="lbl"><i class="fas fa-user"></i>歌手</div><div class="val">${escHtml(r.artist)}</div></div>
-            <div class="detail-row"><div class="lbl"><i class="fas fa-tag"></i>種別</div><div class="val">${escHtml(r.type)}</div></div>
-          </div>
-          <button class="confirm-btn" onclick="event.stopPropagation();openSingersModal('${escAttr(r.anime)}','${escAttr(r.song)}')">
-            <i class="fas fa-users"></i> この曲を歌った人を確認する <i class="fas fa-chevron-right"></i>
-          </button>
-        </div>
-      </div>`;
-    }
-  });
+  if(top20.length===0){list.innerHTML='<div class="empty">ランキング対象データがありません</div>';return;}
+  let html='';
+  top20.forEach(r=>html+=buildRankCardHtml(r));
   list.innerHTML = html;
 }
 
-// ====== Trend ======
-const trendCatSel = document.getElementById('trendCat');
+// === Trend ===
 const trendPeriodSel = document.getElementById('trendPeriod');
 const trendSortSel = document.getElementById('trendSort');
-{
-  const o = document.createElement('option');o.value=TREND_TARGET_CAT;o.innerText=TREND_TARGET_CAT;trendCatSel.appendChild(o);
-}
 TREND_PERIODS.forEach(p=>{
-  const o = document.createElement('option');o.value=String(p);o.innerText=`直近${p}日`;
-  if(p===7) o.selected = true;
+  const o=document.createElement('option');o.value=String(p);o.innerText=`直近${p}日`;
+  if(p===7) o.selected=true;
   trendPeriodSel.appendChild(o);
 });
 trendPeriodSel.addEventListener('change', renderTrend);
 trendSortSel.addEventListener('change', renderTrend);
 
-function renderTrend(){
+function buildTrendItems(){
   const period = trendPeriodSel.value;
   const sort = trendSortSel.value;
   const td = TREND_DATA[period] || {kpi:{surge_count:0,new_in:0,max_delta:0},items:[]};
@@ -1889,154 +1705,120 @@ function renderTrend(){
   if(sort==='surge') items.sort((a,b)=>b.delta-a.delta || b.cur_count-a.cur_count);
   else if(sort==='new') items.sort((a,b)=>(b.is_new?1:0)-(a.is_new?1:0) || b.delta-a.delta);
   else items.sort((a,b)=>b.delta-a.delta);
+  return {kpi: td.kpi, items: items};
+}
 
+function buildTrendHtml(){
+  const {kpi, items} = buildTrendItems();
   let html = '';
-  // KPI cards
   html += `<div class="trend-stats">
-    <div class="trend-stat"><div class="ico up"><i class="fas fa-arrow-trend-up"></i></div><div class="lbl">今週急上昇</div><div class="val">${td.kpi.surge_count}<small>曲</small></div></div>
-    <div class="trend-stat"><div class="ico new"><i class="far fa-star"></i></div><div class="lbl">新規ランクイン</div><div class="val">${td.kpi.new_in}<small>曲</small></div></div>
-    <div class="trend-stat"><div class="ico max"><i class="fas fa-arrow-up-right-dots"></i></div><div class="lbl">最大伸び</div><div class="val">+${td.kpi.max_delta}</div></div>
+    <div class="trend-stat"><div class="ico up"><i class="fas fa-arrow-trend-up"></i></div><div class="lbl">急上昇</div><div class="val">${kpi.surge_count}<small>曲</small></div></div>
+    <div class="trend-stat"><div class="ico new"><i class="far fa-star"></i></div><div class="lbl">新規ランクイン</div><div class="val">${kpi.new_in}<small>曲</small></div></div>
+    <div class="trend-stat"><div class="ico max"><i class="fas fa-arrow-up"></i></div><div class="lbl">最大伸び</div><div class="val">+${kpi.max_delta}</div></div>
   </div>`;
 
-  // Pickup
-  if(items.length > 0){
+  if(items.length>0){
     const p = items[0];
     const thumbUrl = getThumbUrl(TREND_TARGET_CAT, p.anime);
     html += `<div class="trend-pickup">
-      <i class="fas fa-fire trend-pickup-icon"></i>
       <div class="trend-pickup-head"><i class="fas fa-fire"></i> 急上昇ピックアップ</div>
       <div class="trend-pickup-body">
-        <div class="thumb-square large">
-          ${thumbUrl ? `<img src="${thumbUrl}" alt="">` : '<i class="far fa-image"></i>'}
+        <div class="thumb-square">
+          ${thumbUrl?`<img src="${thumbUrl}" alt="">`:'<i class="far fa-image"></i>'}
           <span class="thumb-tag">急上昇 No.1</span>
         </div>
         <div class="tp-info">
-          <div class="tp-anime">${escHtml(p.song)}</div>
-          <div class="tp-anime" style="font-size:13px;color:var(--text-sub);font-weight:600">${escHtml(p.anime)}</div>
+          <div class="tp-song">${escHtml(p.song)}</div>
+          <div class="tp-anime">${escHtml(p.anime)}</div>
           <div class="tp-artist">${escHtml(p.artist)}</div>
-          <div class="tp-type"><span class="type-pill has">${escHtml(p.type||'-')}</span></div>
-        </div>
-        <div class="tp-side">
-          <div class="arrow"><i class="fas fa-arrow-up"></i></div>
-          <div class="pre-label">前週比</div>
-          <div class="delta">${p.delta>=0?'+':''}${p.delta}</div>
+          <div class="tp-type">${typePillHtml(p.type)}</div>
         </div>
       </div>
-      <div class="tp-stats">
-        <div class="tp-stat"><div class="lbl"><i class="fas fa-microphone"></i>歌唱数</div><div class="val">${p.cur_count}</div></div>
-        <div class="tp-stat"><div class="lbl"><i class="fas fa-users"></i>人数</div><div class="val">${p.cur_user}</div></div>
-        <div class="tp-stat"><div class="lbl"><i class="fas fa-crown"></i>現在</div><div class="val">${p.rank_now||'-'}<small>位</small></div></div>
+      <div class="tp-metrics">
+        ${flatMetricHtml('人数',p.cur_user,'user')}
+        ${flatMetricHtml('歌唱数',p.cur_count,'song')}
       </div>
-      <button class="confirm-btn" style="margin-top:12px" onclick="openSingersModal('${escAttr(p.anime)}','${escAttr(p.song)}')">
-        <i class="fas fa-users"></i> この曲を歌った人を確認する <i class="fas fa-chevron-right"></i>
-      </button>
     </div>`;
   }
 
-  // 注目の上昇曲 (2位以下)
-  if(items.length > 1){
+  if(items.length>1){
     html += `<div class="notable-head"><i class="fas fa-arrow-trend-up"></i> 注目の上昇曲</div>`;
-    items.slice(1, 21).forEach((it,idx)=>{
-      const rank = idx + 2;
+    items.slice(1, 10).forEach((it,idx)=>{
+      const rank = idx+2;
       const thumbUrl = getThumbUrl(TREND_TARGET_CAT, it.anime);
-      const deltaCls = it.is_new ? 'new' : '';
-      const deltaTxt = it.is_new ? 'NEW' : (it.delta>=0?'↑+'+it.delta:''+it.delta);
-      html += `<div class="notable-card">
-        <div class="notable-row" onclick="toggleCard(this)">
-          <div class="notable-num">${rank}</div>
-          <div class="thumb-mini">${thumbUrl?`<img src="${thumbUrl}" alt="">`:'<i class="far fa-image"></i>'}</div>
-          <div class="notable-info">
-            <div class="notable-anime">${escHtml(it.song)}</div>
-            <div class="notable-artist">${escHtml(it.anime)} / ${escHtml(it.artist)}</div>
-            <div class="rank-types-inline"><span class="type-pill has">${escHtml(it.type||'-')}</span></div>
-          </div>
-          <div class="notable-delta ${deltaCls}">${deltaTxt}</div>
-          <div class="notable-mini-metric"><div class="lbl"><i class="fas fa-users"></i>人数</div><div class="val">${it.cur_user}</div></div>
-          <div class="notable-mini-metric"><div class="lbl"><i class="fas fa-microphone"></i>歌唱数</div><div class="val">${it.cur_count}</div></div>
-          <i class="fas fa-chevron-right notable-chev"></i>
+      html += `<div class="notable-row">
+        <div class="notable-num">${rank}</div>
+        <div class="thumb-mini">${thumbUrl?`<img src="${thumbUrl}" alt="">`:'<i class="far fa-image"></i>'}</div>
+        <div class="notable-info">
+          <div class="notable-anime">${escHtml(it.song)}</div>
+          <div class="notable-artist">${escHtml(it.anime)} / ${escHtml(it.artist)}</div>
+          <div class="notable-types">${typePillHtml(it.type)}</div>
         </div>
-        <div class="card-detail">
-          <div class="detail-table">
-            <div class="detail-row"><div class="lbl"><i class="fas fa-music"></i>曲名</div><div class="val">${escHtml(it.song)}</div></div>
-            <div class="detail-row"><div class="lbl"><i class="fas fa-film"></i>作品名</div><div class="val">${escHtml(it.anime)}</div></div>
-            <div class="detail-row"><div class="lbl"><i class="fas fa-user"></i>歌手</div><div class="val">${escHtml(it.artist)}</div></div>
-          </div>
-          <button class="confirm-btn" onclick="event.stopPropagation();openSingersModal('${escAttr(it.anime)}','${escAttr(it.song)}')">
-            <i class="fas fa-users"></i> この曲を歌った人を確認する <i class="fas fa-chevron-right"></i>
-          </button>
-        </div>
+        ${flatMetricHtml('人数',it.cur_user,'user')}
+        ${flatMetricHtml('歌唱数',it.cur_count,'song')}
       </div>`;
     });
   }
 
-  if(items.length === 0){
-    html += '<div class="empty">急上昇データがありません</div>';
-  }
-
-  document.getElementById('trendBody').innerHTML = html;
+  if(items.length===0) html += '<div class="empty">急上昇データがありません</div>';
+  return html;
+}
+function renderTrend(){
+  document.getElementById('trendBody').innerHTML = buildTrendHtml();
 }
 
-// ====== Env (image upload) ======
+// === Env (image upload, with quarter selector) ===
+const envCatSel = document.getElementById('envCat');
+CATS.forEach(c=>{const o=document.createElement('option');o.value=c;o.innerText=c;envCatSel.appendChild(o);});
+envCatSel.addEventListener('change', renderEnv);
+
 function renderEnv(){
+  const cat = envCatSel.value;
+  const works = (COOL_DATA[cat]||{works:[]}).works;
   const list = document.getElementById('envList');
-  let html = '';
-  CATS.forEach(cat=>{
-    const works = (COOL_DATA[cat]||{works:[]}).works;
-    if(!works.length) return;
-    html += `<div class="env-section"><h3>${escHtml(cat)}</h3>`;
-    works.forEach(w=>{
-      const thumbUrl = getThumbUrl(cat, w.anime);
-      const safeId = 'env_'+btoa(unescape(encodeURIComponent(cat+'|'+w.anime))).replace(/[^a-zA-Z0-9]/g,'');
-      html += `<div class="env-work-row">
-        <div class="env-work-thumb" id="${safeId}_thumb">${thumbUrl?`<img src="${thumbUrl}" alt="">`:'<i class="far fa-image"></i>'}</div>
-        <div class="env-work-name">${escHtml(w.anime)}</div>
-        <label class="env-upload-btn"><i class="fas fa-upload"></i> アップロード
-          <input type="file" accept="image/*" onchange="handleImageUpload(this,'${escAttr(cat)}','${escAttr(w.anime)}','${safeId}_thumb')">
-        </label>
-      </div>`;
-    });
-    html += '</div>';
+  if(!works.length){list.innerHTML='<div class="empty">対象作品がありません</div>';return;}
+  let html='';
+  works.forEach(w=>{
+    const thumbUrl = getThumbUrl(cat, w.anime);
+    const sid = 'env_'+btoa(unescape(encodeURIComponent(cat+'|'+w.anime))).replace(/[^a-zA-Z0-9]/g,'');
+    html += `<div class="env-work-row">
+      <div class="env-work-thumb" id="${sid}_thumb">${thumbUrl?`<img src="${thumbUrl}" alt="">`:'<i class="far fa-image"></i>'}</div>
+      <div class="env-work-name">${escHtml(w.anime)}</div>
+      <label class="env-upload-btn"><i class="fas fa-upload"></i> アップロード
+        <input type="file" accept="image/*" onchange="handleImageUpload(this,'${escAttr(cat)}','${escAttr(w.anime)}','${sid}_thumb')">
+      </label>
+    </div>`;
   });
-  list.innerHTML = html || '<div class="empty">対象作品がありません</div>';
+  list.innerHTML = html;
 }
 function showEnvStatus(msg, isError){
   const el = document.getElementById('envStatus');
   el.innerText = msg;
-  el.style.background = isError ? '#fef2f2' : '#eef2ff';
+  el.style.background = isError ? '#fef2f2' : 'var(--accent-bg)';
   el.style.color = isError ? '#ef4444' : 'var(--accent)';
   el.classList.add('show');
   setTimeout(()=>el.classList.remove('show'), 5000);
 }
 async function handleImageUpload(input, cat, work, thumbId){
-  const file = input.files[0];
-  if(!file) return;
-  showEnvStatus('画像を処理中... ('+file.name+')', false);
-  try {
+  const file = input.files[0]; if(!file) return;
+  showEnvStatus('画像を処理中...', false);
+  try{
     const dataUrl = await cropToSquareDataUrl(file, 512);
     const base64 = dataUrl.split(',')[1];
-    const payload = {
-      action: 'upload_image',
-      quarter: cat,
-      work: work,
-      filename: file.name,
-      content_base64: base64,
-      mime: 'image/jpeg'
-    };
     showEnvStatus('Driveへアップロード中...', false);
     const res = await fetch(GAS_URL, {
-      method: 'POST',
-      headers: {'Content-Type':'text/plain;charset=utf-8'},
-      body: JSON.stringify(payload)
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({action:'upload_image',quarter:cat,work:work,filename:file.name,content_base64:base64,mime:'image/jpeg'})
     });
     const text = await res.text();
-    let result;
-    try { result = JSON.parse(text); } catch(e){ result = {ok:false, msg:text}; }
+    let result; try{result=JSON.parse(text);}catch(e){result={ok:false,msg:text};}
     if(result.ok && result.fileId){
-      if(!IMAGE_MAP[cat]) IMAGE_MAP[cat] = {};
-      IMAGE_MAP[cat][work] = result.fileId;
+      if(!IMAGE_MAP[cat]) IMAGE_MAP[cat]={};
+      IMAGE_MAP[cat][work]=result.fileId;
       const t = document.getElementById(thumbId);
       if(t) t.innerHTML = `<img src="${dataUrl}" alt="">`;
-      showEnvStatus('アップロード完了: '+work, false);
+      showEnvStatus('完了: '+work, false);
     } else {
       showEnvStatus('失敗: '+(result.msg||'unknown'), true);
     }
@@ -2057,8 +1839,10 @@ function cropToSquareDataUrl(file, size){
         const canvas = document.createElement('canvas');
         canvas.width = size; canvas.height = size;
         const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(img, sx, sy, s, s, 0, 0, size, size);
-        resolve(canvas.toDataURL('image/jpeg', 0.85));
+        resolve(canvas.toDataURL('image/jpeg', 0.88));
       };
       img.onerror = reject;
       img.src = e.target.result;
@@ -2068,15 +1852,17 @@ function cropToSquareDataUrl(file, size){
   });
 }
 
-// ====== HTML download ======
-function buildExportHtml(title, contentHtml, embedScript){
+// === HTML downloads ===
+function buildExportHtml(title, contentHtml){
   const port = document.getElementById('exportPort').value || '11059';
   const linkType = document.getElementById('exportLinkType').value;
+  const baseStyle = document.querySelector('style').innerHTML;
   return `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>${escHtml(title)}</title>
-<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-<style>${document.querySelector('style').innerHTML}</style>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>${baseStyle}</style>
 </head><body>
 <div class="app-header"><div class="brand">${escHtml(title)}</div></div>
 <div class="update-line">${escHtml(UPDATE_TS)} 出力</div>
@@ -2086,136 +1872,92 @@ function buildExportHtml(title, contentHtml, embedScript){
 const PORT='${port}';const LINKTYPE='${linkType}';
 const HISTORY=${JSON.stringify(HISTORY)};
 const IMAGE_MAP=${JSON.stringify(IMAGE_MAP)};
-${embedScript}
+${commonExportScript()}
 <\/script>
 </body></html>`;
 }
 function downloadFile(filename, content){
   const blob = new Blob([content],{type:'text/html;charset=utf-8'});
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = filename;
-  a.click();
+  a.href = URL.createObjectURL(blob); a.download = filename; a.click();
 }
 function commonExportScript(){
   return `
 function escHtml(s){return String(s||"").replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function escAttr(s){return String(s||"").replace(/'/g,"&#39;").replace(/"/g,'&quot;');}
 function jsNormalize(s){if(!s)return"";s=String(s).normalize('NFKC');s=s.replace(/\\.[a-zA-Z0-9]{3,4}$/,'');s=s.replace(/[\\[\\(\\{【].*?[\\]\\)\\}】]/g,' ');s=s.replace(/(key|KEY)?\\s*[\\+\\-]\\s*[0-9]+/g,' ');s=s.replace(/原キー/g,' ');s=s.replace(/(キー)?変更[:：]?/g,' ');s=s.replace(/[~〜～\\-_=,.]/g,' ');s=s.replace(/\\s+/g,' ').trim();return s.toUpperCase();}
-function findHistoryMatches(workName,songName){const sn=jsNormalize(songName);const wn=jsNormalize(workName);if(!sn&&!wn)return[];return HISTORY.filter(h=>{let songOk=false,workOk=false;if(sn){if(/^[A-Z0-9 ]+$/.test(sn)){const re=new RegExp('(?:^|[^A-Z0-9])'+sn.replace(/[.*+?^\${}()|[\\]\\\\]/g,'\\\\$&')+'(?:[^A-Z0-9]|$)','i');songOk=re.test(h.sn);}else{songOk=h.sn.indexOf(sn)>=0;}}if(wn){workOk=(h.sn.indexOf(wn)>=0)||(h.wn.indexOf(wn)>=0);}if(sn&&wn)return songOk&&workOk;if(sn)return songOk;if(wn)return workOk;return false;});}
-function openSingersModal(w,s){const m=findHistoryMatches(w,s);const u={};m.forEach(x=>{if(!u[x.u])u[x.u]={c:0,d:x.d,r:x.rm};u[x.u].c++;if(x.d>u[x.u].d){u[x.u].d=x.d;u[x.u].r=x.rm;}});const us=Object.entries(u).sort((a,b)=>b[1].c-a[1].c);document.getElementById('modalTitle').innerHTML=escHtml(s)+'<small>'+escHtml(w)+' - '+m.length+'件 / '+us.length+'人</small>';let b='<div class="modal-summary"><i class="fas fa-users"></i> '+us.length+'人がこの曲を歌っています（合計'+m.length+'回）</div>';if(us.length===0)b+='<div class="empty">履歴が見つかりませんでした</div>';else us.forEach(([uu,info])=>{b+='<div class="modal-row"><div class="top"><div class="user"><i class="fas fa-microphone"></i> '+escHtml(uu)+' <span style="color:var(--accent);font-size:11.5px;margin-left:4px">×'+info.c+'</span></div><div class="date">'+escHtml(info.d)+'</div></div><div class="meta">最新: '+escHtml(info.r)+'</div></div>';});document.getElementById('modalBody').innerHTML=b;document.getElementById('modalOverlay').classList.add('active');}
+function findHistoryMatches(w,s){const sn=jsNormalize(s);const wn=jsNormalize(w);if(!sn&&!wn)return[];return HISTORY.filter(h=>{let so=false,wo=false;if(sn){if(/^[A-Z0-9 ]+$/.test(sn)){const re=new RegExp('(?:^|[^A-Z0-9])'+sn.replace(/[.*+?^\${}()|[\\]\\\\]/g,'\\\\$&')+'(?:[^A-Z0-9]|$)','i');so=re.test(h.sn);}else{so=h.sn.indexOf(sn)>=0;}}if(wn){wo=(h.sn.indexOf(wn)>=0)||(h.wn.indexOf(wn)>=0);}if(sn&&wn)return so&&wo;if(sn)return so;if(wn)return wo;return false;});}
+function openSingersModal(w,s){const m=findHistoryMatches(w,s);const u={};m.forEach(x=>{if(!u[x.u])u[x.u]={c:0,d:x.d,r:x.rm};u[x.u].c++;if(x.d>u[x.u].d){u[x.u].d=x.d;u[x.u].r=x.rm;}});const us=Object.entries(u).sort((a,b)=>b[1].c-a[1].c);document.getElementById('modalTitle').innerHTML=escHtml(s)+'<small>'+escHtml(w)+' - '+m.length+'件 / '+us.length+'人</small>';let b='<div class="modal-summary"><i class="fas fa-users"></i> '+us.length+'人がこの曲を歌っています（合計'+m.length+'回）</div>';if(us.length===0)b+='<div class="empty">履歴なし</div>';else us.forEach(([uu,info])=>{b+='<div class="modal-row"><div class="top"><div class="user"><i class="fas fa-microphone"></i> '+escHtml(uu)+' <span style=\"color:var(--accent);font-size:11.5px;margin-left:4px\">×'+info.c+'</span></div><div class="date">'+escHtml(info.d)+'</div></div><div class="meta">最新: '+escHtml(info.r)+'</div></div>';});document.getElementById('modalBody').innerHTML=b;document.getElementById('modalOverlay').classList.add('active');}
 function closeModal(){document.getElementById('modalOverlay').classList.remove('active');}
 document.getElementById('modalOverlay').addEventListener('click',e=>{if(e.target.id==='modalOverlay')closeModal();});
 function toggleCard(h){h.parentElement.classList.toggle('expanded');}
-function getThumbUrl(c,w){const m=IMAGE_MAP[c];if(!m)return null;const f=m[w];if(!f)return null;return 'https://drive.google.com/thumbnail?id='+f+'&sz=w200';}
-document.querySelectorAll('a.export-link').forEach(l=>{const h=l.getAttribute('href');if(h&&h.indexOf('#search:')===0){const w=h.split('#search:')[1];const path=LINKTYPE==='ykr'?'search_listerdb_filelist.php?anyword=':'search.php?searchword=';l.href='http://ykr.moe:'+PORT+'/'+path+encodeURIComponent(w);l.target='_blank';l.rel='noopener';}});
+document.querySelectorAll('a.export-link').forEach(l=>{const h=l.getAttribute('href');if(h&&h.indexOf('#search:')===0){const w=h.split('#search:')[1];const path=LINKTYPE==='ykr'?'search_listerdb_filelist.php?anyword=':'search.php?searchword=';l.href='http://ykr.moe:'+PORT+'/'+path+encodeURIComponent(decodeURIComponent(w));l.target='_blank';l.rel='noopener';}});
 `;
 }
-function dotGridStr(value, max, color){
-  const filled = max>0 ? Math.min(9, Math.round((value/max)*9)) : 0;
-  let h = '<span class="dot-grid">';
-  for(let i=0;i<9;i++){h += `<span class="dot${i<filled?' '+color:''}"></span>`;}
-  h += '</span>';
-  return h;
-}
-function buildCoolHtmlForCat(cat){
-  const data = COOL_DATA[cat] || {works:[],max_count:0,max_user:0};
+
+function buildCoolHtmlForCatExport(cat){
+  const data = COOL_DATA[cat]||{works:[]};
   const works = data.works.slice().sort((a,b)=>b.total_count-a.total_count);
-  const maxC = data.max_count, maxU = data.max_user;
-  let h = `<div style="font-size:14px;font-weight:700;color:var(--primary);padding:0 16px;border-left:3px solid var(--accent);margin:14px 0 8px">${escHtml(cat)} - ${works.length}作品</div>`;
+  let h = `<div style="font-size:14px;font-weight:700;color:var(--primary);padding-left:10px;border-left:3px solid var(--accent);margin:14px 0 8px">${escHtml(cat)} - ${works.length}作品</div>`;
   works.forEach((w,i)=>{
-    const rank = i+1;
-    const opTag = `<span class="type-pill${w.op_n>0?' has':''}">OP <b>${w.op_n}</b></span>`;
-    const edTag = `<span class="type-pill${w.ed_n>0?' has':''}">ED <b>${w.ed_n}</b></span>`;
-    const inTag = `<span class="type-pill${w.in_n>0?' has':''}">IN <b>${w.in_n}</b></span>`;
-    let sh = '';
-    w.songs.forEach(s=>{
-      const sm = `<div class="metric"><div class="lbl">人数</div>${dotGridStr(s.user_count,maxU,'fu')}<div class="val">${s.user_count}</div></div><div class="metric"><div class="lbl">歌唱</div>${dotGridStr(s.count,maxC,'fc')}<div class="val">${s.count}</div></div>`;
-      const tagShort = s.type ? s.type.toUpperCase().replace(/[^A-Z]/g,'').slice(0,2) || s.type : '';
-      const linkSong = `<a class="export-link" href="#search:${escAttr(w.anime+' '+s.song)}">${escHtml(s.song)}</a>`;
-      sh += `<div class="song-row"><div class="song-type">${escHtml(tagShort||'-')}</div><div class="song-info"><div class="song-name">${linkSong}</div><div class="song-artist">${escHtml(s.artist)}</div></div><div class="song-metrics">${sm}</div></div><div class="song-confirm"><button class="confirm-btn" style="margin:0;width:100%" onclick="event.stopPropagation();openSingersModal('${escAttr(w.anime)}','${escAttr(s.song)}')"><i class="fas fa-microphone"></i> この曲を歌った人を確認する <i class="fas fa-chevron-right"></i></button></div>`;
+    const card = buildCoolCard(w, i+1, cat);
+    // 曲名にリンク化
+    h += card.replace(/(<div class="song-name">)([^<]+)(<\/div>)/g, (_,p1,n,p3)=>{
+      // 注意: anime名はwにあり、songNameはnそのもの → リンク化
+      return p1 + `<a class="export-link" href="#search:${encodeURIComponent(w.anime+' '+n)}">${n}</a>` + p3;
     });
-    h += `<div class="card"><div class="card-head" onclick="toggleCard(this)"><div class="num-badge${rank===1?' gold':rank===2?' silver':rank===3?' bronze':''}">${rank}</div><div class="card-body"><div class="cool-head-row"><div class="cool-anime-block"><div class="cool-anime">${escHtml(w.anime)}</div><div class="cool-types">${opTag}${edTag}${inTag}</div></div><div class="metric-block"><div class="metric"><div class="lbl">人数</div>${dotGridStr(w.total_user,maxU,'fu')}<div class="val">${w.total_user}</div></div><div class="metric"><div class="lbl">歌唱数</div>${dotGridStr(w.total_count,maxC,'fc')}<div class="val">${w.total_count}</div></div></div></div></div><i class="fas fa-chevron-down card-chev"></i></div><div class="card-detail">${sh}</div></div>`;
   });
   return h;
 }
 function downloadCoolHTML(scope){
   const cat = coolCatSel.value;
-  let body = '<div style="max-width:760px;margin:0 auto;padding:0 16px 60px">';
-  if(scope === 'current'){
-    body += buildCoolHtmlForCat(cat);
-  } else {
-    CATS.forEach(c=> body += buildCoolHtmlForCat(c));
-  }
+  let body = '<div style="max-width:600px;margin:0 auto;padding:0 16px 60px">';
+  if(scope==='current') body += buildCoolHtmlForCatExport(cat);
+  else CATS.forEach(c=> body += buildCoolHtmlForCatExport(c));
   body += '</div>';
   const ttl = scope==='current' ? `クール集計 - ${cat}` : 'クール集計（全クール）';
-  const html = buildExportHtml(ttl, body, commonExportScript());
   const fname = scope==='current' ? `karaoke_cool_${cat}.html` : 'karaoke_cool_all.html';
-  downloadFile(fname, html);
+  downloadFile(fname, buildExportHtml(ttl, body));
 }
 
-function buildRankHtmlForCat(cat, mode){
-  const all = (RANK_DATA[cat]||[]).slice();
-  if(mode==='count') all.sort((a,b)=>b.count-a.count || b.user_count-a.user_count);
-  else all.sort((a,b)=>b.user_count-a.user_count || b.count-a.count);
-  const top20 = []; let prevVal=null,curRank=0;
-  for(let i=0;i<all.length;i++){
-    const v = mode==='count' ? all[i].count : all[i].user_count;
-    if(v!==prevVal){curRank=i+1;prevVal=v;}
-    if(curRank>20) break;
-    top20.push({...all[i],rank:curRank});
-  }
-  const modeTitle = mode==='count'?'歌唱数ランキング':'歌唱人数ランキング';
-  let h = `<div style="font-size:14px;font-weight:700;color:var(--primary);padding:0 16px;border-left:3px solid var(--accent);margin:14px 0 8px">${escHtml(cat)} ${modeTitle}</div>`;
+function buildRankHtmlForCatExport(cat, mode){
+  const top20 = buildRankingTop20(cat, mode);
+  const modeT = mode==='count' ? '歌唱数ランキング' : '歌唱人数ランキング';
+  let h = `<div style="font-size:14px;font-weight:700;color:var(--primary);padding-left:10px;border-left:3px solid var(--accent);margin:14px 0 8px">${escHtml(cat)} ${modeT}</div>`;
   top20.forEach(r=>{
-    const isTop3 = r.rank<=3;
-    const grade = r.rank===1?'gold':r.rank===2?'silver':r.rank===3?'bronze':'';
-    const linkSong = `<a class="export-link" href="#search:${escAttr(r.anime+' '+r.song)}">${escHtml(r.song)}</a>`;
-    if(isTop3){
-      h += `<div class="rank-card-top3 ${grade}"><div class="rank-top3-head" onclick="toggleCard(this)"><div style="display:flex;flex-direction:column;align-items:center"><div class="rank-crown ${grade}"><i class="fas fa-crown"></i></div><div class="rank-top3-num ${grade}">${r.rank}</div></div><div class="rank-top3-info"><div class="rank-top3-song">${linkSong}</div><div class="rank-top3-anime">${escHtml(r.anime)}</div><div class="rank-top3-artist">${escHtml(r.artist)}</div><div class="rank-top3-types"><span class="type-pill has">${escHtml(r.type||'-')}</span></div></div><i class="fas fa-chevron-down card-chev"></i></div><div class="rank-top3-metrics"><div class="rank-top3-metric"><div class="ico user"><i class="fas fa-users"></i></div><div class="lbl">人数</div><div class="val">${r.user_count}</div></div><div class="rank-top3-metric"><div class="ico song"><i class="fas fa-microphone"></i></div><div class="lbl">歌唱数</div><div class="val">${r.count}</div></div></div><div class="card-detail"><button class="confirm-btn" onclick="event.stopPropagation();openSingersModal('${escAttr(r.anime)}','${escAttr(r.song)}')"><i class="fas fa-users"></i> この曲を歌った人を確認する <i class="fas fa-chevron-right"></i></button></div></div>`;
-    } else {
-      h += `<div class="rank-card"><div class="rank-row" onclick="toggleCard(this)"><div class="num-badge">${r.rank}</div><div class="rank-info"><div class="rank-anime">${escHtml(r.anime)}</div><div class="rank-sub">${linkSong} / ${escHtml(r.artist)}</div></div><div class="rank-mini-metric"><div class="lbl"><i class="fas fa-users user"></i>人数</div><div class="val">${r.user_count}</div></div><div class="rank-mini-metric"><div class="lbl"><i class="fas fa-microphone song"></i>歌唱数</div><div class="val">${r.count}</div></div><i class="fas fa-chevron-down card-chev"></i></div><div class="card-detail"><button class="confirm-btn" onclick="event.stopPropagation();openSingersModal('${escAttr(r.anime)}','${escAttr(r.song)}')"><i class="fas fa-users"></i> この曲を歌った人を確認する <i class="fas fa-chevron-right"></i></button></div></div>`;
-    }
+    const card = buildRankCardHtml(r);
+    // 曲名リンク化
+    h += card
+      .replace(/(<div class="rank-top3-song">)([^<]+)(<\/div>)/, (_,p1,n,p3)=>p1+`<a class="export-link" href="#search:${encodeURIComponent(r.anime+' '+r.song)}">${n}</a>`+p3)
+      .replace(/(<div class="rank-sub">)([^<]+)(<\/div>)/, (_,p1,n,p3)=>p1+`<a class="export-link" href="#search:${encodeURIComponent(r.anime+' '+r.song)}">${n}</a>`+p3);
   });
   return h;
 }
 function downloadRankingHTML(scope){
   const cat = rankCatSel.value;
   const mode = rankModeSel.value;
-  let body = '<div style="max-width:760px;margin:0 auto;padding:0 16px 60px">';
-  if(scope==='current'){
-    body += buildRankHtmlForCat(cat, mode);
-  } else {
-    CATS.forEach(c=>{
-      body += buildRankHtmlForCat(c, mode);
-    });
-  }
+  let body = '<div style="max-width:600px;margin:0 auto;padding:0 16px 60px">';
+  if(scope==='current') body += buildRankHtmlForCatExport(cat, mode);
+  else CATS.forEach(c=> body += buildRankHtmlForCatExport(c, mode));
   body += '</div>';
   const ttl = scope==='current' ? `ランキング - ${cat}` : 'ランキング（全クール）';
-  const html = buildExportHtml(ttl, body, commonExportScript());
   const fname = scope==='current' ? `karaoke_rank_${mode}_${cat}.html` : `karaoke_rank_${mode}_all.html`;
-  downloadFile(fname, html);
+  downloadFile(fname, buildExportHtml(ttl, body));
 }
 
 function downloadTrendHTML(){
   const period = trendPeriodSel.value;
-  const sort = trendSortSel.value;
-  // 直接DOM cloneでOK
-  const node = document.getElementById('trendBody').cloneNode(true);
-  const body = `<div style="max-width:760px;margin:0 auto;padding:0 16px 60px"><div style="font-size:14px;font-weight:700;color:var(--primary);padding:0 16px;border-left:3px solid var(--accent);margin:14px 0 8px">推移 - ${TREND_TARGET_CAT} (直近${period}日)</div>${node.outerHTML}</div>`;
-  const html = buildExportHtml(`推移 - ${TREND_TARGET_CAT}`, body, commonExportScript());
-  downloadFile(`karaoke_trend_${period}d.html`, html);
+  const inner = buildTrendHtml();
+  const body = `<div style="max-width:600px;margin:0 auto;padding:0 16px 60px"><div style="font-size:14px;font-weight:700;color:var(--primary);padding-left:10px;border-left:3px solid var(--accent);margin:14px 0 8px">推移 - ${TREND_TARGET_CAT} (直近${period}日)</div>${inner}</div>`;
+  downloadFile(`karaoke_trend_${period}d.html`, buildExportHtml(`推移 - ${TREND_TARGET_CAT}`, body));
 }
-
 function downloadSetlistHTML(){
-  // 表示中のリストをそのまま出力
   const node = document.getElementById('slList').cloneNode(true);
-  const body = `<div style="max-width:760px;margin:0 auto;padding:0 16px 60px"><div style="font-size:14px;font-weight:700;color:var(--primary);padding:0 16px;border-left:3px solid var(--accent);margin:14px 0 8px">セットリスト</div>${node.outerHTML}</div>`;
-  const html = buildExportHtml('セットリスト', body, commonExportScript());
-  downloadFile('karaoke_setlist.html', html);
+  const body = `<div style="max-width:600px;margin:0 auto;padding:0 16px 60px"><div style="font-size:14px;font-weight:700;color:var(--primary);padding-left:10px;border-left:3px solid var(--accent);margin:14px 0 8px">セットリスト</div>${node.outerHTML}</div>`;
+  downloadFile('karaoke_setlist.html', buildExportHtml('セットリスト', body));
 }
 
-// ====== Init ======
+// Init
 renderSetlist();
 renderCool();
 renderRanking();
@@ -2226,7 +1968,6 @@ renderEnv();
 </html>
 """
 
-# プレースホルダ置換
 html_content = (html_content
     .replace("__COOL_JSON__", cool_json)
     .replace("__RANK_JSON__", ranking_json)
@@ -2240,7 +1981,7 @@ html_content = (html_content
     .replace("__GAS_URL__", GAS_WEB_APP_URL)
     .replace("__UPDATE_TS__", current_datetime_str)
     .replace("__UPDATE__", current_datetime_str)
-    .replace("__CURRENT_DATE__", current_date_str)
+    .replace("__TREND_CAT__", TREND_TARGET_CATEGORY)
 )
 
 with open("index.html", "w", encoding="utf-8") as f:
