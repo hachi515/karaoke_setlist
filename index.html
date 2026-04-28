@@ -43,17 +43,17 @@ a{color:inherit;text-decoration:none}
   display:grid;grid-template-columns:1fr 1fr;gap:10px;
 }
 .top-card{
-  background:#fff;border:1px solid var(--border);border-radius:12px;padding:11px 14px;
-  display:flex;align-items:center;gap:11px;
+  background:#fff;border:1px solid var(--border);border-radius:12px;padding:8px 12px;
+  display:flex;align-items:center;gap:10px;
 }
 .top-card .ico{
-  width:34px;height:34px;border-radius:8px;background:var(--accent-bg);color:var(--accent);
-  display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;
+  width:28px;height:28px;border-radius:8px;background:var(--accent-bg);color:var(--accent);
+  display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;
 }
-.top-card .lbl{font-size:11.5px;color:var(--text-sub);margin-bottom:2px;font-weight:500}
+.top-card .lbl{font-size:11px;color:var(--text-sub);margin-bottom:1px;font-weight:500;line-height:1.2}
 .top-card input,.top-card select{
-  border:none;background:transparent;font-weight:700;font-size:16px;color:var(--primary);
-  outline:none;width:100%;cursor:pointer;
+  border:none;background:transparent;font-weight:700;font-size:15px;color:var(--primary);
+  outline:none;width:100%;cursor:pointer;line-height:1.25;
 }
 .top-card input[type=number]{cursor:text}
 
@@ -193,11 +193,15 @@ a{color:inherit;text-decoration:none}
 .detail-table{padding:12px 16px}
 .detail-row{
   display:grid;grid-template-columns:104px 1fr;gap:10px;padding:10px 14px;
-  background:#fff;border-radius:8px;margin-bottom:5px;align-items:start;
+  background:#fff;border-radius:8px;margin-bottom:5px;align-items:center;
   border:1px solid var(--border-soft);
 }
-.detail-row .lbl{font-size:12.5px;color:var(--accent);font-weight:600;display:flex;align-items:center;gap:6px}
-.detail-row .lbl i{color:var(--accent);font-size:12px}
+.detail-row .lbl{font-size:12.5px;color:var(--accent);font-weight:600;display:flex;align-items:center;gap:8px}
+.detail-row .lbl .lbl-ico{
+  width:24px;height:24px;border-radius:6px;background:var(--accent-bg);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.detail-row .lbl .lbl-ico i{color:var(--accent);font-size:11.5px}
 .detail-row .val{font-size:14px;color:var(--primary);word-break:break-word;line-height:1.5}
 
 /* 控えめなボタン */
@@ -303,7 +307,7 @@ a{color:inherit;text-decoration:none}
 /* Normal rank flat */
 .rank-row-flat{
   background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);margin-top:8px;
-  padding:14px 18px;display:grid;grid-template-columns:36px 1fr auto auto;gap:18px;align-items:center;
+  padding:10px 14px;display:grid;grid-template-columns:36px 1fr auto auto;gap:12px;align-items:center;
   box-shadow:0 1px 2px rgba(15,23,42,.03);
 }
 .rank-row-flat .rank-info{min-width:0}
@@ -312,28 +316,31 @@ a{color:inherit;text-decoration:none}
 .rank-row-flat .rank-sub{font-size:12px;color:var(--text-sub);margin-top:3px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rank-row-flat .rank-types-inline{margin-top:5px;display:flex;gap:5px;flex-wrap:wrap}
-.rank-row-flat .flat-metric{min-width:54px}
-.rank-row-flat .flat-metric .val-row b{font-size:18px}
-.rank-row-flat .flat-metric .icon-circle{width:26px;height:26px;font-size:12px}
+.rank-row-flat .flat-metric{min-width:54px;align-items:flex-end}
+.rank-row-flat .flat-metric .lbl{text-align:right}
+.rank-row-flat .flat-metric .val-row b{font-size:20px}
+.rank-row-flat .flat-metric .icon-circle{width:22px;height:22px;font-size:11px}
 
 /* ===== Trend ===== */
 .trend-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
 .trend-stat{
-  background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:13px 8px;text-align:center;
+  background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;
+  display:flex;align-items:center;gap:10px;
 }
 .trend-stat .ico{
-  width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;
-  font-size:14px;
+  width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+  font-size:13px;flex-shrink:0;
 }
 .trend-stat .ico.up{background:var(--accent-bg);color:var(--accent)}
 .trend-stat .ico.new{background:var(--green-bg);color:var(--green)}
 .trend-stat .ico.max{background:var(--orange-bg);color:var(--orange)}
-.trend-stat .lbl{font-size:11px;color:var(--text-sub);font-weight:600}
-.trend-stat .val{font-size:19px;font-weight:800;color:var(--primary);margin-top:3px}
+.trend-stat .body{flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-end;text-align:right}
+.trend-stat .lbl{font-size:11px;color:var(--text-sub);font-weight:600;line-height:1.2}
+.trend-stat .val{font-size:20px;font-weight:800;color:var(--primary);margin-top:2px;line-height:1.1;font-variant-numeric:tabular-nums}
 .trend-stat .val small{font-size:11px;font-weight:600;color:var(--text-sub);margin-left:2px}
 
 .trend-pickup{
-  background:linear-gradient(135deg,#eef2ff 0%,#fff 60%,#fef3c7 100%);
+  background:linear-gradient(135deg,#eef2ff 0%,#f5f3ff 60%,#fdf4ff 100%);
   border:1px solid var(--accent-soft);border-radius:var(--radius-lg);
   margin-top:16px;padding:18px;
 }
@@ -369,20 +376,21 @@ a{color:inherit;text-decoration:none}
 
 .notable-row{
   background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);margin-top:8px;
-  padding:11px 16px;display:grid;grid-template-columns:36px 56px 1fr auto auto;gap:14px;align-items:center;
+  padding:9px 12px;display:grid;grid-template-columns:32px 46px 1fr auto auto;gap:10px;align-items:center;
   box-shadow:0 1px 2px rgba(15,23,42,.03);
 }
-.thumb-mini{width:54px;height:54px;border-radius:10px;background:#e5e7eb;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--text-mute);font-size:18px}
+.thumb-mini{width:46px;height:46px;border-radius:10px;background:#e5e7eb;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--text-mute);font-size:16px}
 .thumb-mini img{width:100%;height:100%;object-fit:cover}
 .notable-info{min-width:0}
 .notable-anime{font-weight:700;font-size:14px;color:var(--primary);line-height:1.3;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .notable-artist{font-size:11.5px;color:var(--text-sub);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:3px}
-.notable-types{margin-top:5px;display:flex;gap:5px;flex-wrap:wrap}
-.notable-row .flat-metric{min-width:48px}
-.notable-row .flat-metric .val-row b{font-size:16px}
-.notable-row .flat-metric .icon-circle{width:24px;height:24px;font-size:11px}
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.notable-types{margin-top:4px;display:flex;gap:5px;flex-wrap:wrap}
+.notable-row .flat-metric{min-width:46px;align-items:flex-end}
+.notable-row .flat-metric .lbl{text-align:right}
+.notable-row .flat-metric .val-row b{font-size:18px}
+.notable-row .flat-metric .icon-circle{width:22px;height:22px;font-size:10px}
 
 /* Modal */
 .modal-overlay{
@@ -477,11 +485,22 @@ a{color:inherit;text-decoration:none}
 
 @media (max-width:420px){
   body{font-size:14.5px}
-  .top-cards{grid-template-columns:1fr 1fr;gap:8px}
+  .app-header{padding:14px 10px 0 10px}
+  .top-cards{grid-template-columns:1fr 1fr;gap:8px;padding:0 10px}
+  .tabs-wrap{padding:0 10px}
+  .tab-toolbar{padding:0 10px}
+  .update-line{padding:0 10px}
+  .count-line{padding:0 10px}
+  .tab-content{padding:6px 10px 80px}
+  .card{margin-top:8px}
+  .sl-card-head{padding:11px 12px;gap:10px}
   .rank-top3-metrics{padding-left:0;justify-content:space-around}
   .tp-metrics{padding-left:0;justify-content:space-around}
-  .notable-row{grid-template-columns:30px 50px 1fr auto auto;gap:10px;padding:10px 12px}
-  .rank-row-flat{padding:12px 14px;gap:14px}
+  .notable-row{grid-template-columns:28px 42px 1fr auto auto;gap:8px;padding:8px 10px}
+  .rank-row-flat{padding:9px 12px;gap:10px}
+  .trend-stats{gap:8px}
+  .trend-stat{padding:9px 10px;gap:8px}
+  .trend-stat .val{font-size:18px}
 }
 </style>
 </head>
@@ -821,12 +840,12 @@ function drawSetlistPage(){
       </div>
       <div class="card-detail">
         <div class="detail-table">
-          <div class="detail-row"><div class="lbl"><i class="fas fa-music"></i>曲名</div><div class="val">${escHtml(x.sg)}</div></div>
-          <div class="detail-row"><div class="lbl"><i class="fas fa-film"></i>作品名</div><div class="val">${escHtml(x.wk)}</div></div>
-          <div class="detail-row"><div class="lbl"><i class="fas fa-user"></i>歌手名</div><div class="val">${escHtml(x.ar)}</div></div>
-          <div class="detail-row"><div class="lbl"><i class="fas fa-microphone"></i>歌った人</div><div class="val">${escHtml(x.u)}</div></div>
-          <div class="detail-row"><div class="lbl"><i class="fas fa-door-open"></i>部屋</div><div class="val">${escHtml(x.rm)}</div></div>
-          <div class="detail-row"><div class="lbl"><i class="fas fa-hashtag"></i>順番</div><div class="val">${escHtml(x.o)}</div></div>
+          <div class="detail-row"><div class="lbl"><span class="lbl-ico"><i class="fas fa-music"></i></span>曲名</div><div class="val">${escHtml(x.sg)}</div></div>
+          <div class="detail-row"><div class="lbl"><span class="lbl-ico"><i class="fas fa-film"></i></span>作品名</div><div class="val">${escHtml(x.wk)}</div></div>
+          <div class="detail-row"><div class="lbl"><span class="lbl-ico"><i class="fas fa-user"></i></span>歌手名</div><div class="val">${escHtml(x.ar)}</div></div>
+          <div class="detail-row"><div class="lbl"><span class="lbl-ico"><i class="fas fa-microphone"></i></span>歌った人</div><div class="val">${escHtml(x.u)}</div></div>
+          <div class="detail-row"><div class="lbl"><span class="lbl-ico"><i class="fas fa-door-open"></i></span>部屋</div><div class="val">${escHtml(x.rm)}</div></div>
+          <div class="detail-row"><div class="lbl"><span class="lbl-ico"><i class="fas fa-hashtag"></i></span>順番</div><div class="val">${escHtml(x.o)}</div></div>
         </div>
         <button class="confirm-btn" onclick="event.stopPropagation();openSingersModal('${escAttr(x.wk)}','${escAttr(x.sg)}')">
           <i class="fas fa-users"></i> この曲を歌った人を確認 <i class="fas fa-chevron-right"></i>
@@ -1067,9 +1086,9 @@ function buildTrendHtml(){
   const {kpi, items} = buildTrendItems();
   let html = '';
   html += `<div class="trend-stats">
-    <div class="trend-stat"><div class="ico up"><i class="fas fa-arrow-trend-up"></i></div><div class="lbl">急上昇</div><div class="val">${kpi.surge_count}<small>曲</small></div></div>
-    <div class="trend-stat"><div class="ico new"><i class="far fa-star"></i></div><div class="lbl">新規ランクイン</div><div class="val">${kpi.new_in}<small>曲</small></div></div>
-    <div class="trend-stat"><div class="ico max"><i class="fas fa-arrow-up"></i></div><div class="lbl">最大伸び</div><div class="val">+${kpi.max_delta}</div></div>
+    <div class="trend-stat"><div class="ico up"><i class="fas fa-arrow-trend-up"></i></div><div class="body"><div class="lbl">急上昇</div><div class="val">${kpi.surge_count}<small>曲</small></div></div></div>
+    <div class="trend-stat"><div class="ico new"><i class="far fa-star"></i></div><div class="body"><div class="lbl">新規ランクイン</div><div class="val">${kpi.new_in}<small>曲</small></div></div></div>
+    <div class="trend-stat"><div class="ico max"><i class="fas fa-arrow-up"></i></div><div class="body"><div class="lbl">最大伸び</div><div class="val">+${kpi.max_delta}</div></div></div>
   </div>`;
 
   if(items.length>0){
@@ -1102,7 +1121,7 @@ function buildTrendHtml(){
       const rank = idx+2;
       const thumbUrl = getThumbUrl(TREND_TARGET_CAT, it.anime);
       html += `<div class="notable-row">
-        <div class="num-badge" style="width:30px;height:30px;font-size:13px">${rank}</div>
+        <div class="num-badge" style="width:28px;height:28px;font-size:12px">${rank}</div>
         <div class="thumb-mini">${thumbUrl?`<img src="${thumbUrl}" alt="">`:'<i class="far fa-image"></i>'}</div>
         <div class="notable-info">
           <div class="notable-anime">${escHtml(it.anime)}</div>
