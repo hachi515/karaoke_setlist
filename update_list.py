@@ -31,8 +31,10 @@ OFFLINE_FILES = [
 GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyzKEPfj0bYcRyEdizwQXcduIOQFt2_njtFQSyGP9jBjrhR8pyVKwDol6VN7bLPrktq/exec"
 CSV_EMPTY_PREFIX_BYTES = b'\xef\xbb\xbf\r\n\t '  # BOMと空白のみのCSVレスポンス判定に使う
 EXPECTED_HISTORY_COLUMNS = [
-    '部屋主', '順番', '曲名（ファイル名）', '作品名', '歌手名', '歌った人', '取得日'
+    '取得日', '部屋主', '順番', '曲名（ファイル名）', '作品名', '歌手名', '歌った人'
 ]
+# 履歴表示・HTML出力時の見せ順（取得日は歌った人の右）
+HISTORY_DISPLAY_COLUMNS = ['部屋主', '順番', '曲名（ファイル名）', '作品名', '歌手名', '歌った人', '取得日']
 
 def load_df_from_github(filename, **kwargs):
     """GitHubのRawデータからCSVを読み込む"""
@@ -284,9 +286,10 @@ def sort_history_df(df):
         df = df.drop(columns=['_temp_date'])
 
     cols = list(df.columns)
-    if '部屋主' in cols:
-        cols.insert(0, cols.pop(cols.index('部屋主')))
-        df = df[cols]
+    display_cols = [c for c in HISTORY_DISPLAY_COLUMNS if c in cols]
+    other_cols = [c for c in cols if c not in display_cols]
+    if display_cols:
+        df = df[display_cols + other_cols]
 
     return format_history_order_column(df.fillna(""))
 
