@@ -18,6 +18,9 @@
   --radius:10px; --radius-lg:14px;
   --maxw:600px;
 }
+@media (min-width:768px){
+  :root{ --maxw:880px; }
+}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
@@ -36,6 +39,46 @@ a{color:inherit;text-decoration:none}
 /* Header */
 .app-header{max-width:var(--maxw);margin:0 auto;padding:18px 16px 0 16px;display:flex;justify-content:space-between;align-items:center}
 .brand{font-size:24px;font-weight:800;color:var(--primary);letter-spacing:-0.01em}
+.theme-toggle{
+  width:32px;height:32px;border-radius:8px;background:#fff;border:1px solid var(--border);
+  color:var(--text-sub);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;
+  font-size:13px;flex-shrink:0;
+}
+.theme-toggle:hover{color:var(--accent);border-color:var(--accent-soft)}
+
+/* Dark mode */
+body.dark{
+  --primary:#f1f5f9; --accent:#818cf8; --accent-2:#a78bfa; --accent-soft:#4338ca; --accent-bg:#1e1b4b;
+  --bg:#0f172a; --panel:#1e293b; --text:#f1f5f9; --text-sub:#cbd5e1; --text-mute:#94a3b8;
+  --border:#334155; --border-soft:#1e293b;
+  --green-bg:#064e3b; --green-bd:#047857;
+  --orange-bg:#7c2d12; --orange-bd:#9a3412;
+}
+body.dark .top-card,body.dark .card,body.dark .icon-btn,body.dark .pill-select,body.dark .pill-text,
+body.dark .search-pill,body.dark .rank-row-flat,body.dark .notable-row,body.dark .trend-stat,
+body.dark .modal,body.dark .modal-row,body.dark .env-csv-text,body.dark .env-work-row,
+body.dark .env-lock-card,body.dark .popover,body.dark .pager button,body.dark .theme-toggle,
+body.dark .room-chip,body.dark .env-lock-input{
+  background:var(--panel);color:var(--text);border-color:var(--border);
+}
+body.dark .top-card input,body.dark .top-card select,body.dark .search-pill input,
+body.dark .env-csv-text,body.dark .env-lock-input,body.dark .room-search{
+  color:var(--text);background:transparent;
+}
+body.dark .room-search{border-color:var(--border)}
+body.dark .num-badge{background:#312e81;color:#c7d2fe}
+body.dark .modal-summary{background:#1e1b4b;color:#a5b4fc}
+body.dark .detail-row{background:var(--panel);border-color:var(--border-soft)}
+body.dark .card-detail{background:#0b1220}
+body.dark .song-row{border-color:var(--border-soft)}
+body.dark .growth-badge{background:var(--panel);border-color:var(--border)}
+body.dark .growth-badge.flat{background:#374151;color:var(--text-sub)}
+body.dark .modal-close{background:#374151;color:var(--text-sub)}
+body.dark .confirm-btn{background:#374151;color:var(--text-sub);border-color:var(--border)}
+body.dark .env-status{background:#1e1b4b;color:#a5b4fc}
+body.dark .btn-clear{background:#374151;color:var(--text-sub)}
+body.dark .dl-btn.ghost{background:var(--panel);color:var(--accent)}
+body.dark .type-pill.tp-none,body.dark .type-chip.tp-none{background:#374151;color:var(--text-sub);border-color:var(--border)}
 
 /* Top settings */
 .top-cards{
@@ -511,6 +554,7 @@ a{color:inherit;text-decoration:none}
 
 <div class="app-header">
   <div class="brand">Karaoke Dashboard</div>
+  <button class="theme-toggle" id="themeToggle" type="button" title="ダークモード切替" aria-label="ダークモード切替"><i class="fas fa-moon"></i></button>
 </div>
 
 <div class="top-cards">
@@ -567,6 +611,7 @@ a{color:inherit;text-decoration:none}
       </div>
     </div>
     <div class="dl-row">
+      <select class="pill-select" id="slDlYear" title="HTML保存期間"></select>
       <button class="dl-btn ghost" onclick="downloadSetlistHTML()"><i class="fas fa-file-download"></i> HTML保存</button>
     </div>
   </div>
@@ -643,15 +688,6 @@ a{color:inherit;text-decoration:none}
     </div>
   </div>
   <div id="envContent" style="display:none">
-    <div class="tab-toolbar">
-      <div class="toolbar-row">
-        <select class="pill-select" id="envCat"></select>
-      </div>
-    </div>
-    <div class="count-line" style="margin-top:12px"><i class="fas fa-cog"></i> 作品サムネイル管理</div>
-    <div class="env-status" id="envStatus"></div>
-    <div id="envList"></div>
-
     <div class="count-line" style="margin-top:18px"><i class="fas fa-file-csv"></i> cool_analysis.csv 編集</div>
     <div class="env-csv-wrap">
       <div class="env-csv-actions">
@@ -689,6 +725,25 @@ const UPDATE_TS = "2026/04/29 01:57";
 const PAGE_SIZE = 200;
 
 document.getElementById('updateLine').innerText = UPDATE_TS + ' 更新';
+
+// Dark mode toggle
+(function(){
+  const tg = document.getElementById('themeToggle');
+  if(!tg) return;
+  function apply(d){
+    document.body.classList.toggle('dark', d);
+    const ic = tg.querySelector('i');
+    if(ic) ic.className = d ? 'fas fa-sun' : 'fas fa-moon';
+  }
+  let dark = false;
+  try { dark = localStorage.getItem('darkMode') === '1'; } catch(e){}
+  apply(dark);
+  tg.addEventListener('click', ()=>{
+    dark = !dark;
+    try { localStorage.setItem('darkMode', dark ? '1' : '0'); } catch(e){}
+    apply(dark);
+  });
+})();
 
 function jsNormalize(s){
   if(!s) return "";
@@ -738,11 +793,7 @@ function typeChipHtml(t){
 }
 
 function getThumbUrl(cat, work){
-  const m = IMAGE_MAP[cat];
-  if(!m) return null;
-  const fid = m[work];
-  if(!fid) return null;
-  return `https://drive.google.com/thumbnail?id=${fid}&sz=w200`;
+  return null;
 }
 
 function findHistoryMatches(workName,songName){
@@ -1088,12 +1139,12 @@ function growthBadgeHtml(it, mode){
   const cur = trendCurValue(it, mode);
   const prev = trendPrevValue(it, mode);
   const d = cur - prev;
-  if(prev<=0 && cur>0) return `<span class="growth-badge new">NEW</span>`;
+  const unit = mode==='user' ? '人' : '曲';
+  if(prev<=0 && cur>0) return `<span class="growth-badge new">NEW +${cur}${unit}</span>`;
   if(prev<=0 && cur<=0) return '';
-  const pct = Math.round((d/prev)*100);
-  if(pct===0) return `<span class="growth-badge flat">±0%</span>`;
-  if(pct>0) return `<span class="growth-badge up">▲${pct}%</span>`;
-  return `<span class="growth-badge down">▼${Math.abs(pct)}%</span>`;
+  if(d===0) return `<span class="growth-badge flat">±0${unit}</span>`;
+  if(d>0) return `<span class="growth-badge up">+${d}${unit}</span>`;
+  return `<span class="growth-badge down">${d}${unit}</span>`;
 }
 
 function buildTrendItems(){
@@ -1173,9 +1224,6 @@ function renderTrend(){
 
 // ===== Env =====
 const ENV_PASSWORD = '0515';
-const envCatSel = document.getElementById('envCat');
-CATS.forEach(c=>{const o=document.createElement('option');o.value=c;o.innerText=c;envCatSel.appendChild(o);});
-envCatSel.addEventListener('change', renderEnv);
 
 function envIsUnlocked(){return sessionStorage.getItem('envUnlocked')==='1';}
 function envApplyLockState(){
@@ -1184,7 +1232,6 @@ function envApplyLockState(){
   if(envIsUnlocked()){
     lock.style.display='none';
     content.style.display='';
-    renderEnv();
   } else {
     lock.style.display='';
     content.style.display='none';
@@ -1205,64 +1252,6 @@ function envTryUnlock(){
 document.getElementById('envPwBtn').addEventListener('click', envTryUnlock);
 document.getElementById('envPwInput').addEventListener('keydown', e=>{ if(e.key==='Enter') envTryUnlock(); });
 envApplyLockState();
-
-function renderEnv(){
-  if(!envIsUnlocked()) return;
-  const cat = envCatSel.value;
-  const works = (COOL_DATA[cat]||{works:[]}).works;
-  const list = document.getElementById('envList');
-  if(!works.length){list.innerHTML='<div class="empty">対象作品がありません</div>';return;}
-  let html='';
-  works.forEach(w=>{
-    const thumbUrl = getThumbUrl(cat, w.anime);
-    const sid = 'env_'+btoa(unescape(encodeURIComponent(cat+'|'+w.anime))).replace(/[^a-zA-Z0-9]/g,'');
-    html += `<div class="env-work-row">
-      <div class="env-work-thumb" id="${sid}_thumb">${thumbUrl?`<img src="${thumbUrl}" alt="">`:'<i class="far fa-image"></i>'}</div>
-      <div class="env-work-name">${escHtml(w.anime)}</div>
-      <label class="env-upload-btn"><i class="fas fa-upload"></i> アップロード
-        <input type="file" accept="image/*" onchange="handleImageUpload(this,'${escAttr(cat)}','${escAttr(w.anime)}','${sid}_thumb')">
-      </label>
-    </div>`;
-  });
-  list.innerHTML = html;
-}
-function showEnvStatus(msg, isError){
-  const el = document.getElementById('envStatus');
-  el.innerText = msg;
-  el.style.background = isError ? '#fef2f2' : 'var(--accent-bg)';
-  el.style.color = isError ? '#ef4444' : 'var(--accent)';
-  el.classList.add('show');
-  setTimeout(()=>el.classList.remove('show'), 5000);
-}
-async function handleImageUpload(input, cat, work, thumbId){
-  const file = input.files[0]; if(!file) return;
-  showEnvStatus('画像を処理中...', false);
-  try{
-    const dataUrl = await cropToSquareDataUrl(file, 512);
-    const base64 = dataUrl.split(',')[1];
-    showEnvStatus('Driveへアップロード中...', false);
-    const existingId = (IMAGE_MAP[cat] && IMAGE_MAP[cat][work]) || '';
-    const res = await fetch(GAS_URL, {
-      method:'POST',
-      headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body: JSON.stringify({action:'upload_image',quarter:cat,work:work,filename:file.name,content_base64:base64,mime:'image/jpeg',existing_file_id:existingId,overwrite:true})
-    });
-    const text = await res.text();
-    let result; try{result=JSON.parse(text);}catch(e){result={ok:false,msg:text};}
-    if(result.ok && result.fileId){
-      if(!IMAGE_MAP[cat]) IMAGE_MAP[cat]={};
-      IMAGE_MAP[cat][work]=result.fileId;
-      const t = document.getElementById(thumbId);
-      if(t) t.innerHTML = `<img src="${dataUrl}" alt="">`;
-      showEnvStatus('完了: '+work, false);
-    } else {
-      showEnvStatus('失敗: '+(result.msg||'unknown'), true);
-    }
-  } catch(e){
-    showEnvStatus('エラー: '+e.message, true);
-  }
-  input.value = '';
-}
 
 // CSV editor for cool_analysis.csv
 function showCsvMsg(msg, kind){
@@ -1301,30 +1290,6 @@ async function envCsvSave(){
 }
 document.getElementById('envCsvLoad').addEventListener('click', envCsvLoad);
 document.getElementById('envCsvSave').addEventListener('click', envCsvSave);
-function cropToSquareDataUrl(file, size){
-  return new Promise((resolve,reject)=>{
-    const reader = new FileReader();
-    reader.onload = e=>{
-      const img = new Image();
-      img.onload = ()=>{
-        const s = Math.min(img.width, img.height);
-        const sx = (img.width - s)/2;
-        const sy = (img.height - s)/2;
-        const canvas = document.createElement('canvas');
-        canvas.width = size; canvas.height = size;
-        const ctx = canvas.getContext('2d');
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(img, sx, sy, s, s, 0, 0, size, size);
-        resolve(canvas.toDataURL('image/jpeg', 0.88));
-      };
-      img.onerror = reject;
-      img.src = e.target.result;
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
 
 // ===== HTML downloads =====
 function buildExportHtml(title, contentHtml){
@@ -1383,7 +1348,7 @@ function buildCoolHtmlForCatExport(cat){
 }
 function downloadCoolHTML(scope){
   const cat = coolCatSel.value;
-  let body = '<div style="max-width:600px;margin:0 auto;padding:0 16px 60px">';
+  let body = '<div style="max-width:var(--maxw);margin:0 auto;padding:0 16px 60px">';
   if(scope==='current') body += buildCoolHtmlForCatExport(cat);
   else CATS.forEach(c=> body += buildCoolHtmlForCatExport(c));
   body += '</div>';
@@ -1407,7 +1372,7 @@ function buildRankHtmlForCatExport(cat, mode){
 function downloadRankingHTML(scope){
   const cat = rankCatSel.value;
   const mode = rankModeSel.value;
-  let body = '<div style="max-width:600px;margin:0 auto;padding:0 16px 60px">';
+  let body = '<div style="max-width:var(--maxw);margin:0 auto;padding:0 16px 60px">';
   if(scope==='current') body += buildRankHtmlForCatExport(cat, mode);
   else CATS.forEach(c=> body += buildRankHtmlForCatExport(c, mode));
   body += '</div>';
@@ -1418,21 +1383,116 @@ function downloadRankingHTML(scope){
 
 function downloadTrendHTML(){
   const period = trendPeriodSel.value;
-  const inner = buildTrendHtml();
-  const body = `<div style="max-width:600px;margin:0 auto;padding:0 16px 60px"><div style="font-size:14px;font-weight:700;color:var(--primary);padding-left:10px;border-left:3px solid var(--accent);margin:14px 0 8px">推移 - ${TREND_TARGET_CAT} (直近${period}日)</div>${inner}</div>`;
+  let inner = buildTrendHtml();
+  // Wrap song titles in pickup-sub and notable-artist with export-links so the
+  // saved-time port + 検索リンク mapping can rewrite them on click.
+  inner = inner.replace(
+    /(<div class="pickup-anime">)([^<]+)(<\/div>)\s*(<div class="pickup-sub">)([^<]+)(<\/div>)/g,
+    (_, p1, anime, p3, p4, sub, p6)=>{
+      const key = encodeURIComponent(anime + ' ' + sub.split(' / ')[0]);
+      return p1 + anime + p3 + p4 + `<a class="export-link" href="#search:${key}">${sub}</a>` + p6;
+    }
+  );
+  inner = inner.replace(
+    /(<div class="notable-anime">)([^<]+)(<\/div>)\s*(<div class="notable-artist">)([^<]+)(<\/div>)/g,
+    (_, p1, anime, p3, p4, sub, p6)=>{
+      const key = encodeURIComponent(anime + ' ' + sub.split(' / ')[0]);
+      return p1 + anime + p3 + p4 + `<a class="export-link" href="#search:${key}">${sub}</a>` + p6;
+    }
+  );
+  const body = `<div style="max-width:var(--maxw);margin:0 auto;padding:0 16px 60px"><div style="font-size:14px;font-weight:700;color:var(--primary);padding-left:10px;border-left:3px solid var(--accent);margin:14px 0 8px">推移 - ${TREND_TARGET_CAT} (直近${period}日)</div>${inner}</div>`;
   downloadFile(`karaoke_trend_${period}d.html`, buildExportHtml(`推移 - ${TREND_TARGET_CAT}`, body));
 }
 function downloadSetlistHTML(){
-  const node = document.getElementById('slList').cloneNode(true);
-  const body = `<div style="max-width:600px;margin:0 auto;padding:0 16px 60px"><div style="font-size:14px;font-weight:700;color:var(--primary);padding-left:10px;border-left:3px solid var(--accent);margin:14px 0 8px">セットリスト</div>${node.outerHTML}</div>`;
-  downloadFile('karaoke_setlist.html', buildExportHtml('セットリスト', body));
+  const yearSel = document.getElementById('slDlYear');
+  const yearVal = yearSel ? yearSel.value : 'all';
+  // Filter SETLIST by selected year (or 'all')
+  let arr = SETLIST.slice();
+  if(yearVal && yearVal !== 'all'){
+    arr = arr.filter(x=>{
+      const y = (x.d || '').slice(0,4);
+      return y === yearVal;
+    });
+  }
+  // Same sort order as the on-screen list: date desc, then 順番 desc
+  arr.sort((a,b)=>{
+    if(a.d!==b.d) return a.d<b.d?1:-1;
+    return b._orderNum - a._orderNum;
+  });
+
+  let cards = '';
+  arr.forEach((x, idx)=>{
+    const dispNum = (idx + 1).toString();
+    const metaPieces = [];
+    if(x.wk) metaPieces.push(escHtml(x.wk));
+    if(x.ar) metaPieces.push(escHtml(x.ar));
+    const metaLine = metaPieces.join('<span class="sep">|</span>');
+    const songIcon = x.sg && /singing|歌|うた/i.test(x.sg) ? '<i class="fas fa-microphone song-mic"></i>' : '';
+    const searchKey = encodeURIComponent((x.wk ? x.wk + ' ' : '') + x.sg);
+    const songLinkOpen = `<a class="export-link" href="#search:${searchKey}" onclick="event.stopPropagation()">`;
+    const songLinkClose = `</a>`;
+    cards += `<div class="card">
+      <div class="sl-card-head" onclick="toggleCard(this)">
+        <div class="num-badge">${escHtml(dispNum)}</div>
+        <div class="sl-body">
+          <div class="sl-top">
+            ${roomTagHtml(x.rm)}
+            <span class="sl-date">${escHtml(x.d)}</span>
+          </div>
+          <div class="sl-song">${songIcon}<span style="overflow:hidden;text-overflow:ellipsis">${songLinkOpen}${escHtml(x.sg)}${songLinkClose}</span></div>
+          ${metaLine?`<div class="sl-meta">${metaLine}</div>`:''}
+        </div>
+        <i class="fas fa-chevron-down card-chev"></i>
+      </div>
+      <div class="card-detail">
+        <div class="detail-table">
+          <div class="detail-row"><div class="lbl"><i class="fas fa-music"></i>曲名</div><div class="val">${songLinkOpen}${escHtml(x.sg)}${songLinkClose}</div></div>
+          <div class="detail-row"><div class="lbl"><i class="fas fa-film"></i>作品名</div><div class="val">${escHtml(x.wk)}</div></div>
+          <div class="detail-row"><div class="lbl"><i class="fas fa-user"></i>歌手名</div><div class="val">${escHtml(x.ar)}</div></div>
+          <div class="detail-row"><div class="lbl"><i class="fas fa-microphone"></i>歌った人</div><div class="val">${escHtml(x.u)}</div></div>
+          <div class="detail-row"><div class="lbl"><i class="fas fa-door-open"></i>部屋</div><div class="val">${escHtml(x.rm)}</div></div>
+          <div class="detail-row"><div class="lbl"><i class="fas fa-hashtag"></i>順番</div><div class="val">${escHtml(x.o)}</div></div>
+        </div>
+        <button class="confirm-btn" onclick="event.stopPropagation();openSingersModal('${escAttr(x.wk)}','${escAttr(x.sg)}')">
+          <i class="fas fa-users"></i> この曲を歌った人を確認 <i class="fas fa-chevron-right"></i>
+        </button>
+      </div>
+    </div>`;
+  });
+  if(arr.length===0) cards = '<div class="empty">該当データがありません</div>';
+
+  const titleSuffix = (yearVal && yearVal !== 'all') ? ` (${yearVal}年)` : ' (全件)';
+  const body = `<div style="max-width:var(--maxw);margin:0 auto;padding:0 16px 60px"><div style="font-size:14px;font-weight:700;color:var(--primary);padding-left:10px;border-left:3px solid var(--accent);margin:14px 0 8px">セットリスト${titleSuffix} - ${arr.length}件</div>${cards}</div>`;
+  const fname = (yearVal && yearVal !== 'all') ? `karaoke_setlist_${yearVal}.html` : 'karaoke_setlist_all.html';
+  downloadFile(fname, buildExportHtml('セットリスト' + titleSuffix, body));
 }
+
+// Populate setlist HTML download year selector
+(function(){
+  const sel = document.getElementById('slDlYear');
+  if(!sel) return;
+  const years = new Set();
+  HISTORY.forEach(h=>{
+    const y = (h.d || '').slice(0,4);
+    if(/^\d{4}$/.test(y)) years.add(y);
+  });
+  const sorted = Array.from(years).sort((a,b)=>b.localeCompare(a));
+  sel.innerHTML = '';
+  const optAll = document.createElement('option');
+  optAll.value = 'all'; optAll.innerText = '全件';
+  sel.appendChild(optAll);
+  sorted.forEach(y=>{
+    const o = document.createElement('option');
+    o.value = y; o.innerText = y + '年';
+    sel.appendChild(o);
+  });
+  if(sorted.length>0) sel.value = sorted[0];
+})();
 
 renderSetlist();
 renderCool();
 renderRanking();
 renderTrend();
-renderEnv();
 </script>
 </body>
 </html>
