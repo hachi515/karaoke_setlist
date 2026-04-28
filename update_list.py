@@ -1216,8 +1216,8 @@ a{color:inherit;text-decoration:none}
 }
 
 @media (max-width:520px){
-  .app-header,.top-cards,.tabs-wrap,.tab-toolbar,.update-line,.count-line,.tab-content{padding-left:8px !important;padding-right:8px !important}
-  .tab-content{padding-bottom:80px !important}
+  .app-header,.top-cards,.tabs-wrap,.tab-toolbar,.update-line,.count-line,.tab-content{padding-left:8px;padding-right:8px}
+  .tab-content{padding-bottom:80px}
 }
 @media (max-width:420px){
   body{font-size:14.5px}
