@@ -758,6 +758,13 @@ if not full_df.empty:
         ar = pick(r, col_aliases['ar'])
         u  = pick(r, col_aliases['u'])
 
+        # 取得日を必ず "YYYY/MM/DD" (ゼロ埋め) に正規化する。
+        # 文字列ソートで日付降順を担保するため (例: "2026/4/29" と "2026/04/29" の混在を防ぐ)。
+        if d:
+            _dt = pd.to_datetime(d, errors='coerce')
+            if pd.notna(_dt):
+                d = _dt.strftime('%Y/%m/%d')
+
         sn = normalize_text(sg)
         wn_src = _rescue_workname(wk, sg)
         wn = normalize_text(wn_src)
@@ -1649,7 +1656,7 @@ document.querySelectorAll('.tab-btn').forEach(b=>{
 function toggleCard(headEl){headEl.parentElement.classList.toggle('expanded');}
 
 // ===== Setlist =====
-const SETLIST = HISTORY.map((h,i)=>({...h, idx:i, _orderNum: parseFloat(h.o) || -Infinity}));
+const SETLIST = HISTORY.map((h,i)=>{const n=parseFloat(h.o);return {...h, idx:i, _orderNum: Number.isFinite(n) ? n : -Infinity};});
 let slState = {rooms:new Set(), keyword:'', page:1, filtered:[]};
 
 function applySlFilter(){
