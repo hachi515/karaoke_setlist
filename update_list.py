@@ -619,1542 +619,230 @@ else:
 print(f"全履歴データ合計: {len(full_df)} 行")
 
 # ==========================================
+# ==========================================
 # ★集計処理
 # ==========================================
-analysis_html_content = "" 
-ranking_count_html_content = "" 
-ranking_user_html_content = "" 
 
-cool_data_exists = False
-ranking_data_list = [] 
-graph_series_data_count = {}
-graph_series_data_user = {}
-
-created_lists_html = ""
-uncreated_lists_html = ""
-
-cool_file = "cool_analysis.csv" 
-
-# 集計対象カテゴリの定義
+cool_file = "cool_analysis.csv"
 ALLOWED_CATEGORIES = ["2026年春アニメ", "2026年冬アニメ", "2025年秋アニメ"]
 
-# --- HTMLコントロール用 プルダウン生成 ---
-category_options = '<option value="ALL">すべて保存</option>\n'
-for cat in ALLOWED_CATEGORIES:
-    category_options += f'<option value="{cat}">{cat}</option>\n'
-
-# --- オフラインリスト読み込み (GitHubから) ---
-offline_targets = []
-
 print(f"GitHubからオフラインリストを読み込みます... (User: {GITHUB_USER}, Repo: {GITHUB_REPO})")
-
+offline_targets = []
 for filename in OFFLINE_FILES:
     offline_df = load_df_from_github(filename)
-    if not offline_df.empty:
-        offline_df = offline_df.fillna("")
-        if '曲名' in offline_df.columns:
-            targets = [normalize_offline_text(str(x)) for x in offline_df['曲名'].tolist()]
-            offline_targets.extend(targets)
-            print(f"  -> {filename}: {len(targets)} 件追加")
-        else:
-            print(f"  -> {filename}: '曲名'カラムが見つかりません。")
-    else:
-        print(f"  -> {filename}: 読み込み失敗または空です。")
+    if not offline_df.empty and '曲名' in offline_df.columns:
+        targets = [normalize_offline_text(str(x)) for x in offline_df.fillna("")['曲名'].tolist()]
+        offline_targets.extend(targets)
+        print(f"  -> {filename}: {len(targets)} 件追加")
 
-print(f"オフラインリスト合計件数: {len(offline_targets)}")
-
-
-# --- ★関数: カテゴリ別リストHTML生成 ---
-def generate_category_html_block(category_name, item_list):
-    if not item_list:
-        return ""
-    
-    item_list.sort(key=lambda x: x['anime'])
-    
-    html = f"""
-    <div class="category-block">
-        <div class="category-header" onclick="toggleCategory(this)">
-            {category_name} <i class="fas fa-chevron-down" style="float:right;"></i>
-        </div>
-        <div class="category-content">
-        <table class="analysisTable">
-            <thead>
-                <tr>
-                    <th style="width:30%; min-width:180px;">作品名</th>
-                    <th style="width:10%; min-width:60px;">OP/ED</th>
-                    <th style="width:25%; min-width:150px;">歌手</th>
-                    <th style="width:35%; min-width:180px;">曲名</th>
-                </tr>
-            </thead>
-    """
-    
-    def get_anime_key(x): return x['anime']
-    
-    for anime_name, group_iter in groupby(item_list, key=get_anime_key):
-        group_items = list(group_iter)
-        rowspan = len(group_items)
-        
-        html += '<tbody class="anime-group">'
-        
-        for i, item in enumerate(group_items):
-            clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
-            search_word = f"{clean_anime} {item['song']}"
-            
-            link_tag_start = f'<a href="#search_link/{search_word}" class="export-link">'
-            
-            html += '<tr>'
-            if i == 0:
-                html += f'<td rowspan="{rowspan}">{item["anime"]}</td>'
-            
-            html += f'<td align="center">{link_tag_start}{item["type"]}</a></td>'
-            html += f'<td>{link_tag_start}{item["artist"]}</a></td>'
-            html += f'<td>{link_tag_start}{item["song"]}</a></td>'
-            html += '</tr>'
-        
-        html += '</tbody>'
-    
-    html += "</table></div></div>"
-    return html
-
-
-# --- Cool Analysis読み込み ---
 raw_df = load_df_from_gas(cool_file, header=None)
+embedded_categories = {cat: [] for cat in ALLOWED_CATEGORIES}
+created_lists = {cat: [] for cat in ALLOWED_CATEGORIES}
+uncreated_lists = {cat: [] for cat in ALLOWED_CATEGORIES}
+ranking_base = []
+trending_items = []
 
 if not raw_df.empty:
-    try:
-        raw_df = raw_df.fillna("")
-        raw_df = raw_df.drop_duplicates(keep='last')
-        
-        analysis_source_df = full_df.copy()
-        analysis_source_df['dt_obj'] = pd.to_datetime(analysis_source_df['取得日'], errors='coerce')
-        analysis_source_df = analysis_source_df.dropna(subset=['dt_obj'])
-        
-        analysis_source_df['norm_filename'] = analysis_source_df['曲名（ファイル名）'].apply(normalize_text)
-        
-        def get_rescued_workname(row):
-            raw_work = str(row['作品名']) if pd.notna(row['作品名']) else ""
-            raw_song = str(row['曲名（ファイル名）']) if pd.notna(row['曲名（ファイル名）']) else ""
-            if raw_work.strip() in ["-", "−", "", "nan"]:
-                match = re.search(r'【(.*?)】', raw_song)
-                if match:
-                    return normalize_text(match.group(1))
-            return normalize_text(raw_work)
+    raw_df = raw_df.fillna("").drop_duplicates(keep='last')
+    analysis_source_df = full_df.copy()
+    analysis_source_df['dt_obj'] = pd.to_datetime(analysis_source_df['取得日'], errors='coerce')
+    analysis_source_df = analysis_source_df.dropna(subset=['dt_obj'])
+    analysis_source_df['norm_filename'] = analysis_source_df['曲名（ファイル名）'].apply(normalize_text)
 
-        if '作品名' in analysis_source_df.columns:
-            analysis_source_df['norm_workname'] = analysis_source_df.apply(get_rescued_workname, axis=1)
-        else:
-            analysis_source_df['norm_workname'] = ""
+    def get_rescued_workname(row):
+        raw_work = str(row['作品名']) if pd.notna(row['作品名']) else ""
+        raw_song = str(row['曲名（ファイル名）']) if pd.notna(row['曲名（ファイル名）']) else ""
+        if raw_work.strip() in ["-", "−", "", "nan"]:
+            match = re.search(r'【(.*?)】', raw_song)
+            if match:
+                return normalize_text(match.group(1))
+        return normalize_text(raw_work)
 
-        exclude_keywords = ['test', 'テスト', 'システム', 'admin', 'System']
-        
-        full_history = analysis_source_df[
-            (~analysis_source_df['歌った人'].astype(str).apply(lambda x: any(k in x for k in exclude_keywords)))
-        ].sort_values('dt_obj')
-        
-        start_date = pd.to_datetime("2026/01/01")
-        end_date = pd.to_datetime("2026/06/30")
-        target_history = full_history[
-            (full_history['dt_obj'] >= start_date) & 
-            (full_history['dt_obj'] <= end_date)
-        ]
+    analysis_source_df['norm_workname'] = analysis_source_df.apply(get_rescued_workname, axis=1) if '作品名' in analysis_source_df.columns else ""
+    exclude_keywords = ['test', 'テスト', 'システム', 'admin', 'System']
+    full_history = analysis_source_df[(~analysis_source_df['歌った人'].astype(str).apply(lambda x: any(k in x for k in exclude_keywords)))].sort_values('dt_obj')
 
-        categorized_data = {}
-        current_category = None
-        
-        for idx, row in raw_df.iterrows():
-            if not any(str(x).strip() for x in row): continue
-            col0 = str(row[0]).strip()
+    start_date = pd.to_datetime("2026/01/01")
+    end_date = pd.to_datetime("2026/06/30")
+    target_history = full_history[(full_history['dt_obj'] >= start_date) & (full_history['dt_obj'] <= end_date)]
 
-            is_category_line = any(cat in col0 for cat in ALLOWED_CATEGORIES) and "作品名" not in col0
+    categorized_data = {}
+    current_category = None
+    for _, row in raw_df.iterrows():
+        if not any(str(x).strip() for x in row):
+            continue
+        col0 = str(row[0]).strip()
+        is_category_line = any(cat in col0 for cat in ALLOWED_CATEGORIES) and "作品名" not in col0
+        if is_category_line:
+            current_category = col0
+            categorized_data.setdefault(current_category, [])
+            continue
+        if "作品名" in col0 or current_category is None:
+            continue
+        anime = str(row[0]).strip() if len(row) > 0 else ""
+        type_ = str(row[1]).strip() if len(row) > 1 else ""
+        artist = str(row[2]).strip() if len(row) > 2 else ""
+        song = str(row[3]).strip() if len(row) > 3 else ""
+        if anime or song:
+            categorized_data[current_category].append({"anime": anime, "type": type_, "artist": artist, "song": song})
 
-            if is_category_line:
-                current_category = col0
-                if current_category not in categorized_data:
-                    categorized_data[current_category] = []
-                continue
-            
-            if "作品名" in col0: continue
-            if current_category is None: continue
+    for category, items in categorized_data.items():
+        if category not in embedded_categories:
+            continue
+        for item in sorted(items, key=lambda x: (x['anime'], x['song'])):
+            target_song_norm = normalize_text(item['song'])
+            target_anime_norm = normalize_text(item['anime'])
+            song_match_mask = check_match(target_song_norm, target_history['norm_filename'])
+            anime_match_mask = (
+                target_history['norm_filename'].str.contains(re.escape(target_anime_norm), case=False, na=False) |
+                target_history['norm_workname'].str.contains(re.escape(target_anime_norm), case=False, na=False)
+            )
+            if target_song_norm and target_anime_norm:
+                final_mask = song_match_mask & anime_match_mask
+            elif target_song_norm:
+                final_mask = song_match_mask
+            elif target_anime_norm:
+                final_mask = anime_match_mask
+            else:
+                final_mask = pd.Series([False] * len(target_history))
 
-            anime = str(row[0]).strip() if len(row) > 0 else ""
-            type_ = str(row[1]).strip() if len(row) > 1 else ""
-            artist = str(row[2]).strip() if len(row) > 2 else ""
-            song = str(row[3]).strip() if len(row) > 3 else ""
-            
-            if not anime and not song: continue
+            matched_data = target_history[final_mask]
+            count = int(len(matched_data))
+            users = int(matched_data['歌った人'].nunique()) if count > 0 else 0
 
-            categorized_data[current_category].append({
-                "anime": anime, "type": type_, "artist": artist, "song": song
-            })
+            target_song_raw_norm = normalize_offline_text(item['song'])
+            created = False
+            if target_song_norm:
+                for offline_str in offline_targets:
+                    if (target_song_norm in offline_str) or (target_song_raw_norm in offline_str):
+                        if (not target_anime_norm) or (target_anime_norm in offline_str):
+                            created = True
+                            break
 
-        print("グラフデータ計算中...")
-        graph_target_cat = "2026年春アニメ"
-        
-        if graph_target_cat in categorized_data:
-            winter_items = categorized_data[graph_target_cat]
-            
-            items_with_norm = []
-            for item in winter_items:
-                items_with_norm.append({
-                    "meta": item,
-                    "song_norm": normalize_text(item["song"]),
-                    "anime_norm": normalize_text(item["anime"]),
-                    "name": f"{item['anime']} {item['song']}"
+            row = {"anime": item['anime'], "type": item['type'], "artist": item['artist'], "song": item['song'], "count": count, "users": users, "created": created, "category": category}
+            embedded_categories[category].append(row)
+            ranking_base.append(row)
+            (created_lists[category] if created else uncreated_lists[category]).append(row)
+
+    if not target_history.empty:
+        max_dt = target_history['dt_obj'].max()
+        recent_start = max_dt - pd.Timedelta(days=6)
+        base_start = recent_start - pd.Timedelta(days=14)
+        base_end = recent_start - pd.Timedelta(days=1)
+        for category, items in embedded_categories.items():
+            for item in items:
+                song_norm = normalize_text(item['song'])
+                anime_norm = normalize_text(item['anime'])
+                song_match = check_match(song_norm, target_history['norm_filename'])
+                anime_match = (
+                    target_history['norm_filename'].str.contains(re.escape(anime_norm), case=False, na=False) |
+                    target_history['norm_workname'].str.contains(re.escape(anime_norm), case=False, na=False)
+                )
+                if song_norm and anime_norm:
+                    mask = song_match & anime_match
+                elif song_norm:
+                    mask = song_match
+                else:
+                    mask = anime_match
+                matched = target_history[mask]
+                recent_df = matched[(matched['dt_obj'] >= recent_start) & (matched['dt_obj'] <= max_dt)]
+                base_df = matched[(matched['dt_obj'] >= base_start) & (matched['dt_obj'] <= base_end)]
+                recent = int(len(recent_df))
+                if recent < 3:
+                    continue
+                baseline = float(len(base_df) / 2.0)
+                score = (recent - baseline) / max(baseline, 1.0)
+                if score <= 0:
+                    continue
+                trending_items.append({
+                    "anime": item['anime'], "song": item['song'], "artist": item['artist'], "type": item['type'],
+                    "category": category, "recent": recent, "baseline": round(baseline, 2), "score": round(score, 4),
+                    "users7d": int(recent_df['歌った人'].nunique()) if not recent_df.empty else 0, "isNew": baseline == 0
                 })
 
-            matched_records = []
-            for idx, item in enumerate(items_with_norm):
-                song_pat = item["song_norm"]
-                anime_pat = item["anime_norm"]
-                if not song_pat and not anime_pat: continue
-                
-                song_match = check_match(song_pat, full_history['norm_filename'])
-                mask = None
-                if song_pat and anime_pat:
-                    anime_match = (
-                        full_history['norm_filename'].str.contains(re.escape(anime_pat), case=False, na=False) |
-                        full_history['norm_workname'].str.contains(re.escape(anime_pat), case=False, na=False)
-                    )
-                    mask = song_match & anime_match
-                elif song_pat:
-                    mask = song_match
-                elif anime_pat:
-                    mask = (
-                        full_history['norm_filename'].str.contains(re.escape(anime_pat), case=False, na=False) |
-                        full_history['norm_workname'].str.contains(re.escape(anime_pat), case=False, na=False)
-                    )
-                
-                if mask is not None:
-                    for _, row in full_history[mask].iterrows():
-                        matched_records.append({
-                            "date": row['dt_obj'],
-                            "item_idx": idx,
-                            "user": row['歌った人']
-                        })
-            
-            matched_records.sort(key=lambda x: x['date'])
-            
-            if matched_records:
-                unique_dates = sorted(list(set(r['date'] for r in matched_records)))
-                current_counts = {}
-                current_users = {}
-                rec_ptr = 0
-                total_recs = len(matched_records)
-                
-                for current_dt in unique_dates:
-                    dt_str = current_dt.strftime("%Y-%m-%d")
-                    
-                    while rec_ptr < total_recs and matched_records[rec_ptr]['date'] <= current_dt:
-                        rec = matched_records[rec_ptr]
-                        idx = rec['item_idx']
-                        user = rec['user']
-                        
-                        current_counts[idx] = current_counts.get(idx, 0) + 1
-                        if idx not in current_users:
-                            current_users[idx] = set()
-                        current_users[idx].add(user)
-                        rec_ptr += 1
-                    
-                    ranking_src_count = []
-                    for idx, cnt in current_counts.items():
-                        ranking_src_count.append({"name": items_with_norm[idx]["name"], "val": cnt})
-                    ranking_src_count.sort(key=lambda x: x['val'], reverse=True)
-                    
-                    rank = 1
-                    prev_val = -1
-                    for i, d in enumerate(ranking_src_count):
-                        if i > 0 and d['val'] < prev_val: rank = i + 1
-                        prev_val = d['val']
-                        if rank <= 20:
-                            if d['name'] not in graph_series_data_count: graph_series_data_count[d['name']] = []
-                            graph_series_data_count[d['name']].append({"x": dt_str, "y": rank})
+trending_items.sort(key=lambda x: (x['score'], x['recent'], x['users7d']), reverse=True)
+trending_items = trending_items[:30]
 
-                    ranking_src_user = []
-                    for idx, u_set in current_users.items():
-                        if len(u_set) > 0:
-                            ranking_src_user.append({"name": items_with_norm[idx]["name"], "val": len(u_set)})
-                    ranking_src_user.sort(key=lambda x: x['val'], reverse=True)
-                    
-                    rank = 1
-                    prev_val = -1
-                    for i, d in enumerate(ranking_src_user):
-                        if i > 0 and d['val'] < prev_val: rank = i + 1
-                        prev_val = d['val']
-                        if rank <= 20:
-                            if d['name'] not in graph_series_data_user: graph_series_data_user[d['name']] = []
-                            graph_series_data_user[d['name']].append({"x": dt_str, "y": rank})
+rankings_count = {cat: [] for cat in ALLOWED_CATEGORIES}
+rankings_users = {cat: [] for cat in ALLOWED_CATEGORIES}
+for cat in ALLOWED_CATEGORIES:
+    items = [x for x in ranking_base if x['category'] == cat and x['count'] > 0]
+    rankings_count[cat] = sorted(items, key=lambda x: (x['count'], x['users']), reverse=True)
+    rankings_users[cat] = sorted(items, key=lambda x: (x['users'], x['count']), reverse=True)
 
-        print("グラフデータ計算完了。")
-
-        for category, items in categorized_data.items():
-            
-            cat_created_items = []
-            cat_uncreated_items = []
-
-            analysis_html_content += f"""
-            <div class="category-block">
-                <div class="category-header" onclick="toggleCategory(this)">
-                    {category} <i class="fas fa-chevron-down" style="float:right;"></i>
-                </div>
-                <div class="category-content">
-                <table class="analysisTable">
-                    <thead>
-                        <tr>
-                            <th style="width:25%; min-width:180px;">作品名</th>
-                            <th style="width:5%; min-width:40px;">作成</th> <th style="width:10%; min-width:60px;">OP/ED</th>
-                            <th style="width:20%; min-width:150px;">歌手</th>
-                            <th style="width:25%; min-width:180px;">曲名</th>
-                            <th style="width:8%; min-width:60px;">人数</th>
-                            <th style="width:15%; min-width:60px;">歌唱数</th>
-                        </tr>
-                    </thead>
-            """
-            
-            items.sort(key=lambda x: x['anime'])
-            def get_anime_key(x): return x['anime']
-            
-            for anime_name, group_iter in groupby(items, key=get_anime_key):
-                group_items = list(group_iter)
-                rowspan = len(group_items)
-                
-                analysis_html_content += '<tbody class="anime-group">'
-                
-                for i, item in enumerate(group_items):
-                    target_song_norm = normalize_text(item["song"])
-                    target_anime_norm = normalize_text(item["anime"])
-                    
-                    song_match_mask = check_match(target_song_norm, target_history['norm_filename'])
-                    anime_match_mask = (
-                        target_history['norm_filename'].str.contains(re.escape(target_anime_norm), case=False, na=False) |
-                        target_history['norm_workname'].str.contains(re.escape(target_anime_norm), case=False, na=False)
-                    )
-                    
-                    if target_song_norm and target_anime_norm:
-                        final_mask = song_match_mask & anime_match_mask
-                    elif target_song_norm:
-                        final_mask = song_match_mask
-                    elif target_anime_norm:
-                        final_mask = anime_match_mask
-                    else:
-                        final_mask = pd.Series([False] * len(target_history))
-
-                    matched_data = target_history[final_mask]
-                    count = len(matched_data)
-                    user_count = matched_data['歌った人'].nunique() if count > 0 else 0
-                    
-                    creation_count = 0
-                    
-                    target_song_raw_norm = normalize_offline_text(item["song"])
-
-                    if target_song_norm:
-                        for offline_str in offline_targets:
-                            if (target_song_norm in offline_str) or (target_song_raw_norm in offline_str):
-                                if target_anime_norm:
-                                    if target_anime_norm in offline_str:
-                                        creation_count += 1
-                                else:
-                                    creation_count += 1
-
-                    if creation_count >= 1:
-                        cat_created_items.append(item)
-                    else:
-                        cat_uncreated_items.append(item)
-
-                    ranking_data_list.append({
-                        "category": category,
-                        "anime": item["anime"],
-                        "song": item["song"],
-                        "artist": item["artist"],
-                        "type": item["type"],
-                        "count": count,
-                        "user_count": user_count
-                    })
-
-                    row_class = "has-count"
-                    
-                    bar_width = min(count * 20, 150)
-                    bar_html = f'<div class="bar-chart" style="width:{bar_width}px;"></div>' if count > 0 else ""
-                    
-                    user_bar_width = min(user_count * 20, 100)
-                    user_bar_html = f'<div class="bar-chart-user" style="width:{user_bar_width}px;"></div>' if user_count > 0 else ""
-
-                    clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
-                    search_word = f"{clean_anime} {item['song']}"
-                    
-                    link_tag_start = f'<a href="#search_link/{search_word}" class="export-link">'
-                    
-                    analysis_html_content += f'<tr class="{row_class}">'
-                    if i == 0:
-                        analysis_html_content += f'<td rowspan="{rowspan}">{item["anime"]}</td>'
-                    
-                    analysis_html_content += f'<td align="center">{creation_count}</td>'
-                    analysis_html_content += f'<td align="center">{link_tag_start}{item["type"]}</a></td>'
-                    analysis_html_content += f'<td>{link_tag_start}{item["artist"]}</a></td>'
-                    analysis_html_content += f'<td>{link_tag_start}{item["song"]}</a></td>'
-                    analysis_html_content += f'<td class="count-cell"><div class="count-wrapper"><span class="count-num">{user_count}</span>{user_bar_html}</div></td>'
-                    analysis_html_content += f'<td class="count-cell"><div class="count-wrapper"><span class="count-num">{count}</span>{bar_html}</div></td>'
-                    analysis_html_content += '</tr>'
-                
-                analysis_html_content += '</tbody>'
-            
-            analysis_html_content += "</table></div></div>"
-
-            created_lists_html += generate_category_html_block(category, cat_created_items)
-            uncreated_lists_html += generate_category_html_block(category, cat_uncreated_items)
-
-        cool_data_exists = True
-        print("クール集計処理完了。")
-        
-        print("ランキング生成処理開始...")
-        
-        def generate_ranking_html(mode="count"):
-            html_out = ""
-            for target_cat in ALLOWED_CATEGORIES:
-                if target_cat not in categorized_data:
-                    continue
-                    
-                cat_items = [d for d in ranking_data_list if d["category"] == target_cat and d["count"] > 0]
-                
-                if mode == "count":
-                    cat_items.sort(key=lambda x: (x["count"], x["user_count"]), reverse=True)
-                    rank_title = f"{target_cat} 歌唱数ランキング (TOP 20)"
-                    val_key = "count"
-                else: 
-                    cat_items.sort(key=lambda x: (x["user_count"], x["count"]), reverse=True)
-                    rank_title = f"{target_cat} 歌唱人数ランキング (TOP 20)"
-                    val_key = "user_count"
-
-                html_out += f"""
-                <div class="category-block">
-                    <div class="category-header" onclick="toggleCategory(this)">
-                        {rank_title} <i class="fas fa-chevron-down" style="float:right;"></i>
-                    </div>
-                    <div class="category-content">
-                    <table class="rankingTable">
-                        <thead>
-                            <tr>
-                                <th style="width:10%; min-width:60px;">順位</th>
-                                <th style="width:25%; min-width:180px;">作品名</th>
-                                <th style="width:25%; min-width:180px;">曲名</th>
-                                <th style="width:15%; min-width:150px;">歌手</th>
-                                <th style="width:10%; min-width:60px;">人数</th>
-                                <th style="width:15%; min-width:60px;">歌唱数</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                """
-                
-                if not cat_items:
-                    html_out += '<tr><td colspan="6" style="text-align:center; padding:20px;">歌唱データがありません</td></tr>'
-                else:
-                    previous_val = None
-                    current_rank = 0
-                    
-                    for i, item in enumerate(cat_items):
-                        current_val = item[val_key] 
-                        
-                        if current_val != previous_val:
-                            current_rank = i + 1
-                        
-                        if current_rank > 20:
-                            break
-                        
-                        previous_val = current_val
-                        
-                        rank_class = f"rank-{current_rank}" if current_rank <= 3 else "rank-normal"
-                        row_rank_class = f"rank-row-{current_rank}" if current_rank <= 3 else ""
-
-                        rank_display = f'<span class="rank-badge {rank_class}">{current_rank}</span>'
-                        
-                        if current_rank == 1:
-                            rank_display += ' <i class="fas fa-crown" style="color:#FFD700;"></i>'
-                        elif current_rank == 2:
-                            rank_display += ' <i class="fas fa-medal" style="color:#C0C0C0;"></i>'
-                        elif current_rank == 3:
-                            rank_display += ' <i class="fas fa-medal" style="color:#CD7F32;"></i>'
-                            
-                        bar_width = min(item["count"] * 20, 150)
-                        bar_html = f'<div class="bar-chart" style="width:{bar_width}px;"></div>'
-
-                        user_bar_width = min(item["user_count"] * 20, 100)
-                        user_bar_html = f'<div class="bar-chart-user" style="width:{user_bar_width}px;"></div>' if item["user_count"] > 0 else ""
-
-                        clean_anime = re.sub(r'[（\(].*?[）\)]', '', item['anime']).strip()
-                        search_word = f"{clean_anime} {item['song']}"
-                        
-                        html_out += f"""
-                        <tr class="has-count ranking-row {row_rank_class}" data-href="#search_link/{search_word}">
-                            <td align="center" style="font-weight:bold; font-size:1.1rem;">{rank_display}</td>
-                            <td>{item["anime"]} <span style="font-size:0.8em; color:#777;">({item["type"]})</span></td>
-                            <td>{item["song"]}</td> <td>{item["artist"]}</td>
-                            <td class="count-cell"><div class="count-wrapper"><span class="count-num">{item["user_count"]}</span>{user_bar_html}</div></td>
-                            <td class="count-cell"><div class="count-wrapper"><span class="count-num">{item["count"]}</span>{bar_html}</div></td>
-                        </tr>
-                        """
-                        
-                html_out += "</tbody></table></div></div>"
-            return html_out
-
-        ranking_count_html_content = generate_ranking_html("count")
-        ranking_user_html_content = generate_ranking_html("user")
-        
-        print("ランキング生成完了。")
-
-    except Exception as e:
-        print(f"集計エラー: {e}")
-        import traceback
-        traceback.print_exc()
-
-else:
-    print("CSV読み込み失敗: cool_analysis.csv がGASから取得できませんでした。")
-
-
-# ==========================================
-# HTML生成 (HTML出力・印刷設定)
-# ==========================================
-
-columns_to_hide = ['コメント']
-
-# --- 列の並び替え: 取得日 を 歌った人 の右に置く ---
+setlist_records = []
 if not full_df.empty:
-    html_df = full_df.drop(columns=columns_to_hide, errors='ignore')
-    cols = list(html_df.columns)
-    if '取得日' in cols and '歌った人' in cols:
-        cols.remove('取得日')
-        idx = cols.index('歌った人') + 1
-        cols.insert(idx, '取得日')
-        html_df = html_df[cols]
-else:
-    html_df = pd.DataFrame()
+    html_df = full_df.drop(columns=['コメント'], errors='ignore').fillna("")
+    for _, row in html_df.iterrows():
+        rec = {
+            "room": str(row.get('部屋主', '')),
+            "song": str(row.get('曲名（ファイル名）', '')),
+            "work": str(row.get('作品名', '')),
+            "artist": str(row.get('歌手名', '')),
+            "singer": str(row.get('歌った人', '')),
+            "order": str(row.get('順番', '')),
+            "fetchedAt": str(row.get('取得日', '')),
+        }
+        rec['search'] = normalize_text(" ".join([rec[k] for k in ["room", "song", "work", "artist", "singer", "order", "fetchedAt"]]))
+        setlist_records.append(rec)
 
-# --- 優先表示する列（スマホ時に常時表示する列）---
-PRIORITY_COLS = ['部屋主', '曲名（ファイル名）', '作品名']
-SETLIST_COLUMNS = list(html_df.columns)
+embedded = {
+    "updatedAt": current_datetime_str,
+    "setlist": setlist_records,
+    "categories": embedded_categories,
+    "createdLists": created_lists,
+    "uncreatedLists": uncreated_lists,
+    "rankings": {"count": rankings_count, "users": rankings_users},
+    "trending": trending_items,
+    "config": {"categories": ALLOWED_CATEGORIES, "defaultPort": 11059}
+}
+app_json = json.dumps(embedded, ensure_ascii=False)
 
-def _col_class(col_name):
-    return 'col-priority' if col_name in PRIORITY_COLS else 'col-detail'
-
-setlist_rows = ""
-for _, row in html_df.iterrows():
-    setlist_rows += '<tr class="setlist-row">'
-    for col, val in zip(SETLIST_COLUMNS, row):
-        setlist_rows += (
-            f'<td data-label="{col}" class="{_col_class(col)}">{val}</td>'
-        )
-    # スマホ用「詳細を表示」トグル（CSSで desktop は非表示）
-    setlist_rows += '<td class="col-toggle" aria-hidden="true"></td>'
-    setlist_rows += '</tr>'
-
-setlist_headers = ""
-for i, col in enumerate(SETLIST_COLUMNS):
-    cls = _col_class(col)
-    setlist_headers += (
-        f'<th class="{cls}" onclick="sortTable({i})">'
-        f'{col} <i class="fas fa-sort"></i></th>'
-    )
-# トグル列ヘッダ（スマホ用ダミー、desktopでは display:none）
-setlist_headers += '<th class="col-toggle" aria-hidden="true"></th>'
-
-graph_json_count = json.dumps(graph_series_data_count, ensure_ascii=False)
-graph_json_user = json.dumps(graph_series_data_user, ensure_ascii=False)
-
-html_content = f"""
-<!DOCTYPE html>
-<html lang="ja">
+html_content = f"""<!DOCTYPE html>
+<html lang='ja'>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Karaoke Dashboard</title>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <style>
-        :root {{
-            --primary-color: #2c3e50;
-            --accent-color: #3498db;
-            --bg-color: #f4f7f6;
-            --text-color: #333;
-            --header-bg: #fff;
-            --border-color: #e0e0e0;
-        }}
-        html, body {{
-            height: 100%; margin: 0; padding: 0;
-            overflow: hidden; 
-            font-family: "Helvetica Neue", Arial, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            font-size: 13px; 
-            display: flex; flex-direction: column;
-        }}
-
-        a.export-link {{
-            color: inherit;
-            text-decoration: none;
-            pointer-events: none;
-            cursor: default;
-        }}
-
-        tr.ranking-row {{
-            cursor: default; 
-        }}
-        
-        /* ===== Setlist Table 共通スタイル ===== */
-        table {{
-            width: 100%; border-collapse: separate; border-spacing: 0;
-            background: #fff; border-radius: 8px;
-            margin-top: 10px; margin-bottom: 20px;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
-            overflow: hidden;
-        }}
-        th, td {{
-            padding: 8px 10px; text-align: left;
-            border-bottom: 1px solid #eef0f3;
-            font-size: 13px; vertical-align: middle; line-height: 1.4;
-        }}
-        th {{
-            background: linear-gradient(180deg, #34495e 0%, #2c3e50 100%);
-            color: #fff;
-            position: sticky; top: 0; z-index: 10;
-            font-weight: 600; cursor: pointer;
-            white-space: nowrap;
-        }}
-        th:hover {{ background: #3a546d; }}
-
-        /* セットリスト：ストライプではなく、ホバーと罫線で見せる */
-        #setlistTable tbody tr {{ background: #fff; transition: background 0.15s; }}
-        #setlistTable tbody tr:nth-child(even) td {{
-            background-color: #fbfcfd;  /* ごく薄いストライプ */
-        }}
-        #setlistTable tbody tr:hover td {{
-            background-color: #eaf4fd !important;
-        }}
-
-        /* 部屋主は識別しやすくバッジ風に */
-        #setlistTable td[data-label="部屋主"] {{
-            font-weight: 600;
-            color: #2c3e50;
-            white-space: nowrap;
-        }}
-        /* 曲名は強調 */
-        #setlistTable td[data-label="曲名（ファイル名）"] {{
-            font-weight: 600;
-            color: #1f2d3d;
-            word-break: break-word;
-        }}
-        /* 作品名はやや控えめ */
-        #setlistTable td[data-label="作品名"] {{
-            color: #5a6878;
-            word-break: break-word;
-        }}
-
-        /* desktopではトグル列は完全非表示 */
-        #setlistTable th.col-toggle,
-        #setlistTable td.col-toggle {{ display: none; }}
-
-        tr.hidden {{ display: none !important; }}
-
-        /* ===== タブレット (〜960px) =====
-           副次情報のフォントを少し落とす */
-        @media (max-width: 960px) {{
-            th, td {{ padding: 7px 8px; font-size: 12.5px; }}
-        }}
-
-        /* ===== スマホ (〜720px) : カードレイアウト ===== */
-        @media (max-width: 720px) {{
-            #setlistTable {{
-                box-shadow: none;
-                background: transparent;
-                border-radius: 0;
-            }}
-            #setlistTable thead {{ display: none; }}
-            #setlistTable,
-            #setlistTable tbody {{ display: block; width: 100%; }}
-
-            #setlistTable tr {{
-                display: grid;
-                grid-template-columns: auto 1fr auto;
-                grid-template-areas:
-                    "room  title  toggle"
-                    "room  work   toggle"
-                    "detail detail detail";
-                column-gap: 10px;
-                row-gap: 2px;
-                background: #fff;
-                border: 1px solid #e3e7ec;
-                border-radius: 10px;
-                margin-bottom: 10px;
-                padding: 10px 12px;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-            }}
-            /* スマホでもうっすらストライプ（背景色のついた偶数カード）*/
-            #setlistTable tbody tr:nth-child(even) {{
-                background: #f7f9fc;
-            }}
-            #setlistTable tbody tr:hover td {{ background: transparent !important; }}
-
-            #setlistTable td {{
-                border: none;
-                padding: 2px 0;
-                background: transparent !important;
-                font-size: 13px;
-            }}
-
-            /* 部屋主（左にバッジ）*/
-            #setlistTable td[data-label="部屋主"] {{
-                grid-area: room;
-                align-self: start;
-                background: linear-gradient(135deg,#667eea,#764ba2) !important;
-                color: #fff !important;
-                font-weight: 600;
-                font-size: 11px;
-                padding: 4px 8px !important;
-                border-radius: 999px;
-                line-height: 1.2;
-                max-width: 110px;
-                text-align: center;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-            }}
-
-            /* 曲名（タイトル）*/
-            #setlistTable td[data-label="曲名（ファイル名）"] {{
-                grid-area: title;
-                font-weight: 700;
-                font-size: 14.5px;
-                color: #1f2d3d;
-            }}
-
-            /* 作品名（サブタイトル）*/
-            #setlistTable td[data-label="作品名"] {{
-                grid-area: work;
-                font-size: 12px;
-                color: #6b7785;
-            }}
-
-            /* それ以外の列（順番・歌手名・歌った人・取得日 など）はカード下部に展開 */
-            #setlistTable td.col-detail {{
-                grid-area: unset;
-                display: none;
-                padding: 4px 0 !important;
-                font-size: 12.5px;
-                color: #4a5562;
-                border-top: 1px dashed #e3e7ec;
-            }}
-            #setlistTable td.col-detail::before {{
-                content: attr(data-label) " : ";
-                font-weight: 600;
-                color: #8a95a3;
-                margin-right: 4px;
-            }}
-            #setlistTable tr.expanded td.col-detail {{
-                display: block;
-                grid-column: 1 / -1;
-            }}
-            /* 展開された詳細群の最初だけ上罫線 */
-            #setlistTable tr.expanded td.col-detail:first-of-type {{
-                margin-top: 6px;
-            }}
-
-            /* 右上の展開ボタン */
-            #setlistTable td.col-toggle {{
-                display: flex !important;
-                grid-area: toggle;
-                align-items: center;
-                justify-content: center;
-                width: 28px; height: 28px;
-                border-radius: 50%;
-                background: #eef2f7;
-                color: #3498db;
-                font-size: 12px;
-                cursor: pointer;
-                user-select: none;
-            }}
-            #setlistTable td.col-toggle::before {{ content: "▼"; }}
-            #setlistTable tr.expanded td.col-toggle {{ background: #3498db; color: #fff; }}
-            #setlistTable tr.expanded td.col-toggle::before {{ content: "▲"; }}
-
-            /* スマホで横スクロールが起こらないように */
-            .tab-content {{ padding: 0 8px 40px 8px; }}
-        }}
-
-        /* ===== さらに小さい端末 (〜420px) ===== */
-        @media (max-width: 420px) {{
-            #setlistTable td[data-label="曲名（ファイル名）"] {{ font-size: 14px; }}
-            #setlistTable td[data-label="部屋主"] {{ max-width: 90px; font-size: 10.5px; }}
-            .header-inner h1 {{ font-size: 1.05rem; }}
-            .port-input-wrapper {{ display: none; }}  /* 入力UIは横幅優先で隠す */
-        }}
-
-        .top-section {{
-            flex: 0 0 auto;
-            background-color: var(--header-bg);
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            z-index: 100;
-        }}
-        .header-inner {{
-            padding: 8px 15px; display: flex; justify-content: space-between; align-items: center;
-        }}
-        h1 {{ margin: 0; font-size: 1.2rem; color: var(--primary-color); }}
-        .update-time {{ font-size: 0.8rem; color: #7f8c8d; }}
-
-        .port-input-wrapper {{
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            margin-left: 15px;
-            font-size: 13px;
-            font-weight: bold;
-            color: var(--primary-color);
-        }}
-        .port-input-wrapper input, .port-input-wrapper select {{
-            padding: 3px 5px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            font-family: monospace;
-        }}
-        .port-input-wrapper input {{
-            width: 70px;
-            text-align: center;
-        }}
-
-        .tabs {{
-            display: flex; padding: 0 15px; border-bottom: 1px solid var(--border-color); overflow-x: auto;
-        }}
-        .tab-btn {{
-            padding: 10px 20px; cursor: pointer; border: none; background: none;
-            font-weight: bold; color: #7f8c8d; border-bottom: 3px solid transparent;
-            font-size: 14px; white-space: nowrap;
-        }}
-        .tab-btn.active {{ color: var(--accent-color); border-bottom-color: var(--accent-color); }}
-
-        .controls-row {{
-            padding: 8px 15px; display: flex; gap: 8px; align-items: center;
-            background-color: #fff; border-bottom: 1px solid var(--border-color);
-            height: 40px;
-            flex-wrap: nowrap;
-            overflow-x: auto;
-        }}
-        .search-box {{
-            padding: 6px 12px; border: 1px solid #ccc; border-radius: 4px;
-            width: 250px; font-size: 13px; outline: none;
-        }}
-        .btn {{
-            padding: 6px 12px; border-radius: 4px; border: none; cursor: pointer;
-            color: #fff; background-color: var(--accent-color); font-size: 13px;
-            font-weight: bold; white-space: nowrap;
-        }}
-        .btn:hover {{ opacity: 0.9; }}
-        .btn-dl {{ background-color: #2ecc71; }}
-        .btn-list {{ background-color: #9b59b6; font-size: 12px; }}
-        .count-display {{ margin-left: auto; font-weight: bold; font-size: 13px; }}
-
-        .ctrl-setlist {{ display: flex; width: 100%; align-items: center; gap:8px; }}
-        .ctrl-analysis {{ display: none; width: 100%; align-items: center; justify-content: flex-end; gap:5px; }}
-        .ctrl-ranking {{ display: none; width: 100%; align-items: center; justify-content: flex-end; gap:5px; }}
-        .ctrl-graph {{ display: none; width: 100%; align-items: center; justify-content: flex-end; }}
-
-        .content-area {{
-            flex: 1; position: relative; overflow: hidden;
-        }}
-        .tab-content {{
-            display: none; position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            overflow-y: auto;
-            -webkit-overflow-scrolling: touch;
-            padding: 0 15px 40px 15px;
-        }}
-        .tab-content.active {{ display: block; }}
-
-        .category-header {{
-            margin-top: 20px; padding: 10px 15px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white; border-radius: 6px;
-            font-weight: bold; font-size: 1.1rem; cursor: pointer;
-            user-select: none;
-        }}
-        .category-content {{ display: block; transition: all 0.3s; }}
-        .category-content.collapsed {{ display: none; }}
-        
-        tr.has-count {{ background-color: #fff; color: #333; }}
-        
-        .count-wrapper {{ display: flex; align-items: center; gap: 8px; }}
-        .count-num {{ width: 25px; text-align: right; font-size:1.1rem; }}
-        .bar-chart {{
-            height: 10px; background: linear-gradient(90deg, #3498db, #2980b9);
-            border-radius: 5px;
-        }}
-
-        .bar-chart-user {{
-            height: 10px; background: linear-gradient(90deg, #2ecc71, #27ae60);
-            border-radius: 5px;
-        }}
-
-        td[rowspan] {{
-            background-color: #fff;
-            border-right: 1px solid #eee;
-            vertical-align: middle;
-            font-weight: normal; color: inherit;       
-        }}
-
-        .rank-badge {{
-            display: inline-block; width: 24px; height: 24px; line-height: 24px;
-            border-radius: 50%; text-align: center; color: #fff; font-weight: bold; font-size: 12px;
-            background-color: #95a5a6;
-        }}
-        .rank-1 {{ background-color: #f1c40f; width: 28px; height: 28px; line-height: 28px; }}
-        .rank-2 {{ background-color: #bdc3c7; }}
-        .rank-3 {{ background-color: #d35400; }}
-        
-        tr.rank-row-1 td {{ background-color: #fff8e1 !important; }}
-        tr.rank-row-2 td {{ background-color: #f5f5f5 !important; }}
-        tr.rank-row-3 td {{ background-color: #fff0e6 !important; }}
-
-        .rankingTable tr:nth-child(1) th {{ background-color: var(--primary-color) !important; color: #fff !important; }}
-
-        .chart-wrapper {{
-            background: #fff;
-            padding: 10px;
-            border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            margin-top: 15px;
-            height: 75vh;
-            display: flex;
-            flex-direction: column;
-        }}
-        .chart-info {{
-            min-height: 35px;
-            height: auto;
-            line-height: 1.4;
-            padding: 5px;
-            text-align: center;
-            font-weight: bold;
-            color: #2c3e50;
-            background: #f8f9fa;
-            border: 1px solid #e0e0e0;
-            margin-bottom: 5px;
-            border-radius: 4px;
-            font-size: 14px;
-            white-space: normal;
-            overflow: visible;
-            word-break: break-all;
-        }}
-        .canvas-container {{
-            flex: 1;
-            position: relative;
-            min-height: 0;
-        }}
-
-        @media print {{
-            * {{
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-                color-adjust: exact !important;
-            }}
-            body {{
-                overflow: visible !important;
-                height: auto !important;
-                display: block !important;
-            }}
-            .top-section {{ display: none !important; }}
-            .content-area {{ overflow: visible !important; position: static !important; }}
-            .tab-content {{ 
-                position: static !important; 
-                display: block !important; 
-                overflow: visible !important; 
-                padding: 0 !important;
-            }}
-            .category-content {{ display: block !important; }}
-            
-            tbody.anime-group {{
-                break-inside: avoid;
-                page-break-inside: avoid;
-            }}
-            .category-header {{ page-break-after: avoid; }}
-            thead {{ display: table-header-group; }}
-            .chart-wrapper {{ height: auto; }}
-        }}
-    </style>
+<meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1'>
+<title>Karaoke Dashboard</title>
+<style>
+:root{{--accent:#2563eb;--line:#e5e7eb;--bg:#f8fafc;--text:#0f172a}}body{{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,'Segoe UI','Hiragino Sans','Yu Gothic UI',sans-serif;line-height:1.5}}.top{{position:sticky;top:0;background:#fff;border-bottom:1px solid var(--line);z-index:10}}.row{{padding:8px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}}.tabs{{display:flex;overflow:auto}}.tab-btn{{border:0;background:none;padding:10px 12px;font-weight:600;color:#64748b}}.tab-btn.active{{color:var(--accent);border-bottom:3px solid var(--accent)}}.tab{{display:none;padding:10px 12px}}.tab.active{{display:block}}.card{{background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,.06);padding:10px;margin:8px 0}}.chips{{display:flex;gap:6px;flex-wrap:wrap}}.chip{{border:1px solid var(--line);border-radius:999px;padding:6px 10px;background:#fff;cursor:pointer;min-height:44px}}.chip.active{{border-color:var(--accent);color:var(--accent)}}input,select,button{{min-height:44px;border-radius:8px;border:1px solid #cbd5e1;padding:0 10px;background:#fff}}button.primary{{background:var(--accent);color:#fff;border-color:var(--accent)}}.small{{font-size:12px;color:#64748b}}.list-wrap{{height:65vh;overflow:auto;position:relative}}.spacer{{width:1px;opacity:0}}.items{{position:absolute;left:0;right:0;top:0}}.meta{{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:#64748b}}.title{{font-weight:700;font-size:16px}}.muted{{color:#64748b;font-size:13px}}.detail{{display:none;margin-top:6px;border-top:1px dashed var(--line);padding-top:6px}}.card.open .detail{{display:block}}.badge{{display:inline-block;padding:2px 8px;border-radius:999px;background:#eef2ff;color:#1e3a8a;font-size:12px}}.metric{{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}}.heat1{{background:#eff6ff}}.heat2{{background:#dbeafe}}.heat3{{background:#bfdbfe}}.heat4{{background:#93c5fd}}.heat5{{background:#60a5fa;color:#fff}}.rank-item{{border-left:4px solid transparent}}.rank-item.top1{{border-left-color:#d4af37}}.rank-item.top2{{border-left-color:#c0c0c0}}.rank-item.top3{{border-left-color:#cd7f32}}
+</style>
 </head>
 <body>
-    <div class="top-section">
-        <div class="header-inner">
-            <div style="display:flex; align-items:center;">
-                <h1>Karaoke Dashboard</h1>
-                <div class="port-input-wrapper">
-                    <label for="exportPort"><i class="fas fa-network-wired"></i> 保存時ポート:</label>
-                    <input type="number" id="exportPort" value="11059" title="HTML保存時のURLポート番号を指定">
-                </div>
-                <div class="port-input-wrapper" style="margin-left:20px;">
-                    <label for="exportLinkType"><i class="fas fa-link"></i> 検索リンク:</label>
-                    <select id="exportLinkType">
-                        <option value="eve">Everything</option>
-                        <option value="ykr">ゆかりすたー</option>
-                    </select>
-                </div>
-            </div>
-            <div class="update-time">{current_datetime_str} 更新</div>
-        </div>
-        <div class="tabs">
-            <button class="tab-btn active" onclick="openTab('setlist')">セットリスト</button>
-            <button class="tab-btn" onclick="openTab('analysis')">クール集計</button>
-            <button class="tab-btn" onclick="openTab('ranking_count')">歌唱数ランキング</button>
-            <button class="tab-btn" onclick="openTab('ranking_user')">歌唱人数ランキング</button>
-            <button class="tab-btn" onclick="openTab('graph_view_count')">推移(数)</button>
-            <button class="tab-btn" onclick="openTab('graph_view_user')">推移(人)</button>
-        </div>
-        <div class="controls-row">
-            <div id="ctrl-setlist" class="ctrl-setlist">
-                <input type="text" id="searchInput" class="search-box" placeholder="キーワード (例: 曲名 歌手)...">
-                <button onclick="performSearch()" class="btn"><i class="fas fa-search"></i> 検索</button>
-                <button onclick="resetFilter()" class="btn" style="background:#95a5a6"><i class="fas fa-undo"></i></button>
-                <div class="count-display" id="countDisplay">読み込み中...</div>
-            </div>
-            <div id="ctrl-analysis" class="ctrl-analysis">
-                <select id="exportTargetCategory" style="margin-right:10px; padding:4px; border-radius:4px; font-size:13px; border: 1px solid #ccc;">
-                    {category_options}
-                </select>
-                <button onclick="downloadListWithCategory('list-created-content', 'created_list.html', '作成済みリスト')" class="btn btn-list">作成リスト保存</button>
-                <button onclick="downloadListWithCategory('list-uncreated-content', 'uncreated_list.html', '未作成リスト')" class="btn btn-list" style="background-color:#e74c3c;">未作成リスト保存</button>
-                <button onclick="downloadHTMLWithCategory()" class="btn btn-dl" style="margin-left:10px;"><i class="fas fa-file-code"></i> HTML保存</button>
-            </div>
-            <div id="ctrl-ranking-count" class="ctrl-ranking">
-                <select id="exportTargetRankingCount" style="margin-right:10px; padding:4px; border-radius:4px; font-size:13px; border: 1px solid #ccc;">
-                    {category_options}
-                </select>
-                <button onclick="downloadRankingWithCategory('count')" class="btn btn-dl"><i class="fas fa-trophy"></i> 歌唱数ランキング保存</button>
-            </div>
-            <div id="ctrl-ranking-user" class="ctrl-ranking">
-                <select id="exportTargetRankingUser" style="margin-right:10px; padding:4px; border-radius:4px; font-size:13px; border: 1px solid #ccc;">
-                    {category_options}
-                </select>
-                <button onclick="downloadRankingWithCategory('user')" class="btn btn-dl"><i class="fas fa-users"></i> 歌唱人数ランキング保存</button>
-            </div>
-            <div id="ctrl-graph" class="ctrl-graph">
-                <button onclick="downloadGraphHTML()" class="btn btn-dl" style="background-color:#e67e22;"><i class="fas fa-file-code"></i> HTML保存</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="content-area">
-        <div id="setlist" class="tab-content active">
-            <table id="setlistTable">
-                <thead><tr>{setlist_headers}</tr></thead>
-                <tbody>{setlist_rows}</tbody>
-            </table>
-            {"" if setlist_rows else '<div style="padding:20px;text-align:center">データがありません</div>'}
-        </div>
-
-        <div id="analysis" class="tab-content">
-            <div style="margin-top:15px; font-size:0.9rem; color:#7f8c8d; text-align:right;">集計対象: 2026/01/01 - 2026/06/30</div>
-            <div id="print-target">
-                {analysis_html_content if cool_data_exists else '<div style="padding:20px;text-align:center;color:#e74c3c;">集計データがありません</div>'}
-            </div>
-        </div>
-
-        <div id="ranking_count" class="tab-content">
-            <div style="margin-top:15px; font-size:0.9rem; color:#7f8c8d; text-align:right;">集計対象: 2026/01/01 - 2026/06/30</div>
-            <div id="ranking-count-print-target">
-                {ranking_count_html_content if ranking_count_html_content else '<div style="padding:20px;text-align:center;color:#e74c3c;">ランキング対象データがありません</div>'}
-            </div>
-        </div>
-        
-        <div id="ranking_user" class="tab-content">
-            <div style="margin-top:15px; font-size:0.9rem; color:#7f8c8d; text-align:right;">集計対象: 2026/01/01 - 2026/06/30</div>
-            <div id="ranking-user-print-target">
-                {ranking_user_html_content if ranking_user_html_content else '<div style="padding:20px;text-align:center;color:#e74c3c;">ランキング対象データがありません</div>'}
-            </div>
-        </div>
-
-        <div id="graph_view_count" class="tab-content">
-            <div class="category-header">2026年春アニメ 歌唱数ランキング推移 (Top 20)</div>
-            <div class="chart-wrapper">
-                <div id="chart-info-count" class="chart-info">グラフの点をタップ・ホバーで詳細を表示</div>
-                <div class="canvas-container"><canvas id="rankingChartCount"></canvas></div>
-            </div>
-        </div>
-        <div id="graph_view_user" class="tab-content">
-            <div class="category-header">2026年春アニメ 歌唱人数ランキング推移 (Top 20)</div>
-            <div class="chart-wrapper">
-                <div id="chart-info-user" class="chart-info">グラフの点をタップ・ホバーで詳細を表示</div>
-                <div class="canvas-container"><canvas id="rankingChartUser"></canvas></div>
-            </div>
-        </div>
-    </div>
-
-    <div id="list-created-content" style="display:none;">{created_lists_html}</div>
-    <div id="list-uncreated-content" style="display:none;">{uncreated_lists_html}</div>
-
+<div class='top'><div class='row'><strong>Karaoke Dashboard</strong><span class='small'>{current_datetime_str} 更新</span><label>Port<input id='exportPort' type='number' value='11059'></label><label>Link<select id='exportLinkType'><option value='eve'>Everything</option><option value='ykr'>ゆかりすたー</option></select></label></div><div class='tabs'><button class='tab-btn active' data-tab='setlist'>セットリスト</button><button class='tab-btn' data-tab='analysis'>クール集計</button><button class='tab-btn' data-tab='ranking'>ランキング</button><button class='tab-btn' data-tab='trending'>🔥急上昇</button></div></div>
+<div id='setlist' class='tab active'><div class='row'><input id='searchInput' placeholder='検索'><button id='saveSetlist' class='primary'>HTML保存</button></div><div class='row chips' id='setlistSort'></div><div class='row chips' id='roomFilters'></div><div class='small' id='setlistCount'></div><div id='setlistList' class='list-wrap'><div id='setlistSpacer' class='spacer'></div><div id='setlistItems' class='items'></div></div></div>
+<div id='analysis' class='tab'><div class='row'><select id='analysisCategory'></select><select id='analysisState'><option value='all'>すべて</option><option value='created'>作成済みのみ</option><option value='uncreated'>未作成のみ</option><option value='has'>歌唱ありのみ</option><option value='none'>未歌唱のみ</option></select><select id='analysisSort'><option value='anime'>作品名</option><option value='count'>歌唱数↓</option><option value='users'>歌唱人数↓</option></select><button id='saveCreated'>作成リスト保存</button><button id='saveUncreated'>未作成リスト保存</button><button id='saveAnalysis' class='primary'>HTML保存</button></div><div id='analysisBody'></div></div>
+<div id='ranking' class='tab'><div class='row'><select id='rankingMode'><option value='count'>歌唱数↓</option><option value='users'>歌唱人数↓</option></select><button id='saveRanking' class='primary'>HTML保存</button></div><div id='rankingBody'></div></div>
+<div id='trending' class='tab'><div class='row'><select id='trendingCategory'></select><label><input id='trendingNewOnly' type='checkbox'>初登場のみ</label><button id='saveTrending' class='primary'>HTML保存</button></div><div id='trendingBody'></div></div>
+<script id='app-data' type='application/json'>{app_json}</script>
 <script>
-    const host = 'http://ykr.moe:11059';
-    
-    // --- グラフ用データ ---
-    const dataCount = {graph_json_count};
-    const dataUser = {graph_json_user};
-    let charts = {{ count: null, user: null }};
-    
-    // 標準カラーパレット
-    const colors = [
-        '#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#46f0f0', '#f032e6', 
-        '#bcf60c', '#fabebe', '#008080', '#e6beff', '#9a6324', '#fffac8', '#800000', '#aaffc3', 
-        '#808000', '#ffd8b1', '#000075', '#808080'
-    ];
-
-    function initChart(type, dataObj, canvasId) {{
-        if(charts[type]) return;
-        const ctx = document.getElementById(canvasId).getContext('2d');
-        const infoDivId = type === 'count' ? 'chart-info-count' : 'chart-info-user';
-        
-        // 最新の順位でTOP5を判定
-        const allKeys = Object.keys(dataObj);
-        const latestRank = [];
-        allKeys.forEach(key => {{
-            const arr = dataObj[key];
-            if(arr.length > 0) {{
-                latestRank.push({{ key: key, rank: arr[arr.length - 1].y }});
-            }}
-        }});
-        latestRank.sort((a,b) => a.rank - b.rank);
-        const top5 = latestRank.slice(0, 5).map(x => x.key);
-
-        const datasets = allKeys.map((key, i) => {{
-            const color = colors[i % colors.length];
-            const isTop5 = top5.includes(key);
-            return {{
-                label: key, 
-                data: dataObj[key],
-                borderColor: color,
-                backgroundColor: color,
-                pointRadius: 4, 
-                pointHoverRadius: 8, 
-                tension: 0.1, 
-                fill: false, 
-                borderWidth: 2,
-                hidden: !isTop5 // TOP5以外は初期非表示
-            }};
-        }});
-
-        charts[type] = new Chart(ctx, {{
-            type: 'line', 
-            data: {{ datasets }},
-            options: {{
-                responsive: true, 
-                maintainAspectRatio: false,
-                interaction: {{
-                    mode: 'nearest',
-                    axis: 'x',
-                    intersect: true
-                }},
-                plugins: {{
-                    tooltip: {{
-                        enabled: false,
-                        external: function(context) {{
-                            const tooltip = context.tooltip;
-                            const infoDiv = document.getElementById(infoDivId);
-                            if (tooltip.opacity === 0) return;
-                            
-                            if (tooltip.body) {{
-                                const dataPoint = tooltip.dataPoints[0];
-                                const dateObj = new Date(dataPoint.label);
-                                const dateStr = (dateObj.getMonth() + 1) + '/' + dateObj.getDate();
-                                infoDiv.innerHTML = `<span style="color:${{dataPoint.dataset.borderColor}}">●</span> ${{dataPoint.dataset.label}}　${{dateStr}}（${{dataPoint.parsed.y}}位）`;
-                            }}
-                        }}
-                    }},
-                    legend: {{ 
-                        position: 'bottom',
-                        labels: {{ boxWidth: 10, padding: 15 }},
-                        onClick: function(e, legendItem, legend) {{
-                            const index = legendItem.datasetIndex;
-                            const ci = legend.chart;
-                            if (ci.isDatasetVisible(index)) {{
-                                ci.hide(index);
-                                legendItem.hidden = true;
-                            }} else {{
-                                ci.show(index);
-                                legendItem.hidden = false;
-                            }}
-                        }}
-                    }}
-                }},
-                scales: {{
-                    y: {{ 
-                        reverse: true, 
-                        min: 0.5, 
-                        max: 20.5, 
-                        ticks: {{ 
-                            stepSize: 1, 
-                            callback: function(val) {{ 
-                                if (val % 1 === 0 && val >= 1 && val <= 20) return val;
-                                return ''; 
-                            }} 
-                        }},
-                        title: {{ display: true, text: '順位' }}
-                    }},
-                    x: {{ 
-                        type: 'time', 
-                        time: {{ unit: 'day', displayFormats: {{ day: 'M/d' }} }},
-                        title: {{ display: true, text: '日付' }}
-                    }}
-                }}
-            }}
-        }});
-    }}
-
-    function downloadGraphHTML() {{
-        const isCount = document.getElementById('graph_view_count').classList.contains('active');
-        const canvasId = isCount ? 'rankingChartCount' : 'rankingChartUser';
-        const title = isCount ? "推移(数)" : "推移(人)";
-        const filename = 'graph.html';
-
-        const canvas = document.getElementById(canvasId);
-        const imgData = canvas.toDataURL('image/png');
-        
-        const headerText = isCount ? 
-            '2026年春アニメ 歌唱数ランキング推移 (Top 20)' : 
-            '2026年春アニメ 歌唱人数ランキング推移 (Top 20)';
-            
-        const content = `
-            <div class="category-header">${{headerText}}</div>
-            <div class="chart-wrapper">
-                <img src="${{imgData}}" style="width:100%; max-width:800px; border:1px solid #ccc; display:block; margin:0 auto;">
-            </div>
-        `;
-        
-        generateDownload(content, filename, title);
-    }}
-
-    function openTab(tabName) {{
-        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-        document.getElementById(tabName).classList.add('active');
-        
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        
-        let btns = document.querySelectorAll('.tab-btn');
-        for(let i=0; i<btns.length; i++) {{
-            if(btns[i].innerText.includes("セットリスト") && tabName === 'setlist') btns[i].classList.add('active');
-            else if(btns[i].innerText.includes("クール集計") && tabName === 'analysis') btns[i].classList.add('active');
-            else if(btns[i].innerText.includes("歌唱数ランキング") && tabName === 'ranking_count') btns[i].classList.add('active');
-            else if(btns[i].innerText.includes("歌唱人数ランキング") && tabName === 'ranking_user') btns[i].classList.add('active');
-            else if(btns[i].innerText.includes("推移(数)") && tabName === 'graph_view_count') btns[i].classList.add('active');
-            else if(btns[i].innerText.includes("推移(人)") && tabName === 'graph_view_user') btns[i].classList.add('active');
-        }}
-        
-        document.getElementById('ctrl-setlist').style.display = 'none';
-        document.getElementById('ctrl-analysis').style.display = 'none';
-        document.getElementById('ctrl-ranking-count').style.display = 'none';
-        document.getElementById('ctrl-ranking-user').style.display = 'none';
-        document.querySelector('.ctrl-graph').style.display = 'none';
-
-        if(tabName === 'setlist') document.getElementById('ctrl-setlist').style.display = 'flex';
-        else if(tabName === 'analysis') document.getElementById('ctrl-analysis').style.display = 'flex';
-        else if(tabName === 'ranking_count') document.getElementById('ctrl-ranking-count').style.display = 'flex';
-        else if(tabName === 'ranking_user') document.getElementById('ctrl-ranking-user').style.display = 'flex';
-        else if(tabName === 'graph_view_count') {{
-            document.querySelector('.ctrl-graph').style.display = 'flex';
-            initChart('count', dataCount, 'rankingChartCount');
-        }}
-        else if(tabName === 'graph_view_user') {{
-            document.querySelector('.ctrl-graph').style.display = 'flex';
-            initChart('user', dataUser, 'rankingChartUser');
-        }}
-    }}
-
-    function toggleCategory(header) {{
-        const content = header.nextElementSibling;
-        content.classList.toggle('collapsed');
-        const icon = header.querySelector('i');
-        if(icon) {{
-            icon.className = content.classList.contains('collapsed') ? 'fas fa-chevron-right' : 'fas fa-chevron-down';
-            icon.style.float = 'right';
-        }}
-    }}
-
-    // --- HTML出力用関数群 ---
-    function downloadHTML(elementId, filename, title) {{
-        const element = document.getElementById(elementId);
-        if(element) {{
-            const htmlContent = element.innerHTML;
-            generateDownload(htmlContent, filename, title);
-        }}
-    }}
-
-    function extractCategoryHTML(containerId, targetCat) {{
-        const container = document.getElementById(containerId);
-        if (!container) return "";
-        const blocks = container.querySelectorAll('.category-block');
-        let content = "";
-        blocks.forEach(block => {{
-            const header = block.querySelector('.category-header');
-            if (header && header.innerText.includes(targetCat)) {{
-                // 出力時にcollapsedを解除して表示させる
-                const clone = block.cloneNode(true);
-                const catContent = clone.querySelector('.category-content');
-                if (catContent) catContent.classList.remove('collapsed');
-                
-                const icon = clone.querySelector('i.fa-chevron-right');
-                if (icon) icon.className = 'fas fa-chevron-down';
-
-                content += clone.outerHTML;
-            }}
-        }});
-        return content;
-    }}
-
-    function downloadHTMLWithCategory() {{
-        const targetCat = document.getElementById('exportTargetCategory').value;
-        if (targetCat === "ALL") {{
-            downloadHTML('print-target', 'karaoke_analysis.html', 'クール集計結果');
-        }} else {{
-            let content = extractCategoryHTML('print-target', targetCat);
-            if (!content) content = `<div style="padding:20px;text-align:center;">${{targetCat}} のデータがありません</div>`;
-            generateDownload(content, `karaoke_analysis_${{targetCat}}.html`, `${{targetCat}} 集計結果`);
-        }}
-    }}
-
-    function downloadRankingWithCategory(mode) {{
-        const targetCat = mode === 'count' 
-            ? document.getElementById('exportTargetRankingCount').value 
-            : document.getElementById('exportTargetRankingUser').value;
-        const elementId = mode === 'count' ? 'ranking-count-print-target' : 'ranking-user-print-target';
-        const baseTitle = mode === 'count' ? 'カラオケ歌唱数ランキング' : 'カラオケ歌唱人数ランキング';
-        const baseFilename = mode === 'count' ? 'karaoke_ranking_count' : 'karaoke_ranking_user';
-        
-        if (targetCat === "ALL") {{
-            downloadHTML(elementId, `${{baseFilename}}.html`, baseTitle);
-        }} else {{
-            let content = extractCategoryHTML(elementId, targetCat);
-            if (!content) content = `<div style="padding:20px;text-align:center;">${{targetCat}} のデータがありません</div>`;
-            generateDownload(content, `${{baseFilename}}_${{targetCat}}.html`, `${{targetCat}} ${{baseTitle}}`);
-        }}
-    }}
-
-    function downloadListWithCategory(elementId, baseFilename, baseTitle) {{
-        const targetCat = document.getElementById('exportTargetCategory').value;
-        if (targetCat === "ALL") {{
-            downloadHTML(elementId, baseFilename, baseTitle);
-        }} else {{
-            let content = extractCategoryHTML(elementId, targetCat);
-            if (!content) content = `<div style="padding:20px;text-align:center;">${{targetCat}} のデータがありません</div>`;
-            
-            const ext = baseFilename.split('.').pop();
-            const name = baseFilename.replace('.' + ext, '');
-            generateDownload(content, `${{name}}_${{targetCat}}.${{ext}}`, `${{targetCat}} ${{baseTitle}}`);
-        }}
-    }}
-
-    // HTML生成時に選択したリンク・ポート情報を埋め込む
-    function generateDownload(content, filename, title) {{
-        const portValue = document.getElementById('exportPort').value || '11059';
-        const linkType = document.getElementById('exportLinkType').value;
-        const searchPath = linkType === 'ykr' ? 'search_listerdb_filelist.php?anyword=' : 'search.php?searchword=';
-        
-        const fullHtml = `
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <title>${{title}}</title>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <style>
-        body {{ font-family: "Helvetica Neue", Arial, sans-serif; font-size: 13px; color: #333; }}
-        table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; }}
-        th, td {{ border: 1px solid #ccc; padding: 5px 8px; text-align: left; vertical-align: middle; }}
-        th {{ background-color: #2c3e50; color: #fff; }}
-        td[rowspan] {{ background-color: #fff; }}
-        
-        .category-header {{ 
-            background: #667eea; color: white; padding: 10px; margin-top: 20px; 
-            font-weight: bold; border-radius: 4px; cursor: pointer; user-select: none;
-        }}
-        .category-content {{ display: block; }}
-        .category-content.collapsed {{ display: none; }}
-        
-        /* プレーンなリンクスタイル */
-        a.export-link {{
-            display: block; 
-            margin: -5px -8px; 
-            padding: 5px 8px;  
-            color: #333; 
-            text-decoration: none; 
-            box-sizing: border-box;
-            cursor: pointer;
-        }}
-        a.export-link:hover {{ background-color: #eef2f7; color: #3498db; }}
-        
-        tr.ranking-row {{ cursor: pointer; }}
-        tr.ranking-row:hover {{ background-color: #dbeafe; }}
-        
-        .count-wrapper {{ display: flex; align-items: center; gap: 8px; }}
-        .count-num {{ width: 25px; text-align: right; }}
-        .bar-chart {{ height: 10px; background: #3498db; border-radius: 5px; }}
-        .bar-chart-user {{ height: 10px; background: #2ecc71; border-radius: 5px; }}
-        
-        .rank-badge {{
-            display: inline-block; width: 24px; height: 24px; line-height: 24px;
-            border-radius: 50%; text-align: center; color: #fff; font-weight: bold; font-size: 12px;
-            background-color: #95a5a6;
-        }}
-        .rank-1 {{ background-color: #f1c40f; width: 28px; height: 28px; line-height: 28px; }}
-        .rank-2 {{ background-color: #bdc3c7; }}
-        .rank-3 {{ background-color: #d35400; }}
-        
-        tr.rank-row-1 td {{ background-color: #fff8e1 !important; }}
-        tr.rank-row-2 td {{ background-color: #f5f5f5 !important; }}
-        tr.rank-row-3 td {{ background-color: #fff0e6 !important; }}
-
-        .chart-wrapper {{
-            background: #fff; padding: 10px; border-radius: 8px; border: 1px solid #ccc;
-        }}
-
-        @media print {{
-            * {{
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-                color-adjust: exact !important;
-            }}
-            .category-content {{ display: block !important; }}
-            tbody.anime-group {{ break-inside: avoid; page-break-inside: avoid; }}
-            .category-header {{ page-break-after: avoid; }}
-            thead {{ display: table-header-group; }}
-        }}
-    </style>
-</head>
-<body>
-    <h1>${{title}}</h1>
-    <div style="text-align:right; font-size:0.9rem; color:#777;">出力日: {current_date_str}</div>
-    ${{content}}
-
-    <script>
-        const host = 'http://ykr.moe:${{portValue}}';
-        const searchPath = '${{searchPath}}';
-
-        document.addEventListener('DOMContentLoaded', () => {{
-            // クール集計・リスト類のリンク設定
-            document.querySelectorAll('a.export-link').forEach(link => {{
-                const rawHref = link.getAttribute('href');
-                if (rawHref && rawHref.startsWith('#search_link/')) {{
-                    const word = rawHref.split('#search_link/')[1];
-                    link.href = host + '/' + searchPath + word;
-                }}
-            }});
-            
-            // ランキング等の行クリック設定
-            document.querySelectorAll('tr[data-href]').forEach(row => {{
-                row.addEventListener('click', () => {{
-                    if (window.getSelection().toString().length > 0) return;
-                    const rawHref = row.getAttribute('data-href');
-                    if (rawHref && rawHref.startsWith('#search_link/')) {{
-                        const word = rawHref.split('#search_link/')[1];
-                        window.location.href = host + '/' + searchPath + word;
-                    }}
-                }});
-            }});
-        }});
-
-        function toggleCategory(header) {{
-            const content = header.nextElementSibling;
-            content.classList.toggle('collapsed');
-            const icon = header.querySelector('i');
-            if(icon) {{
-                icon.className = content.classList.contains('collapsed') ? 'fas fa-chevron-right' : 'fas fa-chevron-down';
-                icon.style.float = 'right';
-            }}
-        }}
-    <\/script>
-</body>
-</html>`;
-
-        const blob = new Blob([fullHtml], {{type: 'text/html'}});
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = filename;
-        link.click();
-    }}
-
-    const searchInput = document.getElementById("searchInput");
-    const table = document.getElementById("setlistTable");
-    const countDisplay = document.getElementById('countDisplay');
-    let tableData = [];
-    let tbodyRows = [];
-
-    window.addEventListener('DOMContentLoaded', () => {{
-        const tbody = table.tBodies[0];
-        if (tbody) {{
-            tbodyRows = Array.from(tbody.rows);
-            tableData = tbodyRows.map(row => row.innerText.toUpperCase());
-            countDisplay.innerText = '全 ' + tbodyRows.length + ' 件';
-
-            // スマホ向けカード：行（またはトグルボタン）クリックで詳細展開
-            tbody.addEventListener('click', (e) => {{
-                // 検索結果のテキスト選択中はトグルしない
-                if (window.getSelection && window.getSelection().toString().length > 0) return;
-                const tr = e.target.closest('tr.setlist-row');
-                if (!tr) return;
-                // モバイル幅でのみ動作させる（PCでは普通の表として使う）
-                if (window.matchMedia('(max-width: 720px)').matches) {{
-                    tr.classList.toggle('expanded');
-                }}
-            }});
-        }}
-    }});
-
-    searchInput.addEventListener("keyup", function(event) {{
-        if (event.key === "Enter") performSearch();
-    }});
-
-    function performSearch() {{
-        const filter = searchInput.value.toUpperCase();
-        const keywords = filter.replace(/　/g, " ").split(" ").filter(k => k.length > 0);
-        let visibleCount = 0;
-        const total = tableData.length;
-        
-        for (let i = 0; i < total; i++) {{
-            let isMatch = true;
-            const rowText = tableData[i];
-            for (let k = 0; k < keywords.length; k++) {{
-                if (rowText.indexOf(keywords[k]) === -1) {{
-                    isMatch = false; break;
-                }}
-            }}
-            
-            if (isMatch || keywords.length === 0) {{
-                tbodyRows[i].classList.remove('hidden');
-                visibleCount++;
-            }} else {{
-                tbodyRows[i].classList.add('hidden');
-            }}
-        }}
-        countDisplay.innerText = '表示: ' + visibleCount + ' / ' + total;
-    }}
-
-    function resetFilter() {{
-        searchInput.value = "";
-        performSearch();
-    }}
-
-    function sortTable(n) {{
-        const tbody = table.tBodies[0];
-        const rows = Array.from(tbody.rows);
-        const th = table.querySelectorAll('th')[n];
-        let dir = th.getAttribute('data-dir') === 'asc' ? 'desc' : 'asc';
-        
-        table.querySelectorAll('th').forEach(h => h.setAttribute('data-dir', ''));
-        th.setAttribute('data-dir', dir);
-
-        rows.sort((a, b) => {{
-            const valA = a.cells[n].innerText.trim();
-            const valB = b.cells[n].innerText.trim();
-            if (!isNaN(valA) && !isNaN(valB) && valA!=='' && valB!=='') {{
-                return dir === 'asc' ? valA - valB : valB - valA;
-            }}
-            return dir === 'asc' ? valA.localeCompare(valB,'ja') : valB.localeCompare(valA,'ja');
-        }});
-        rows.forEach(row => tbody.appendChild(row));
-        tbodyRows = rows;
-        tableData = tbodyRows.map(row => row.innerText.toUpperCase());
-    }}
+const APP = JSON.parse(document.getElementById('app-data').textContent);
+const tabs=[...document.querySelectorAll('.tab-btn')];tabs.forEach(b=>b.onclick=()=>{{tabs.forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.getElementById(b.dataset.tab).classList.add('active')}});
+function host(){{const p=document.getElementById('exportPort').value||APP.config.defaultPort;return `http://ykr.moe:${{p}}`;}} function searchPath(){{return document.getElementById('exportLinkType').value==='ykr'?'search_listerdb_filelist.php?anyword=':'search.php?searchword='}} function ykr(word){{return `${{host()}}/${{searchPath()}}${{encodeURIComponent(word)}}`;}}
+const sortOpts=[['date_desc','取得日↓'],['date_asc','取得日↑'],['room','部屋主'],['song','曲名']];let activeSort='date_desc';let roomSelected=new Set();let filteredIdx=[];let searchTimer=null;const rowH=152,buf=8;const src=APP.setlist;const rooms=[...new Set(src.map(x=>x.room).filter(Boolean))].sort();
+function renderSortChips(){{document.getElementById('setlistSort').innerHTML=sortOpts.map(([k,l])=>`<button class='chip ${{k===activeSort?'active':''}}' data-sort='${{k}}'>${{l}}</button>`).join('')}}
+renderSortChips();document.getElementById('setlistSort').onclick=(e)=>{{const b=e.target.closest('[data-sort]');if(!b)return;activeSort=b.dataset.sort;renderSortChips();applySetlist();}};
+document.getElementById('roomFilters').innerHTML=rooms.map(r=>`<button class='chip' data-room='${{r}}'>${{r}}</button>`).join('');document.getElementById('roomFilters').onclick=(e)=>{{const b=e.target.closest('[data-room]');if(!b)return;const r=b.dataset.room;if(roomSelected.has(r)){{roomSelected.delete(r);b.classList.remove('active')}}else{{roomSelected.add(r);b.classList.add('active')}}applySetlist();}};
+function applySetlist(){{const kw=(document.getElementById('searchInput').value||'').trim().toUpperCase().split(/\s+/).filter(Boolean);filteredIdx=[];for(let i=0;i<src.length;i++){{const it=src[i];if(roomSelected.size&& !roomSelected.has(it.room))continue;let ok=true;for(const k of kw){{if(!it.search.includes(k)){{ok=false;break}}}}if(ok)filteredIdx.push(i)}}filteredIdx.sort((a,b)=>{{const A=src[a],B=src[b];if(activeSort==='room')return A.room.localeCompare(B.room,'ja');if(activeSort==='song')return A.song.localeCompare(B.song,'ja');if(activeSort==='date_asc')return A.fetchedAt.localeCompare(B.fetchedAt,'ja');return B.fetchedAt.localeCompare(A.fetchedAt,'ja')}});document.getElementById('setlistCount').textContent=`全${{src.length}}件 / 表示${{filteredIdx.length}}件`;renderWindow();}}
+const list=document.getElementById('setlistList');list.addEventListener('scroll',()=>requestAnimationFrame(renderWindow));
+function renderWindow(){{const top=list.scrollTop;const vh=list.clientHeight;const s=Math.max(0,Math.floor(top/rowH)-buf);const e=Math.min(filteredIdx.length,Math.ceil((top+vh)/rowH)+buf);document.getElementById('setlistSpacer').style.height=`${{filteredIdx.length*rowH}}px`;const wrap=document.getElementById('setlistItems');wrap.style.transform=`translateY(${{s*rowH}}px)`;wrap.innerHTML=filteredIdx.slice(s,e).map(idx=>{{const x=src[idx];const q=`${{x.work}} ${{x.song}}`;return `<article class='card' onclick='this.classList.toggle("open")'><div class='meta'><span class='badge'>${{x.room||'-'}}</span><span>${{x.fetchedAt||''}}</span></div><div class='title'><a href='${{ykr(q)}}' target='_blank'>${{x.song||'-'}}</a></div><div class='muted'>${{x.work||'-'}} / ${{x.artist||'-'}}</div><div class='muted'>歌った人: ${{x.singer||'-'}} ／ 順番: ${{x.order||'-'}} ▼</div><div class='detail small'>取得日: ${{x.fetchedAt||'-'}}</div></article>`}}).join('')}}
+document.getElementById('searchInput').addEventListener('input',()=>{{clearTimeout(searchTimer);searchTimer=setTimeout(()=>requestAnimationFrame(applySetlist),150)}});applySetlist();
+function heat(v,max){{if(max<=0)return 'heat1';const r=v/max;return r>.8?'heat5':r>.6?'heat4':r>.4?'heat3':r>.2?'heat2':'heat1'}}
+const cats=['ALL',...APP.config.categories];['analysisCategory','trendingCategory'].forEach(id=>document.getElementById(id).innerHTML=cats.map(c=>`<option value='${{c}}'>${{c==='ALL'?'すべて':c}}</option>`).join(''));
+function renderAnalysis(){{const cat=document.getElementById('analysisCategory').value;const st=document.getElementById('analysisState').value;const so=document.getElementById('analysisSort').value;let works=[];for(const [k,arr] of Object.entries(APP.categories)){{if(cat!=='ALL'&&cat!==k)continue;const map={{}};for(const it of arr){{const key=`${{k}}||${{it.anime}}`;if(!map[key])map[key]={{category:k,anime:it.anime,count:0,users:0,songs:[]}};map[key].count+=it.count;map[key].users+=it.users;map[key].songs.push(it)}}works=works.concat(Object.values(map))}}works=works.filter(w=>st==='all'||(st==='created'&&w.songs.every(s=>s.created))||(st==='uncreated'&&w.songs.some(s=>!s.created))||(st==='has'&&w.count>0)||(st==='none'&&w.count===0));works.sort((a,b)=>so==='anime'?a.anime.localeCompare(b.anime,'ja'):so==='count'?b.count-a.count:b.users-a.users);const maxC=Math.max(...works.map(w=>w.count),1),maxU=Math.max(...works.map(w=>w.users),1);document.getElementById('analysisBody').innerHTML=works.map(w=>`<section class='card'><div class='meta'><strong>${{w.anime}}</strong><span class='badge'>${{w.category}}</span></div><div><span class='badge ${{heat(w.users,maxU)}}'>👥 ${{w.users}}</span> <span class='badge ${{heat(w.count,maxC)}}'>🎤 ${{w.count}}</span> <span class='badge'>楽曲 ${{w.songs.length}}</span></div><details><summary>詳細</summary>${{w.songs.map(s=>`<div class='small'><a target='_blank' href='${{ykr(`${{s.anime}} ${{s.song}}`)}}'>${{s.type}} ${{s.song}}</a> / ${{s.artist}} ${{s.created?'[作成済✓]':'[未作成]'}} 👥${{s.users}} 🎤${{s.count}}</div>`).join('')}}</details></section>`).join('')||'<div class="card">データなし</div>'}}
+['analysisCategory','analysisState','analysisSort'].forEach(id=>document.getElementById(id).onchange=renderAnalysis);renderAnalysis();
+function rankRows(mode,arr){{let out='';let prev=null,rank=0;arr.forEach((x,i)=>{{const v=mode==='count'?x.count:x.users;if(v!==prev)rank=i+1;prev=v;const top=rank===1?'top1':rank===2?'top2':rank===3?'top3':'';out+=`<div class='card rank-item ${{top}}'><div class='meta'><strong>#${{rank}} ${{x.anime}} — <a target='_blank' href='${{ykr(`${{x.anime}} ${{x.song}}`)}}'>${{x.song}}</a></strong><span class='metric'>👥 ${{x.users}}  🎤 ${{x.count}}</span></div><div class='small'>${{x.artist}} (${{x.type}})</div></div>`}});return out}}
+function renderRanking(){{const mode=document.getElementById('rankingMode').value;let html='';for(const cat of APP.config.categories){{const arr=APP.rankings[mode][cat]||[];const top20=arr.slice(0,20);html+=`<section class='card'><details><summary><strong>${{cat}}</strong> TOP20</summary>${{rankRows(mode,top20)}}${{arr.length>20?`<details><summary>もっと見る</summary>${{rankRows(mode,arr.slice(20))}}</details>`:''}}</details></section>`}}document.getElementById('rankingBody').innerHTML=html}}
+document.getElementById('rankingMode').onchange=renderRanking;renderRanking();
+function renderTrending(){{const cat=document.getElementById('trendingCategory').value;const onlyNew=document.getElementById('trendingNewOnly').checked;const arr=APP.trending.filter(x=>(cat==='ALL'||x.category===cat)&&(!onlyNew||x.isNew));document.getElementById('trendingBody').innerHTML=arr.map((x,i)=>`<article class='card'><div class='meta'><strong>#${{i+1}} ${{x.anime}} — <a target='_blank' href='${{ykr(`${{x.anime}} ${{x.song}}`)}}'>${{x.song}}</a></strong><span class='badge'>${{x.category}}</span></div><div class='small'>${{x.artist}} (${{x.type}})</div><div class='metric'>直近7日: 🎤${{x.recent}} 👥${{x.users7d}} ／ 前2週平均: 🎤${{x.baseline}}</div><div>${{x.isNew?'<span class="badge">初登場</span>':''}} <span class='badge' style='background:#dcfce7;color:#166534'>+${{Math.round(x.score*100)}}%</span></div></article>`).join('')||'<div class="card">データなし</div>'}}
+['trendingCategory','trendingNewOnly'].forEach(id=>document.getElementById(id).onchange=renderTrending);renderTrending();
+function makeHtml(title,content){{const p=document.getElementById('exportPort').value||APP.config.defaultPort;const lt=document.getElementById('exportLinkType').value;const sp=lt==='ykr'?'search_listerdb_filelist.php?anyword=':'search.php?searchword=';return `<!doctype html><html lang='ja'><head><meta charset='utf-8'><title>${{title}}</title><style>body{{font-family:-apple-system,Segoe UI,sans-serif;background:#fff;padding:12px}}.card{{border:1px solid #e5e7eb;border-radius:8px;padding:10px;margin:8px 0}}</style></head><body><h1>${{title}}</h1>${{content}}<script>const host='http://ykr.moe:${{p}}',sp='${{sp}}';document.querySelectorAll('a[data-q]').forEach(a=>a.href=host+'/'+sp+encodeURIComponent(a.dataset.q));<\/script></body></html>`;}}
+function saveFile(name,title,content){{const b=new Blob([makeHtml(title,content)],{{type:'text/html'}});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();}}
+document.getElementById('saveSetlist').onclick=()=>{{const cards=filteredIdx.map(i=>{{const x=src[i];const q=`${{x.work}} ${{x.song}}`;return `<div class='card'><div>${{x.room}} / ${{x.fetchedAt}}</div><strong><a data-q='${{q}}'>${{x.song}}</a></strong><div>${{x.work}} / ${{x.artist}}</div><div>${{x.singer}} / ${{x.order}}</div></div>`}}).join('');saveFile('setlist.html','セットリスト',cards);}};
+document.getElementById('saveAnalysis').onclick=()=>saveFile('karaoke_analysis.html','クール集計',document.getElementById('analysisBody').innerHTML);
+document.getElementById('saveRanking').onclick=()=>saveFile('karaoke_ranking.html','ランキング',document.getElementById('rankingBody').innerHTML);
+document.getElementById('saveTrending').onclick=()=>saveFile('karaoke_trending.html','急上昇',document.getElementById('trendingBody').innerHTML);
+document.getElementById('saveCreated').onclick=()=>{{const cat=document.getElementById('analysisCategory').value;let rows=[];for(const [k,v] of Object.entries(APP.createdLists)){{if(cat!=='ALL'&&cat!==k)continue;rows=rows.concat(v)}}saveFile('created_list.html','作成済みリスト',rows.map(x=>`<div class='card'><a data-q='${{x.anime}} ${{x.song}}'>${{x.song}}</a> / ${{x.anime}} / ${{x.artist}}</div>`).join(''));}};
+document.getElementById('saveUncreated').onclick=()=>{{const cat=document.getElementById('analysisCategory').value;let rows=[];for(const [k,v] of Object.entries(APP.uncreatedLists)){{if(cat!=='ALL'&&cat!==k)continue;rows=rows.concat(v)}}saveFile('uncreated_list.html','未作成リスト',rows.map(x=>`<div class='card'><a data-q='${{x.anime}} ${{x.song}}'>${{x.song}}</a> / ${{x.anime}} / ${{x.artist}}</div>`).join(''));}};
 </script>
 </body>
 </html>
