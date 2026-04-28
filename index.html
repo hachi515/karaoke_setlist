@@ -864,7 +864,7 @@ document.querySelectorAll('.tab-btn').forEach(b=>{
 function toggleCard(headEl){headEl.parentElement.classList.toggle('expanded');}
 
 // ===== Setlist =====
-const SETLIST = HISTORY.map((h,i)=>({...h, idx:i, _orderNum: parseFloat(h.o) || -Infinity}));
+const SETLIST = HISTORY.map((h,i)=>{const n=parseFloat(h.o);return {...h, idx:i, _orderNum: Number.isFinite(n) ? n : -Infinity};});
 let slState = {rooms:new Set(), keyword:'', page:1, filtered:[]};
 
 function applySlFilter(){
