@@ -617,13 +617,13 @@ def is_song_created(song_name):
     return False
 
 
-# --- ★関数: 相対バー幅の計算（最大値基準） ---
+# --- ★関数: 相対バー幅の計算（最大値=1位を基準として正規化） ---
 def calc_bar_pct(value, max_value, min_pct=4):
     """
     相対スケーリング:
-    - max_value を基準に 0〜100% で表現
+    - max_value（=1位の値）を100%とし、それに対する割合で width を返す
     - 0 のときは 0%
-    - 1以上だが極端に小さい時も視認できるよう min_pct を下限とする
+    - 値が極端に小さい場合も視認できるよう min_pct を下限とする
     """
     try:
         v = float(value)
@@ -861,13 +861,12 @@ if not raw_df.empty:
         #  Pass1: 各曲の歌唱数 / 歌唱人数 / 作成カウントを算出し、
         #         カテゴリ内 max を計算（バー相対スケーリング用）。
         #  Pass2: 作品名（anime）でグループ化し rowspan 集約。
-        #         同時にスマホ用「作品アコーディオン」用の構造を出力。
         # =========================================================
         for category, items in categorized_data.items():
 
             cat_created_items = []
             cat_uncreated_items = []
-            rendered_items = []  # Pass1 の結果（item に count/user_count/creation_count を付与）
+            rendered_items = []
 
             items.sort(key=lambda x: x['anime'])
 
@@ -928,7 +927,7 @@ if not raw_df.empty:
                     "creation_count": creation_count
                 })
 
-            # 相対バー基準: 同一カテゴリ内の最大値で正規化
+            # 相対バー基準: 同一カテゴリ内の最大値で正規化（=カテゴリ内1位の値が100%）
             max_count_in_cat = max([r['count'] for r in rendered_items], default=0)
             max_user_in_cat = max([r['user_count'] for r in rendered_items], default=0)
 
@@ -955,7 +954,6 @@ if not raw_df.empty:
                     </thead>
             """
 
-            # 作品名でグループ化（rowspan 集約 + スマホアコーディオン）
             anime_groups = []
             for anime_name, group_iter in groupby(rendered_items, key=lambda x: x['anime']):
                 anime_groups.append((anime_name, list(group_iter)))
@@ -966,7 +964,6 @@ if not raw_df.empty:
                 group_total_user = sum(g['user_count'] for g in group_items)
                 group_total_made = sum(g['creation_count'] for g in group_items)
 
-                # スマホ用アコーディオンヘッダ（PCではCSSで非表示）
                 analysis_html_content += f'''<tbody class="anime-group" data-anime="{anime_name}">
                     <tr class="anime-head" onclick="toggleAnimeGroup(this)">
                         <td colspan="7">
@@ -1041,15 +1038,27 @@ if not raw_df.empty:
                     rank_title = f"{target_cat} 歌唱人数ランキング (TOP 20)"
                     val_key = "user_count"
 
-                # ランキング内（TOP20想定）でも相対バーが効くよう、上位の最大値を基準にする
+                # ★1位の値を 100% の基準（分母）として、それに応じた割合でバーを表示する
                 top_slice = cat_items[:20]
-                max_count_rank = max([d["count"] for d in top_slice], default=0)
-                max_user_rank = max([d["user_count"] for d in top_slice], default=0)
+                if mode == "count":
+                    # 主軸: 歌唱数（=1位の歌唱数を分母）
+                    rank1_main = top_slice[0]["count"] if top_slice else 0
+                    rank1_sub = top_slice[0]["user_count"] if top_slice else 0
+                else:
+                    # 主軸: 歌唱人数（=1位の歌唱人数を分母）
+                    rank1_main = top_slice[0]["user_count"] if top_slice else 0
+                    rank1_sub = top_slice[0]["count"] if top_slice else 0
+
+                # 主軸はランキングソートの1位、副軸はその副指標のTOP内最大を分母にする
+                # （副軸が0除算にならないように max() でガードする）
+                max_count_rank = top_slice[0]["count"] if (mode == "count" and top_slice) else max([d["count"] for d in top_slice], default=0)
+                max_user_rank = top_slice[0]["user_count"] if (mode == "user" and top_slice) else max([d["user_count"] for d in top_slice], default=0)
 
                 html_out += f"""
                 <section class="cat-block">
                     <header class="cat-header" onclick="toggleCategory(this)">
                         <span class="cat-title">{rank_title}</span>
+                        <span class="cat-meta">1位基準: 人数 {max_user_rank} / 歌唱数 {max_count_rank}</span>
                         <i class="fas fa-chevron-down cat-chev"></i>
                     </header>
                     <div class="cat-content">
@@ -1097,6 +1106,7 @@ if not raw_df.empty:
 
                         rank_display = f'<span class="{rank_tag_class}">{current_rank}</span>'
 
+                        # 1位を100%とした相対バー
                         user_pct = calc_bar_pct(item["user_count"], max_user_rank)
                         count_pct = calc_bar_pct(item["count"], max_count_rank)
 
@@ -1149,7 +1159,6 @@ columns_to_hide = ['コメント']
 if not full_df.empty:
     html_df = full_df.drop(columns=columns_to_hide, errors='ignore').copy()
 
-    # 並び順を「取得日(新しい順) → 順番(大きい順)」に統一
     html_df['_dt_sort'] = pd.to_datetime(html_df['取得日'], errors='coerce')
     html_df['_order_sort'] = pd.to_numeric(html_df['順番'], errors='coerce')
     html_df = html_df.sort_values(
@@ -1168,6 +1177,12 @@ def _safe(v):
     s = str(v)
     return s if s and s.lower() != 'nan' else ""
 
+# =========================================================
+# セットリスト行の生成
+# レイアウトはクール集計テーブル（analysisTable）と揃える方針:
+#  - PC: 1曲1行のコンパクトなテーブル（順番/曲名/作品名/歌手/歌った人/部屋/取得日）
+#  - スマホ: 番号 + 曲名 + 作品名のみ表示し、行クリックで折り畳み詳細展開
+# =========================================================
 setlist_rows = ""
 total_setlist_rows = 0
 if not html_df.empty:
@@ -1189,24 +1204,16 @@ if not html_df.empty:
         singer = _safe(row['歌った人']) if has_singer else ""
         date = _safe(row['取得日']) if has_date else ""
 
-        # 検索用テキスト（hidden）
         search_text = " ".join([room, order, song, work, artist, singer, date]).upper()
 
-        # 作成有無タグはセットリストでは表示しない（仕様変更）
-        setlist_rows += f'''<tr class="setlist-row" data-search="{search_text}">
-            <td class="cell-main">
-                <div class="row-top">
-                    <span class="col-order">{order}</span>
-                    <span class="col-song" title="{song}">{song}</span>
-                    <span class="col-date">{date}</span>
-                </div>
-                <div class="row-sub">
-                    <span class="col-room"><span class="room-tag">{room}</span></span>
-                    <span class="col-work" title="{work}">{work}</span>
-                    <span class="col-artist">{artist}</span>
-                    <span class="col-singer"><i class="fas fa-microphone"></i> {singer}</span>
-                </div>
-            </td>
+        setlist_rows += f'''<tr class="setlist-row" data-search="{search_text}" onclick="toggleSetlistRow(this, event)">
+            <td class="sl-order" data-label="順番">{order}</td>
+            <td class="sl-song" data-label="曲名"><span class="sl-song-main" title="{song}">{song}</span><span class="sl-mob-chev"><i class="fas fa-chevron-right"></i></span></td>
+            <td class="sl-work" data-label="作品名">{work}</td>
+            <td class="sl-artist" data-label="歌手">{artist}</td>
+            <td class="sl-singer" data-label="歌った人">{singer}</td>
+            <td class="sl-room" data-label="部屋"><span class="room-tag">{room}</span></td>
+            <td class="sl-date" data-label="取得日">{date}</td>
         </tr>'''
         total_setlist_rows += 1
 
@@ -1413,78 +1420,80 @@ html_content = f"""
         .cat-chev {{ color: var(--text-mute); transition: transform 0.2s; font-size: 0.85rem; }}
         .cat-content.collapsed {{ display: none; }}
 
-        /* ============== Setlist Table ============== */
+        /* ============== Setlist Table (大改修: クール集計準拠の詰めたテーブル) ============== */
         #setlistTable {{
             width: 100%;
             border-collapse: collapse;
             background: var(--panel);
-            border-radius: var(--radius-lg);
-            margin-top: 12px;
-            overflow: hidden;
+            font-size: 12.5px;
             border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            margin-top: 12px;
+            table-layout: fixed;
         }}
-        #setlistTable thead {{ display: none; }}
-        #setlistTable tr.setlist-row {{
-            display: block;
-            border-bottom: 1px solid var(--border-soft);
-            padding: 0;
-            background: #fff;
-            transition: background 0.12s;
+        #setlistTable thead {{
+            background: linear-gradient(180deg, #1f2937 0%, #111827 100%);
         }}
-        #setlistTable tr.setlist-row:nth-child(even) {{ background: #fbfcfd; }}
-        #setlistTable tr.setlist-row:hover {{ background: #eef4fb; }}
-        #setlistTable td.cell-main {{
-            display: block;
-            padding: 4px 12px 5px 12px;
+        #setlistTable thead th {{
+            color: #fff;
+            font-weight: 600;
+            font-size: 11.5px;
+            letter-spacing: 0.04em;
+            text-align: left;
+            padding: 7px 10px;
+            white-space: nowrap;
             border: none;
+            cursor: pointer;
+            position: sticky; top: 0; z-index: 5;
         }}
-        .row-top {{
-            display: grid;
-            grid-template-columns: 50px 1fr 90px;
-            gap: 12px;
-            align-items: baseline;
+        #setlistTable thead th:hover {{ color: var(--accent-soft); }}
+        #setlistTable thead th.th-sl-order {{ width: 56px; text-align: right; padding-right: 12px; }}
+        #setlistTable thead th.th-sl-song {{ width: auto; }}
+        #setlistTable thead th.th-sl-work {{ width: 18%; }}
+        #setlistTable thead th.th-sl-artist {{ width: 14%; }}
+        #setlistTable thead th.th-sl-singer {{ width: 12%; }}
+        #setlistTable thead th.th-sl-room {{ width: 110px; }}
+        #setlistTable thead th.th-sl-date {{ width: 92px; text-align: right; }}
+
+        #setlistTable tbody tr.setlist-row {{
+            background: #fff;
+            border-bottom: 1px solid var(--border-soft);
+            transition: background 0.1s;
         }}
-        .row-sub {{
-            display: grid;
-            grid-template-columns: 130px 1.4fr 1fr 1fr;
-            gap: 10px;
-            align-items: start;
-            margin-top: 1px;
-            padding-left: 62px;
+        #setlistTable tbody tr.setlist-row:nth-child(even) {{ background: #fbfcfd; }}
+        #setlistTable tbody tr.setlist-row:hover {{ background: #eef4fb; }}
+        #setlistTable tbody td {{
+            padding: 4px 10px;
+            border: none;
+            border-bottom: 1px solid var(--border-soft);
+            vertical-align: middle;
+            font-size: 12.5px;
+            line-height: 1.35;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }}
-        .col-order {{
+        #setlistTable td.sl-order {{
             font-family: "Inter", monospace;
             font-weight: 700;
-            font-size: 13px;
             color: var(--text-sub);
             text-align: right;
             font-variant-numeric: tabular-nums;
+            padding-right: 12px;
         }}
-        .col-song {{
-            font-weight: 700;
-            font-size: 14px;
+        #setlistTable td.sl-song {{
+            font-weight: 600;
             color: var(--primary);
-            white-space: nowrap;
+            white-space: normal;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
             overflow: hidden;
-            text-overflow: ellipsis;
+            line-height: 1.3;
+            font-size: 13px;
         }}
-        .col-date {{
-            font-size: 12px;
-            color: var(--text-mute);
-            text-align: right;
-            font-variant-numeric: tabular-nums;
-            white-space: nowrap;
-        }}
-        .row-sub > span {{
-            font-size: 12.5px;
-            color: var(--text-sub);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            line-height: 1.35;
-        }}
-        /* 作品名は2行まで折返し */
-        .col-work {{
+        #setlistTable td.sl-work {{
             color: #4b5563;
             white-space: normal;
             display: -webkit-box;
@@ -1492,11 +1501,20 @@ html_content = f"""
             -webkit-box-orient: vertical;
             overflow: hidden;
             line-height: 1.3;
+            font-size: 12px;
+        }}
+        #setlistTable td.sl-artist {{ color: var(--text-sub); font-size: 12px; }}
+        #setlistTable td.sl-singer {{ color: var(--text-sub); font-size: 12px; }}
+        #setlistTable td.sl-date {{
+            color: var(--text-mute);
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+            font-size: 11.5px;
         }}
         .room-tag {{
             display: inline-block;
-            padding: 1px 8px;
-            font-size: 11.5px;
+            padding: 1px 7px;
+            font-size: 11px;
             font-weight: 600;
             color: var(--accent);
             background: #eff6ff;
@@ -1508,77 +1526,135 @@ html_content = f"""
             overflow: hidden;
             text-overflow: ellipsis;
         }}
-        .col-artist {{ color: #4b5563; font-style: normal; font-size: 12.5px; }}
-        .col-singer {{ color: var(--text-sub); font-size: 12.5px; }}
-        .col-singer i {{ font-size: 10px; color: var(--text-mute); margin-right: 2px; }}
+        .sl-mob-chev {{ display: none; color: var(--text-mute); margin-left: 6px; transition: transform 0.2s; }}
 
         tr.hidden {{ display: none !important; }}
 
-        .setlist-pseudo-header {{
-            display: grid;
-            grid-template-columns: 50px 1fr 90px;
-            gap: 12px;
-            padding: 8px 12px;
-            background: linear-gradient(180deg, #1f2937 0%, #111827 100%);
-            color: #fff;
-            font-size: 11.5px;
-            font-weight: 600;
-            letter-spacing: 0.03em;
-            position: sticky; top: 0;
-            border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-            z-index: 5;
-        }}
-        .setlist-pseudo-header span:nth-child(1) {{ text-align: right; cursor: pointer; }}
-        .setlist-pseudo-header span:nth-child(2) {{ cursor: pointer; }}
-        .setlist-pseudo-header span:nth-child(3) {{ text-align: right; cursor: pointer; }}
-        .setlist-pseudo-header span:hover {{ color: var(--accent-soft); }}
-
-        /* ============== Mobile setlist (cards) ============== */
+        /* ============== Mobile setlist (アコーディオン: 番号/曲名/作品名のみ表示) ============== */
         @media (max-width: 720px) {{
-            .setlist-pseudo-header {{ display: none; }}
             #setlistTable {{
+                display: block;
                 background: transparent;
                 border: none;
-                box-shadow: none;
+                border-radius: 0;
+                margin-top: 8px;
             }}
-            #setlistTable tr.setlist-row {{
+            #setlistTable thead {{ display: none; }}
+            #setlistTable tbody {{ display: block; }}
+            #setlistTable tbody tr.setlist-row {{
+                display: grid;
+                grid-template-columns: 36px 1fr 16px;
+                grid-template-areas:
+                    "order  song  chev"
+                    "order  work  chev"
+                    "details details details";
+                gap: 1px 8px;
+                padding: 5px 10px;
                 background: #fff !important;
                 border: 1px solid var(--border);
-                border-radius: var(--radius-lg);
-                margin-bottom: 6px;
+                border-radius: 8px;
+                margin-bottom: 5px;
                 box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+                align-items: start;
             }}
-            #setlistTable td.cell-main {{ padding: 6px 10px; }}
-            .row-top {{
-                grid-template-columns: 32px 1fr 70px;
-                gap: 8px;
-            }}
-            .col-song {{
-                font-size: 13.5px;
-                white-space: normal;
-                display: -webkit-box;
-                -webkit-line-clamp: 2;
-                -webkit-box-orient: vertical;
+            #setlistTable tbody tr.setlist-row td {{
+                display: block;
+                padding: 0;
+                border: none;
+                background: transparent !important;
+                white-space: nowrap;
                 overflow: hidden;
-                line-height: 1.3;
+                text-overflow: ellipsis;
             }}
-            .col-order {{ font-size: 12px; align-self: start; padding-top: 1px; }}
-            .col-date {{ font-size: 11px; align-self: start; padding-top: 1px; }}
-            .row-sub {{
-                grid-template-columns: auto 1fr;
-                grid-template-areas:
-                    "room work"
-                    "artist singer";
-                padding-left: 0;
-                gap: 2px 8px;
+            #setlistTable tbody tr.setlist-row td.sl-order {{
+                grid-area: order;
+                align-self: start;
+                padding-top: 1px;
+                font-size: 12px;
+                text-align: right;
+                padding-right: 0;
+            }}
+            #setlistTable tbody tr.setlist-row td.sl-song {{
+                grid-area: song;
+                font-size: 13px;
+                font-weight: 700;
+                color: var(--primary);
+                white-space: normal;
+                -webkit-line-clamp: 2;
+                line-height: 1.3;
+                padding-right: 4px;
+            }}
+            #setlistTable tbody tr.setlist-row td.sl-song .sl-mob-chev {{ display: none; }}
+            #setlistTable tbody tr.setlist-row td.sl-work {{
+                grid-area: work;
+                font-size: 11.5px;
+                color: var(--text-sub);
+                white-space: normal;
+                -webkit-line-clamp: 2;
+                line-height: 1.25;
+            }}
+            /* 折り畳み表示用のチェブロン */
+            #setlistTable tbody tr.setlist-row::after {{
+                content: "▸";
+                grid-area: chev;
+                color: var(--text-mute);
+                font-size: 11px;
+                align-self: start;
+                padding-top: 2px;
+                transition: transform 0.2s;
+            }}
+            #setlistTable tbody tr.setlist-row.expanded::after {{
+                content: "▾";
+                color: var(--accent);
+            }}
+            /* 詳細（部屋・歌手・歌った人・取得日）はデフォルト非表示 */
+            #setlistTable tbody tr.setlist-row td.sl-artist,
+            #setlistTable tbody tr.setlist-row td.sl-singer,
+            #setlistTable tbody tr.setlist-row td.sl-room,
+            #setlistTable tbody tr.setlist-row td.sl-date {{
+                grid-area: details;
+                display: none !important;
+            }}
+            #setlistTable tbody tr.setlist-row.expanded td.sl-artist,
+            #setlistTable tbody tr.setlist-row.expanded td.sl-singer,
+            #setlistTable tbody tr.setlist-row.expanded td.sl-room,
+            #setlistTable tbody tr.setlist-row.expanded td.sl-date {{
+                display: inline-flex !important;
+                align-items: center;
+                margin-right: 10px;
                 margin-top: 4px;
                 padding-top: 4px;
                 border-top: 1px dashed var(--border);
+                font-size: 11px;
+                color: var(--text-sub);
+                white-space: normal;
             }}
-            .col-room {{ grid-area: room; }}
-            .col-work {{ grid-area: work; font-size: 12px; -webkit-line-clamp: 2; }}
-            .col-artist {{ grid-area: artist; font-size: 11.5px; }}
-            .col-singer {{ grid-area: singer; font-size: 11.5px; text-align: right; }}
+            #setlistTable tbody tr.setlist-row.expanded td.sl-room {{
+                margin-top: 4px;
+                padding-top: 4px;
+                border-top: 1px dashed var(--border);
+                grid-column: 1 / 4;
+                display: flex !important;
+                flex-wrap: wrap;
+                gap: 6px 12px;
+                align-items: center;
+            }}
+            #setlistTable tbody tr.setlist-row.expanded td.sl-artist::before,
+            #setlistTable tbody tr.setlist-row.expanded td.sl-singer::before,
+            #setlistTable tbody tr.setlist-row.expanded td.sl-date::before {{
+                content: attr(data-label) ":";
+                color: var(--text-mute);
+                font-weight: 600;
+                margin-right: 4px;
+            }}
+            #setlistTable tbody tr.setlist-row.expanded td.sl-artist,
+            #setlistTable tbody tr.setlist-row.expanded td.sl-singer,
+            #setlistTable tbody tr.setlist-row.expanded td.sl-date {{
+                grid-column: auto;
+                border-top: none;
+                margin-top: 0;
+                padding-top: 0;
+            }}
         }}
 
         /* ============== 共通テーブル (analysis / ranking / list) ============== */
@@ -1678,7 +1754,7 @@ html_content = f"""
         .made-tag.made-no  {{ color: var(--text-mute); background: #f9fafb; border: 1px solid var(--border); }}
 
         /* ===== 作品アコーディオン（クール集計 スマホ用） ===== */
-        .anime-head {{ display: none; }}  /* PCでは非表示 */
+        .anime-head {{ display: none; }}
         .anime-head td {{
             background: linear-gradient(180deg,#f9fafb,#f3f4f6);
             border-top: 1px solid var(--border);
@@ -1724,7 +1800,6 @@ html_content = f"""
 
         /* ============== Mobile (analysis/ranking) ============== */
         @media (max-width: 720px) {{
-            /* クール集計: アコーディオン化 */
             .analysisTable {{
                 display: block;
                 background: transparent;
@@ -1767,7 +1842,7 @@ html_content = f"""
                 font-size: 12px;
             }}
             .analysisTable tbody.anime-group tr.anime-song td.td-anime {{
-                display: none;  /* スマホではヘッダに集約 */
+                display: none;
             }}
             .analysisTable tbody.anime-group tr.anime-song td.td-made {{
                 grid-area: made; align-self: start;
@@ -1799,7 +1874,6 @@ html_content = f"""
                 grid-column: 2 / 4;
             }}
 
-            /* ランキング: 行アコーディオン化 */
             .rankingTable {{ display: block; background: transparent; }}
             .rankingTable thead {{ display: none; }}
             .rankingTable tbody {{ display: block; }}
@@ -1913,14 +1987,6 @@ html_content = f"""
             .chart-wrapper {{ height: auto; }}
         }}
 
-        @media (max-width: 960px) {{
-            .row-sub {{
-                grid-template-columns: 110px 1fr 1fr;
-                padding-left: 62px;
-            }}
-            .col-singer {{ grid-column: 3 / 4; text-align: right; }}
-        }}
-
         @media (max-width: 420px) {{
             h1 {{ font-size: 0.95rem; }}
             .port-input-wrapper {{ display: none; }}
@@ -1990,33 +2056,39 @@ html_content = f"""
 
     <div class="content-area">
         <div id="setlist" class="tab-content active">
-            <div class="setlist-pseudo-header">
-                <span onclick="sortSetlist('order')">順番 <i class="fas fa-sort"></i></span>
-                <span onclick="sortSetlist('song')">曲名 / 作品名・歌手・歌った人 <i class="fas fa-sort"></i></span>
-                <span onclick="sortSetlist('date')">取得日 <i class="fas fa-sort"></i></span>
-            </div>
             <table id="setlistTable">
+                <thead>
+                    <tr>
+                        <th class="th-sl-order" onclick="sortSetlist('order')">順番 <i class="fas fa-sort"></i></th>
+                        <th class="th-sl-song" onclick="sortSetlist('song')">曲名 <i class="fas fa-sort"></i></th>
+                        <th class="th-sl-work" onclick="sortSetlist('work')">作品名 <i class="fas fa-sort"></i></th>
+                        <th class="th-sl-artist" onclick="sortSetlist('artist')">歌手 <i class="fas fa-sort"></i></th>
+                        <th class="th-sl-singer" onclick="sortSetlist('singer')">歌った人 <i class="fas fa-sort"></i></th>
+                        <th class="th-sl-room" onclick="sortSetlist('room')">部屋 <i class="fas fa-sort"></i></th>
+                        <th class="th-sl-date" onclick="sortSetlist('date')">取得日 <i class="fas fa-sort"></i></th>
+                    </tr>
+                </thead>
                 <tbody>{setlist_rows}</tbody>
             </table>
             {"" if setlist_rows else '<div style="padding:20px;text-align:center;color:var(--text-mute);">データがありません</div>'}
         </div>
 
         <div id="analysis" class="tab-content">
-            <div style="margin-top:10px; font-size:0.78rem; color:var(--text-mute); text-align:right;">集計対象期間: 2026/01/01 - 2026/06/30　/　バーは各カテゴリ内最大値を100%とする相対表示</div>
+            <div style="margin-top:10px; font-size:0.78rem; color:var(--text-mute); text-align:right;">集計対象期間: 2026/01/01 - 2026/06/30　/　バーは各カテゴリ内最大値（=1位）を100%とする相対表示</div>
             <div id="print-target">
                 {analysis_html_content if cool_data_exists else '<div style="padding:20px;text-align:center;color:var(--red);">集計データがありません</div>'}
             </div>
         </div>
 
         <div id="ranking_count" class="tab-content">
-            <div style="margin-top:10px; font-size:0.78rem; color:var(--text-mute); text-align:right;">集計対象期間: 2026/01/01 - 2026/06/30　/　バーはTOP20内最大値を100%とする相対表示</div>
+            <div style="margin-top:10px; font-size:0.78rem; color:var(--text-mute); text-align:right;">集計対象期間: 2026/01/01 - 2026/06/30　/　バーは1位の値を100%とする相対表示</div>
             <div id="ranking-count-print-target">
                 {ranking_count_html_content if ranking_count_html_content else '<div style="padding:20px;text-align:center;color:var(--red);">ランキング対象データがありません</div>'}
             </div>
         </div>
 
         <div id="ranking_user" class="tab-content">
-            <div style="margin-top:10px; font-size:0.78rem; color:var(--text-mute); text-align:right;">集計対象期間: 2026/01/01 - 2026/06/30　/　バーはTOP20内最大値を100%とする相対表示</div>
+            <div style="margin-top:10px; font-size:0.78rem; color:var(--text-mute); text-align:right;">集計対象期間: 2026/01/01 - 2026/06/30　/　バーは1位の値を100%とする相対表示</div>
             <div id="ranking-user-print-target">
                 {ranking_user_html_content if ranking_user_html_content else '<div style="padding:20px;text-align:center;color:var(--red);">ランキング対象データがありません</div>'}
             </div>
@@ -2213,19 +2285,22 @@ html_content = f"""
         }}
     }}
 
-    // クール集計: スマホで作品アコーディオンを開閉
     function toggleAnimeGroup(headRow) {{
         const tbody = headRow.parentElement;
         if (!tbody) return;
         tbody.classList.toggle('expanded');
     }}
 
-    // ランキング: スマホで行アコーディオンを開閉
     function toggleRankRow(row, ev) {{
-        // モバイル幅でだけ動作
         if (!window.matchMedia('(max-width: 720px)').matches) return;
         if (window.getSelection && window.getSelection().toString().length > 0) return;
-        // 曲名リンク等を踏んだ場合はトグルしない（PC版エクスポートでは別スクリプトでリンク化されるためここでは無視でOK）
+        row.classList.toggle('expanded');
+    }}
+
+    // セットリスト：スマホでは行クリックで折り畳み詳細を展開
+    function toggleSetlistRow(row, ev) {{
+        if (!window.matchMedia('(max-width: 720px)').matches) return;
+        if (window.getSelection && window.getSelection().toString().length > 0) return;
         row.classList.toggle('expanded');
     }}
 
@@ -2324,6 +2399,7 @@ html_content = f"""
         a.export-link {{ display:inline-block; color: #2563eb; text-decoration:none; padding: 2px 0; }}
         a.export-link:hover {{ text-decoration: underline; color:#1d4ed8; }}
         .type-tag {{ display:inline-block; padding:1px 7px; font-size:10.5px; font-weight:700; color:#6b7280; background:#f3f4f6; border:1px solid #e5e7eb; border-radius:3px; }}
+        .type-tag-inline {{ display:inline-block; margin-left:6px; font-size:10.5px; font-weight:600; color:#9ca3af; }}
         .made-tag {{ display:inline-block; min-width:28px; padding:1px 6px; font-size:11px; font-weight:800; border-radius:3px; text-align:center; }}
         .made-tag.made-yes {{ color:#10b981; background:#ecfdf5; border:1px solid #a7f3d0; }}
         .made-tag.made-no  {{ color:#9ca3af; background:#f9fafb; border:1px solid #e5e7eb; }}
@@ -2348,7 +2424,6 @@ html_content = f"""
         .chart-wrapper {{ background:#fff; padding:10px; border-radius:8px; border:1px solid #e5e7eb; }}
         .rank-mob-chev {{ display:none; }}
 
-        /* スマホレイアウト（出力HTMLでもアコーディオン） */
         @media (max-width: 720px) {{
             .anime-head {{ display:block; }}
             .anime-head td {{
@@ -2384,7 +2459,6 @@ html_content = f"""
                 content: attr(data-label) ":"; color:#9ca3af; margin-right:4px; font-weight:600;
             }}
 
-            /* ランキング モバイル */
             table.rankingTable {{ display:block; background:transparent; border:none; }}
             table.rankingTable thead {{ display:none; }}
             table.rankingTable tbody {{ display:block; }}
@@ -2430,7 +2504,6 @@ html_content = f"""
         const searchPath = '${{searchPath}}';
 
         document.addEventListener('DOMContentLoaded', () => {{
-            // クール集計・リスト・ランキング 内のすべての export-link をクリック可能に
             document.querySelectorAll('a.export-link').forEach(link => {{
                 const rawHref = link.getAttribute('href');
                 if (rawHref && rawHref.startsWith('#search_link/')) {{
@@ -2441,11 +2514,10 @@ html_content = f"""
                 }}
             }});
 
-            // ランキング行クリック→ 検索ページ（PC）/ アコーディオン（スマホ）
             document.querySelectorAll('tr[data-href]').forEach(row => {{
                 row.addEventListener('click', (e) => {{
                     if (window.getSelection().toString().length > 0) return;
-                    if (e.target.closest('a')) return;  // 曲名リンクなどはそのまま遷移させる
+                    if (e.target.closest('a')) return;
                     if (window.matchMedia('(max-width: 720px)').matches) {{
                         row.classList.toggle('expanded');
                         return;
@@ -2458,7 +2530,6 @@ html_content = f"""
                 }});
             }});
 
-            // 作品アコーディオン（スマホ）
             document.querySelectorAll('tr.anime-head').forEach(headRow => {{
                 headRow.addEventListener('click', () => {{
                     const tbody = headRow.parentElement;
@@ -2489,7 +2560,7 @@ html_content = f"""
     const countDisplay = document.getElementById('countDisplay');
     let setlistRows = [];
     let setlistSearchText = [];
-    let setlistSortDir = {{ order: 'desc', song: 'asc', date: 'desc' }};
+    let setlistSortDir = {{ order: 'desc', song: 'asc', work: 'asc', artist: 'asc', singer: 'asc', room: 'asc', date: 'desc' }};
 
     window.addEventListener('DOMContentLoaded', () => {{
         const tbody = setlistTable.tBodies[0];
@@ -2536,24 +2607,30 @@ html_content = f"""
         if (!tbody) return;
         const rows = Array.from(tbody.rows);
 
-        const getVal = (row, k) => {{
-            if (k === 'order') {{
-                const t = row.querySelector('.col-order');
-                const n = parseFloat(t ? t.innerText : '');
+        const selectorMap = {{
+            order: '.sl-order',
+            song: '.sl-song',
+            work: '.sl-work',
+            artist: '.sl-artist',
+            singer: '.sl-singer',
+            room: '.sl-room',
+            date: '.sl-date'
+        }};
+        const selector = selectorMap[key] || '.sl-song';
+
+        const getVal = (row) => {{
+            const t = row.querySelector(selector);
+            const raw = t ? t.innerText.trim() : '';
+            if (key === 'order') {{
+                const n = parseFloat(raw);
                 return isNaN(n) ? Number.POSITIVE_INFINITY : n;
-            }} else if (k === 'song') {{
-                const t = row.querySelector('.col-song');
-                return t ? t.innerText : '';
-            }} else if (k === 'date') {{
-                const t = row.querySelector('.col-date');
-                return t ? t.innerText : '';
             }}
-            return '';
+            return raw;
         }};
 
         rows.sort((a, b) => {{
-            const va = getVal(a, key);
-            const vb = getVal(b, key);
+            const va = getVal(a);
+            const vb = getVal(b);
             if (typeof va === 'number' && typeof vb === 'number') {{
                 return dir === 'asc' ? va - vb : vb - va;
             }}
