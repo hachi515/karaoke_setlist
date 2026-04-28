@@ -587,7 +587,7 @@ body.dark .type-pill.tp-none,body.dark .type-chip.tp-none{background:#374151;col
   </div>
 </div>
 
-<div class="update-line"><i class="far fa-clock" style="margin-right:4px"></i><span id="updateLine">2026/04/29 01:57 更新</span></div>
+<div class="update-line"><i class="far fa-clock" style="margin-right:4px"></i><span id="updateLine">2026/04/29 02:34 更新</span></div>
 
 <!-- Setlist -->
 <div class="tab-content active" id="tab-setlist">
@@ -721,7 +721,7 @@ const CATS = ["2026年春アニメ", "2026年冬アニメ", "2025年秋アニメ
 const TREND_PERIODS = [3, 7, 14, 30];
 const TREND_TARGET_CAT = "2026年春アニメ";
 const GAS_URL = "https://script.google.com/macros/s/AKfycbyzKEPfj0bYcRyEdizwQXcduIOQFt2_njtFQSyGP9jBjrhR8pyVKwDol6VN7bLPrktq/exec";
-const UPDATE_TS = "2026/04/29 01:57";
+const UPDATE_TS = "2026/04/29 02:34";
 const PAGE_SIZE = 200;
 
 document.getElementById('updateLine').innerText = UPDATE_TS + ' 更新';
@@ -1461,6 +1461,7 @@ function downloadSetlistHTML(){
   });
   if(arr.length===0) cards = '<div class="empty">該当データがありません</div>';
 
+  const periodLabel = (yearVal && yearVal !== 'all') ? (yearVal + '年') : '全件';
   const titleSuffix = (yearVal && yearVal !== 'all') ? ` (${yearVal}年)` : ' (全件)';
   const body = `<div style="max-width:var(--maxw);margin:0 auto;padding:0 16px 60px"><div style="font-size:14px;font-weight:700;color:var(--primary);padding-left:10px;border-left:3px solid var(--accent);margin:14px 0 8px">セットリスト${titleSuffix} - ${arr.length}件</div>${cards}</div>`;
   const fname = (yearVal && yearVal !== 'all') ? `karaoke_setlist_${yearVal}.html` : 'karaoke_setlist_all.html';
