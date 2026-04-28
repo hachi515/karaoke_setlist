@@ -180,15 +180,33 @@ def get_history_filename_candidates(num):
         # 既存環境差分吸収:
         # - history.csv
         # - history_1.csv
+        # - history1.csv
         # のどちらでも読めるようにする
-        return ["history.csv", "history_1.csv"]
-    return [f"history_{num}.csv"]
+        return ["history.csv", "history_1.csv", "history1.csv"]
+    return [f"history_{num}.csv", f"history{num}.csv"]
 
 
 def get_history_filename(num, filename_by_num=None):
     if filename_by_num and num in filename_by_num:
         return filename_by_num[num]
     return get_history_filename_candidates(num)[0]
+
+
+def load_history_df_with_fallback(filename):
+    """
+    履歴CSVは GAS 側に未配置でも、GitHub 側に存在するケースがあるため
+    GAS -> GitHub の順にフォールバックして読み込む。
+    """
+    df, st = load_df_from_gas_with_status(filename)
+    if st == "ok":
+        return df, "ok"
+
+    # GAS が not_found / empty のときは GitHub も確認
+    if st in {"not_found", "empty"}:
+        gh_df = load_df_from_github(filename)
+        if not gh_df.empty:
+            return gh_df, "ok"
+    return df, st
 
 
 def sort_history_df(df):
@@ -297,7 +315,7 @@ def load_all_history_files():
         found = False
         states = []
         for fn in get_history_filename_candidates(num):
-            df, st = load_df_from_gas_with_status(fn)
+            df, st = load_history_df_with_fallback(fn)
             states.append(st)
             if st == "ok":
                 df = cleanup_history_df(df)
