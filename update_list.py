@@ -536,6 +536,61 @@ def compute_match_for_item(item, hdf):
     return hdf.index[mask].tolist()
 
 
+def assign_matches_with_artist_disambiguation(items, hdf):
+    """
+    items のそれぞれを hdf にマッチさせ、同一 (作品, 曲名) で複数ヒットする
+    バージョン違いを歌手名で振り分けた、item ごとの履歴 index リストを返す。
+    """
+    if hdf is None or hdf.empty or not items:
+        return [[] for _ in items]
+
+    raw = [compute_match_for_item(it, hdf) for it in items]
+
+    # group items by normalized (anime, song)
+    buckets = {}
+    for i, it in enumerate(items):
+        key = (normalize_text(it.get("anime", "")), normalize_text(it.get("song", "")))
+        buckets.setdefault(key, []).append(i)
+
+    assigned = [list(idx) for idx in raw]
+    if '歌手名' not in hdf.columns:
+        return assigned
+
+    history_artists_norm = hdf['歌手名'].astype(str).apply(normalize_text)
+    for member_indices in buckets.values():
+        if len(member_indices) <= 1:
+            continue
+        union = set()
+        for mi in member_indices:
+            union.update(raw[mi])
+        if not union:
+            continue
+        # reset and reassign each history row to exactly one item by 歌手名
+        for mi in member_indices:
+            assigned[mi] = []
+        member_artists = [
+            (mi, normalize_text(items[mi].get("artist", "")))
+            for mi in member_indices
+        ]
+        for hidx in union:
+            h_art = history_artists_norm.loc[hidx] if hidx in history_artists_norm.index else ""
+            best_mi = None
+            best_score = -1
+            for mi, an in member_artists:
+                if not an:
+                    continue
+                if h_art and (an in h_art or h_art in an):
+                    score = len(an)  # longer matched artist wins
+                    if score > best_score:
+                        best_score = score
+                        best_mi = mi
+            if best_mi is None:
+                # fallback: keep the row on the first item to avoid losing it
+                best_mi = member_indices[0]
+            assigned[best_mi].append(hidx)
+    return assigned
+
+
 COOL_START = pd.to_datetime("2026/01/01")
 COOL_END = pd.to_datetime("2026/06/30")
 target_history = full_history[
@@ -548,9 +603,15 @@ for cat in ALLOWED_CATEGORIES:
     if not items:
         cool_data_for_js[cat] = {"works": [], "max_count": 0, "max_user": 0}
         continue
+
+    # 「上伊那ぼたん、酔へる姿は百合の花」「感情グラス」のように
+    # 同じ曲名で複数のボーカルバージョンがある場合に二重計上しないため、
+    # 履歴行を歌手名と最も一致する 1 件にだけ割り当てる。
+    assigned_idx_per_item = assign_matches_with_artist_disambiguation(items, target_history)
+
     enriched = []
-    for it in items:
-        idx = compute_match_for_item(it, target_history) if not target_history.empty else []
+    for i, it in enumerate(items):
+        idx = assigned_idx_per_item[i]
         if idx:
             mt = target_history.loc[idx]
             cnt = len(mt)
@@ -615,10 +676,14 @@ for pd_days in TREND_PERIOD_OPTIONS:
         all_h = pd.DataFrame()
 
     stats = []
-    for it in trend_items:
-        ci = compute_match_for_item(it, cur_h) if not cur_h.empty else []
-        pi = compute_match_for_item(it, prv_h) if not prv_h.empty else []
-        ai = compute_match_for_item(it, all_h) if not all_h.empty else []
+    # 同一作品+曲名で複数バージョンがある場合は歌手名で振り分けて二重計上を防止
+    cur_assigned = assign_matches_with_artist_disambiguation(trend_items, cur_h)
+    prv_assigned = assign_matches_with_artist_disambiguation(trend_items, prv_h)
+    all_assigned = assign_matches_with_artist_disambiguation(trend_items, all_h)
+    for i, it in enumerate(trend_items):
+        ci = cur_assigned[i]
+        pi = prv_assigned[i]
+        ai = all_assigned[i]
         cc = len(ci)
         pc = len(pi)
         cu = cur_h.loc[ci]['歌った人'].nunique() if ci else 0
@@ -800,25 +865,41 @@ body.dark .btn-clear{background:#374151;color:var(--text-sub)}
 body.dark .dl-btn.ghost{background:var(--panel);color:var(--accent)}
 body.dark .type-pill.tp-none,body.dark .type-chip.tp-none{background:#374151;color:var(--text-sub);border-color:var(--border)}
 
+/* Dark mode: 急上昇ピックアップ */
+body.dark .trend-pickup{
+  background:linear-gradient(135deg,#3f1d1d 0%,#2a1414 60%,#4a1f1f 100%);
+  border-color:#7f1d1d;
+}
+body.dark .trend-pickup-head{color:#fecaca}
+body.dark .trend-pickup-head i{color:#f87171}
+body.dark .trend-pickup-row{background:var(--panel);border-color:#7f1d1d;color:var(--text)}
+body.dark .trend-pickup-row .pickup-anime{color:var(--text)}
+body.dark .trend-pickup-row .pickup-sub{color:var(--text-sub)}
+body.dark .trend-pickup-row .num-badge{background:#7f1d1d;color:#fecaca}
+
 /* Top settings */
 .top-cards{
   max-width:var(--maxw);margin:14px auto 0;padding:0 16px;
-  display:grid;grid-template-columns:1fr 1fr;gap:10px;
+  display:grid;grid-template-columns:1fr 1fr;gap:8px;
 }
 .top-card{
-  background:#fff;border:1px solid var(--border);border-radius:12px;padding:11px 14px;
-  display:flex;align-items:center;gap:11px;
+  background:#fff;border:1px solid var(--border);border-radius:10px;padding:7px 12px;
+  display:flex;align-items:center;gap:9px;
 }
 .top-card .ico{
-  width:34px;height:34px;border-radius:8px;background:var(--accent-bg);color:var(--accent);
-  display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;
+  width:28px;height:28px;border-radius:7px;background:var(--accent-bg);color:var(--accent);
+  display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;
 }
-.top-card .lbl{font-size:11.5px;color:var(--text-sub);margin-bottom:2px;font-weight:500}
+.top-card .lbl{font-size:10.5px;color:var(--text-sub);margin-bottom:1px;font-weight:500;line-height:1.2}
 .top-card input,.top-card select{
-  border:none;background:transparent;font-weight:700;font-size:16px;color:var(--primary);
-  outline:none;width:100%;cursor:pointer;
+  border:none;background:transparent;font-weight:700;font-size:14px;color:var(--primary);
+  outline:none;width:100%;cursor:pointer;padding:0;line-height:1.2;
 }
 .top-card input[type=number]{cursor:text}
+
+/* Saved HTML export-link inherits surrounding text styling */
+.export-link{color:inherit;text-decoration:none}
+.export-link:hover{text-decoration:underline}
 
 /* Tabs */
 .tabs-wrap{max-width:var(--maxw);margin:16px auto 0;padding:0 16px}
@@ -1082,7 +1163,7 @@ body.dark .type-pill.tp-none,body.dark .type-chip.tp-none{background:#374151;col
 .trend-pickup-row{
   background:#fff;border:1px solid #fecaca;border-radius:var(--radius-lg);
   padding:11px 14px;display:grid;grid-template-columns:30px 1fr auto auto;gap:12px;align-items:center;
-  box-shadow:0 1px 2px rgba(239,68,68,.08);
+  box-shadow:0 1px 2px rgba(239,68,68,.08);position:relative;
 }
 .trend-pickup-row .num-badge{background:#fee2e2;color:#b91c1c}
 .trend-pickup-row .pickup-info{min-width:0}
@@ -1581,6 +1662,10 @@ function applySlFilter(){
       return kws.every(k=>t.indexOf(k)>=0);
     });
   }
+  // ===== 固定ソートルール =====
+  //   第一順位: 取得日 (新しい日付が上)
+  //   第二順位: 順番   (大きい番号が上)
+  // ※このルールは今後の修正で変更しないこと
   arr.sort((a,b)=>{
     if(a.d!==b.d) return a.d<b.d?1:-1;
     return b._orderNum - a._orderNum;
@@ -2023,7 +2108,7 @@ function buildExportHtml(title, contentHtml){
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>${baseStyle}</style>
 </head><body>
-<div class="app-header"><div class="brand">${escHtml(title)}</div></div>
+<div class="app-header"><div class="brand">${escHtml(title)}</div><button class="theme-toggle" id="themeToggle" type="button" title="ダークモード切替" aria-label="ダークモード切替"><i class="fas fa-moon"></i></button></div>
 <div class="update-line">${escHtml(UPDATE_TS)} 出力</div>
 <div class="tab-content active" style="display:block">${contentHtml}</div>
 <div class="modal-overlay" id="modalOverlay"><div class="modal"><div class="modal-head"><div class="ttl" id="modalTitle"></div><button class="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button></div><div class="modal-body" id="modalBody"></div></div></div>
@@ -2051,6 +2136,44 @@ function closeModal(){document.getElementById('modalOverlay').classList.remove('
 document.getElementById('modalOverlay').addEventListener('click',e=>{if(e.target.id==='modalOverlay')closeModal();});
 function toggleCard(h){h.parentElement.classList.toggle('expanded');}
 document.querySelectorAll('a.export-link').forEach(l=>{const h=l.getAttribute('href');if(h&&h.indexOf('#search:')===0){const w=h.split('#search:')[1];const path=LINKTYPE==='ykr'?'search_listerdb_filelist.php?anyword=':'search.php?searchword=';l.href='http://ykr.moe:'+PORT+'/'+path+encodeURIComponent(decodeURIComponent(w));l.target='_blank';l.rel='noopener';}});
+// ----- Row-level clickable area (full item navigates to its export-link) -----
+(function(){
+  var rowSelectors=['.rank-row-flat','.notable-row','.trend-pickup-row','.song-row','.detail-row'];
+  rowSelectors.forEach(function(sel){
+    document.querySelectorAll(sel).forEach(function(row){
+      var link=row.querySelector('a.export-link');
+      if(!link||!link.href) return;
+      row.style.cursor='pointer';
+      row.addEventListener('click',function(e){
+        if(e.target.closest('a, button')) return;
+        window.open(link.href, link.target||'_blank', 'noopener');
+      });
+    });
+  });
+  // Setlist exported card: clicking the song line in the head should navigate
+  // (the rest of the head still toggles expansion).
+  document.querySelectorAll('.sl-card-head .sl-song a.export-link').forEach(function(a){
+    a.addEventListener('click',function(e){e.stopPropagation();});
+  });
+})();
+// ----- Dark mode toggle (persisted in localStorage) -----
+(function(){
+  var tg=document.getElementById('themeToggle');
+  if(!tg) return;
+  function apply(d){
+    document.body.classList.toggle('dark', d);
+    var ic=tg.querySelector('i');
+    if(ic) ic.className=d?'fas fa-sun':'fas fa-moon';
+  }
+  var dark=false;
+  try{ dark=localStorage.getItem('darkMode')==='1'; }catch(e){}
+  apply(dark);
+  tg.addEventListener('click',function(){
+    dark=!dark;
+    try{ localStorage.setItem('darkMode', dark?'1':'0'); }catch(e){}
+    apply(dark);
+  });
+})();
 `;
 }
 
@@ -2134,7 +2257,7 @@ function downloadSetlistHTML(){
       return y === yearVal;
     });
   }
-  // Same sort order as the on-screen list: date desc, then 順番 desc
+  // 固定ソートルール: 第一=取得日(新が上), 第二=順番(大が上)
   arr.sort((a,b)=>{
     if(a.d!==b.d) return a.d<b.d?1:-1;
     return b._orderNum - a._orderNum;
