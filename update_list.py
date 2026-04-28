@@ -791,7 +791,7 @@ a{color:inherit;text-decoration:none}
 
 /* Toolbar */
 .tab-toolbar{max-width:var(--maxw);margin:14px auto 0;padding:0 16px;display:flex;flex-direction:column;gap:8px}
-.toolbar-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.toolbar-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 
 .search-pill{
   flex:1;min-width:0;background:#fff;border:1px solid var(--border);border-radius:12px;padding:11px 16px;
@@ -809,24 +809,32 @@ a{color:inherit;text-decoration:none}
 .icon-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 
 .pill-select{
-  background:#fff;border:1px solid var(--border);border-radius:10px;padding:9px 14px;font-size:13.5px;
+  background:#fff;border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:13px;
   display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-weight:600;color:var(--primary);
   appearance:none;-webkit-appearance:none;
   background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
-  background-repeat:no-repeat;background-position:right 12px center;padding-right:34px;
+  background-repeat:no-repeat;background-position:right 8px center;padding-right:26px;
+  min-width:0;flex:1 1 auto;max-width:100%;
 }
 .pill-text{
-  background:#fff;border:1px solid var(--border);border-radius:10px;padding:9px 14px;font-size:13.5px;
+  background:#fff;border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:12.5px;
   font-weight:600;color:var(--primary);display:inline-flex;align-items:center;gap:6px;
 }
 
-.dl-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.dl-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
 .dl-btn{
-  background:linear-gradient(180deg,var(--accent),var(--accent-2));color:#fff;border:none;border-radius:10px;
-  padding:9px 14px;font-size:12.5px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;
+  background:linear-gradient(180deg,var(--accent),var(--accent-2));color:#fff;border:none;border-radius:8px;
+  padding:7px 10px;font-size:11.5px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:5px;
+  white-space:nowrap;flex-shrink:0;
 }
 .dl-btn.ghost{background:#fff;color:var(--accent);border:1px solid var(--accent-soft)}
 .dl-btn:hover{filter:brightness(1.05)}
+.dl-btn.compact{padding:6px 8px;font-size:11px}
+.dl-btn .dl-lbl{display:inline}
+@media (max-width:520px){
+  .dl-btn .dl-lbl{display:none}
+  .dl-btn{padding:7px 9px}
+}
 
 .update-line{
   max-width:var(--maxw);margin:10px auto 0;padding:0 16px;
@@ -871,16 +879,16 @@ a{color:inherit;text-decoration:none}
 .card.expanded{border-color:var(--accent-soft);box-shadow:0 4px 14px rgba(99,102,241,.10)}
 
 .num-badge{
-  width:36px;height:36px;border-radius:50%;
-  background:linear-gradient(180deg,#7c83f7,var(--accent-2));
-  color:#fff;font-weight:700;font-size:15px;
+  width:30px;height:30px;border-radius:50%;
+  background:#e0e7ff;
+  color:#4f46e5;font-weight:700;font-size:13px;
   display:flex;align-items:center;justify-content:center;
-  flex-shrink:0;box-shadow:0 2px 6px rgba(99,102,241,.28);
+  flex-shrink:0;
   font-variant-numeric:tabular-nums;
 }
-.num-badge.gold{background:linear-gradient(180deg,#fde68a,#f59e0b);color:#78350f;box-shadow:0 2px 6px rgba(245,158,11,.3)}
-.num-badge.silver{background:linear-gradient(180deg,#e5e7eb,#9ca3af);color:#1f2937}
-.num-badge.bronze{background:linear-gradient(180deg,#fed7aa,#d97706);color:#7c2d12}
+.num-badge.gold{background:#fef3c7;color:#92400e}
+.num-badge.silver{background:#e5e7eb;color:#374151}
+.num-badge.bronze{background:#fed7aa;color:#9a3412}
 
 .card-chev{color:var(--text-mute);transition:transform .2s;font-size:13px;align-self:center}
 .card.expanded .card-chev{transform:rotate(180deg)}
@@ -889,7 +897,7 @@ a{color:inherit;text-decoration:none}
 
 /* ===== Setlist ===== */
 .sl-card-head{
-  padding:14px 16px;display:grid;grid-template-columns:36px 1fr 14px;gap:14px;
+  padding:12px 14px;display:grid;grid-template-columns:30px 1fr 14px;gap:12px;
   align-items:center;cursor:pointer;
 }
 .sl-body{min-width:0}
@@ -909,12 +917,14 @@ a{color:inherit;text-decoration:none}
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:3px;line-height:1.4}
 .sl-meta .sep{margin:0 8px;color:var(--text-mute)}
 
-.detail-table{padding:12px 16px}
+.detail-table{padding:10px 14px 12px}
 .detail-row{
   display:grid;grid-template-columns:104px 1fr;gap:10px;padding:10px 14px;
-  background:#fff;border-radius:8px;margin-bottom:5px;align-items:start;
-  border:1px solid var(--border-soft);
+  background:#fff;align-items:start;
+  border:1px solid var(--border-soft);border-top:none;
 }
+.detail-row:first-child{border-top:1px solid var(--border-soft);border-top-left-radius:8px;border-top-right-radius:8px}
+.detail-row:last-of-type{border-bottom-left-radius:8px;border-bottom-right-radius:8px}
 .detail-row .lbl{font-size:12.5px;color:var(--accent);font-weight:600;display:flex;align-items:center;gap:6px}
 .detail-row .lbl i{color:var(--accent);font-size:12px}
 .detail-row .val{font-size:14px;color:var(--primary);word-break:break-word;line-height:1.5}
@@ -944,7 +954,7 @@ a{color:inherit;text-decoration:none}
 
 /* ===== Cool ===== */
 .cool-head{
-  padding:13px 16px;display:grid;grid-template-columns:36px 1fr auto 14px;gap:14px;align-items:center;cursor:pointer;
+  padding:12px 14px;display:grid;grid-template-columns:30px 1fr auto 14px;gap:12px;align-items:center;cursor:pointer;
 }
 .cool-info{min-width:0}
 .cool-anime{font-weight:700;font-size:14.5px;color:var(--primary);line-height:1.3;
@@ -981,50 +991,15 @@ a{color:inherit;text-decoration:none}
 .song-metrics .flat-metric .icon-circle{width:20px;height:20px;font-size:9.5px}
 
 /* ===== Ranking ===== */
-.rank-card-top3{
-  background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);margin-top:12px;padding:18px 20px;
-  display:grid;grid-template-columns:64px 1fr;gap:20px;align-items:center;
-  box-shadow:0 1px 2px rgba(15,23,42,.03);
-}
-.rank-card-top3.gold{background:linear-gradient(180deg,#fffbeb 0%,#fff 70%);border-color:#fde68a}
-.rank-card-top3.silver{background:linear-gradient(180deg,#f9fafb 0%,#fff 70%)}
-.rank-card-top3.bronze{background:linear-gradient(180deg,#fff7ed 0%,#fff 70%);border-color:#fed7aa}
-
-.rank-top3-badgewrap{display:flex;flex-direction:column;align-items:center;gap:5px}
-.rank-crown{font-size:22px;line-height:1}
-.rank-crown.gold{color:var(--gold)}
-.rank-crown.silver{color:var(--silver)}
-.rank-crown.bronze{color:var(--bronze)}
-.rank-top3-num{
-  width:54px;height:54px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-  font-weight:800;font-size:22px;color:#fff;
-  border:3px solid #fff;box-shadow:0 0 0 3px var(--accent),0 4px 10px rgba(99,102,241,.3);
-  background:linear-gradient(180deg,#7c83f7,var(--accent-2));
-}
-.rank-top3-num.gold{box-shadow:0 0 0 3px var(--gold),0 4px 10px rgba(245,158,11,.3);background:linear-gradient(180deg,#fbbf24,#f59e0b)}
-.rank-top3-num.silver{box-shadow:0 0 0 3px var(--silver),0 4px 10px rgba(156,163,175,.3);background:linear-gradient(180deg,#d1d5db,#9ca3af)}
-.rank-top3-num.bronze{box-shadow:0 0 0 3px var(--bronze),0 4px 10px rgba(217,119,6,.3);background:linear-gradient(180deg,#f97316,#d97706)}
-
-.rank-top3-info{min-width:0}
-.rank-top3-anime{font-weight:800;font-size:17px;color:var(--primary);line-height:1.3;word-break:break-word}
-.rank-top3-song{font-size:13px;color:var(--text-sub);margin-top:4px;line-height:1.4;
-  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.rank-top3-artist{font-size:13px;color:var(--text-sub);margin-top:1px}
-.rank-top3-types{margin-top:8px;display:flex;gap:5px;flex-wrap:wrap}
-.rank-top3-metrics{
-  margin-top:14px;display:flex;gap:18px;align-items:center;justify-content:flex-start;padding-left:84px;
-  flex-wrap:wrap;
-}
-.rank-top3-metrics .flat-metric{min-width:84px;align-items:flex-start}
-.rank-top3-metrics .flat-metric .val-row b{font-size:24px}
-.rank-top3-metrics .flat-metric .icon-circle{width:32px;height:32px;font-size:14px}
-
-/* Normal rank flat */
+/* Unified flat layout for all ranks. Top3 differentiated by background + badge. */
 .rank-row-flat{
   background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);margin-top:8px;
-  padding:14px 18px;display:grid;grid-template-columns:36px 1fr auto auto;gap:18px;align-items:center;
+  padding:12px 16px;display:grid;grid-template-columns:30px 1fr auto auto;gap:14px;align-items:center;
   box-shadow:0 1px 2px rgba(15,23,42,.03);
 }
+.rank-row-flat.gold{background:linear-gradient(180deg,#fffbeb 0%,#fff 80%);border-color:#fde68a}
+.rank-row-flat.silver{background:linear-gradient(180deg,#f9fafb 0%,#fff 80%);border-color:#d1d5db}
+.rank-row-flat.bronze{background:linear-gradient(180deg,#fff7ed 0%,#fff 80%);border-color:#fed7aa}
 .rank-row-flat .rank-info{min-width:0}
 .rank-row-flat .rank-anime{font-weight:700;font-size:14.5px;color:var(--primary);line-height:1.3;
   display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
@@ -1036,63 +1011,61 @@ a{color:inherit;text-decoration:none}
 .rank-row-flat .flat-metric .icon-circle{width:26px;height:26px;font-size:12px}
 
 /* ===== Trend ===== */
-.trend-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
+.trend-stats{display:flex;flex-direction:column;gap:6px;margin-top:14px}
 .trend-stat{
-  background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:13px 8px;text-align:center;
+  background:#fff;border:1px solid var(--border);border-radius:var(--radius);
+  padding:8px 14px;display:flex;align-items:center;gap:10px;
 }
 .trend-stat .ico{
-  width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;
-  font-size:14px;
+  width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+  font-size:13px;flex-shrink:0;
 }
 .trend-stat .ico.up{background:var(--accent-bg);color:var(--accent)}
 .trend-stat .ico.new{background:var(--green-bg);color:var(--green)}
 .trend-stat .ico.max{background:var(--orange-bg);color:var(--orange)}
-.trend-stat .lbl{font-size:11px;color:var(--text-sub);font-weight:600}
-.trend-stat .val{font-size:19px;font-weight:800;color:var(--primary);margin-top:3px}
-.trend-stat .val small{font-size:11px;font-weight:600;color:var(--text-sub);margin-left:2px}
+.trend-stat .lbl{flex:1;font-size:13px;color:var(--text-sub);font-weight:600}
+.trend-stat .val{font-size:18px;font-weight:800;color:var(--primary);font-variant-numeric:tabular-nums}
+.trend-stat .val small{font-size:11.5px;font-weight:600;color:var(--text-sub);margin-left:3px}
 
 .trend-pickup{
-  background:linear-gradient(135deg,#eef2ff 0%,#fff 60%,#fef3c7 100%);
-  border:1px solid var(--accent-soft);border-radius:var(--radius-lg);
-  margin-top:16px;padding:18px;
+  background:linear-gradient(135deg,#fee2e2 0%,#fff5f5 60%,#fecaca 100%);
+  border:1px solid #fecaca;border-radius:var(--radius-lg);
+  margin-top:14px;padding:12px 14px;
 }
-.trend-pickup-head{display:flex;align-items:center;gap:6px;margin-bottom:12px;font-weight:700;font-size:14px;color:var(--primary)}
+.trend-pickup-head{display:flex;align-items:center;gap:6px;margin-bottom:8px;font-weight:700;font-size:13.5px;color:var(--primary)}
 .trend-pickup-head i{color:var(--red)}
-.trend-pickup-body{display:grid;grid-template-columns:104px 1fr;gap:14px;align-items:flex-start}
+/* Compact pickup row: same layout as notable-row, differentiated by parent gradient and badge */
+.trend-pickup-row{
+  background:#fff;border:1px solid #fecaca;border-radius:var(--radius-lg);
+  padding:11px 14px;display:grid;grid-template-columns:30px 1fr auto auto;gap:12px;align-items:center;
+  box-shadow:0 1px 2px rgba(239,68,68,.08);
+}
+.trend-pickup-row .num-badge{background:#fee2e2;color:#b91c1c}
+.trend-pickup-row .pickup-info{min-width:0}
+.trend-pickup-row .pickup-anime{font-weight:700;font-size:14.5px;color:var(--primary);line-height:1.3;
+  display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+.trend-pickup-row .pickup-sub{font-size:12px;color:var(--text-sub);margin-top:3px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trend-pickup-row .pickup-types-inline{margin-top:5px;display:flex;gap:5px;flex-wrap:wrap}
+.trend-pickup-row .flat-metric{min-width:54px}
+.trend-pickup-row .flat-metric .val-row b{font-size:18px}
+.trend-pickup-row .flat-metric .icon-circle{width:26px;height:26px;font-size:12px}
 .thumb-square{
   width:104px;height:104px;border-radius:12px;background:#e5e7eb;overflow:hidden;flex-shrink:0;
   display:flex;align-items:center;justify-content:center;color:var(--text-mute);font-size:24px;position:relative;
 }
 .thumb-square img{width:100%;height:100%;object-fit:cover}
-.thumb-tag{
-  position:absolute;top:0;left:0;background:linear-gradient(180deg,#fbbf24,#f59e0b);color:#78350f;
-  padding:3px 9px;font-size:10.5px;font-weight:800;border-radius:0 0 8px 0;letter-spacing:.04em;
-}
-.tp-info{min-width:0}
-.tp-anime{font-weight:800;font-size:19px;color:var(--primary);line-height:1.25;word-break:break-word}
-.tp-song{font-size:13px;color:var(--text-sub);margin-top:4px;font-weight:600;
-  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.4}
-.tp-artist{font-size:12.5px;color:var(--text-sub);margin-top:1px}
-.tp-type{margin-top:8px}
-.tp-metrics{
-  margin-top:16px;display:flex;gap:24px;align-items:center;padding-left:118px;flex-wrap:wrap;
-}
-.tp-metrics .flat-metric{min-width:74px;align-items:flex-start}
-.tp-metrics .flat-metric .val-row b{font-size:22px}
-.tp-metrics .flat-metric .icon-circle{width:30px;height:30px;font-size:13px}
 
 .notable-head{
-  margin-top:20px;font-size:14.5px;font-weight:700;color:var(--primary);display:flex;align-items:center;gap:6px;
+  margin-top:18px;font-size:14.5px;font-weight:700;color:var(--primary);display:flex;align-items:center;gap:6px;
 }
 .notable-head i{color:var(--accent)}
 
 .notable-row{
   background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);margin-top:8px;
-  padding:11px 16px;display:grid;grid-template-columns:36px 56px 1fr auto auto;gap:14px;align-items:center;
-  box-shadow:0 1px 2px rgba(15,23,42,.03);
+  padding:11px 14px;display:grid;grid-template-columns:30px 1fr auto auto;gap:12px;align-items:center;
+  box-shadow:0 1px 2px rgba(15,23,42,.03);position:relative;
 }
-.thumb-mini{width:54px;height:54px;border-radius:10px;background:#e5e7eb;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--text-mute);font-size:18px}
-.thumb-mini img{width:100%;height:100%;object-fit:cover}
 .notable-info{min-width:0}
 .notable-anime{font-weight:700;font-size:14px;color:var(--primary);line-height:1.3;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -1102,6 +1075,19 @@ a{color:inherit;text-decoration:none}
 .notable-row .flat-metric{min-width:48px}
 .notable-row .flat-metric .val-row b{font-size:16px}
 .notable-row .flat-metric .icon-circle{width:24px;height:24px;font-size:11px}
+
+/* Growth rate badge on top-right */
+.growth-badge{
+  position:absolute;top:-6px;right:8px;
+  background:#fff;border:1px solid var(--border);border-radius:10px;
+  padding:1px 7px;font-size:10.5px;font-weight:700;
+  font-variant-numeric:tabular-nums;line-height:1.5;
+  box-shadow:0 1px 2px rgba(15,23,42,.06);
+}
+.growth-badge.up{background:#fef2f2;border-color:#fecaca;color:#dc2626}
+.growth-badge.down{background:#eff6ff;border-color:#bfdbfe;color:#2563eb}
+.growth-badge.flat{background:#f3f4f6;border-color:var(--border);color:var(--text-sub)}
+.growth-badge.new{background:var(--green-bg);border-color:var(--green-bd);color:var(--green)}
 
 /* Modal */
 .modal-overlay{
@@ -1182,6 +1168,40 @@ a{color:inherit;text-decoration:none}
 .env-upload-btn input{display:none}
 .env-status{margin:8px 0;padding:10px 12px;background:var(--accent-bg);border-radius:8px;color:var(--accent);font-size:13px;display:none;font-weight:600}
 .env-status.show{display:block}
+.env-lock{padding:30px 16px;display:flex;justify-content:center}
+.env-lock-card{
+  background:#fff;border:1px solid var(--border);border-radius:14px;padding:24px 20px;
+  width:100%;max-width:340px;text-align:center;box-shadow:0 1px 4px rgba(15,23,42,.04);
+}
+.env-lock-ico{
+  width:48px;height:48px;border-radius:50%;background:var(--accent-bg);color:var(--accent);
+  display:flex;align-items:center;justify-content:center;font-size:18px;margin:0 auto 10px;
+}
+.env-lock-title{font-size:13.5px;font-weight:600;color:var(--text-sub);margin-bottom:14px}
+.env-lock-input{
+  width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:10px;
+  font-size:14px;outline:none;margin-bottom:10px;text-align:center;letter-spacing:.2em;
+}
+.env-lock-input:focus{border-color:var(--accent)}
+.env-lock-btn{
+  width:100%;padding:10px;background:linear-gradient(180deg,var(--accent),var(--accent-2));
+  color:#fff;border:none;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;
+}
+.env-lock-btn:hover{filter:brightness(1.05)}
+.env-lock-msg{margin-top:10px;font-size:12px;color:var(--red);min-height:16px}
+.env-csv-wrap{margin-top:8px}
+.env-csv-actions{display:flex;gap:6px;justify-content:flex-end;margin-bottom:6px}
+.env-csv-text{
+  width:100%;min-height:240px;max-height:50vh;
+  border:1px solid var(--border);border-radius:10px;padding:10px 12px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:12px;line-height:1.5;outline:none;background:#fff;color:var(--primary);
+  white-space:pre;overflow:auto;resize:vertical;box-sizing:border-box;
+}
+.env-csv-text:focus{border-color:var(--accent)}
+.env-csv-msg{margin-top:6px;font-size:12px;color:var(--text-sub);min-height:16px}
+.env-csv-msg.error{color:var(--red)}
+.env-csv-msg.ok{color:var(--green)}
 
 /* Print */
 @media print{
@@ -1194,13 +1214,15 @@ a{color:inherit;text-decoration:none}
   .card-chev{display:none}
 }
 
+@media (max-width:520px){
+  .app-header,.top-cards,.tabs-wrap,.tab-toolbar,.update-line,.count-line,.tab-content{padding-left:8px !important;padding-right:8px !important}
+  .tab-content{padding-bottom:80px !important}
+}
 @media (max-width:420px){
   body{font-size:14.5px}
   .top-cards{grid-template-columns:1fr 1fr;gap:8px}
-  .rank-top3-metrics{padding-left:0;justify-content:space-around}
-  .tp-metrics{padding-left:0;justify-content:space-around}
-  .notable-row{grid-template-columns:30px 50px 1fr auto auto;gap:10px;padding:10px 12px}
-  .rank-row-flat{padding:12px 14px;gap:14px}
+  .notable-row{grid-template-columns:30px 1fr auto auto;gap:10px;padding:10px 12px}
+  .rank-row-flat{padding:11px 12px;gap:12px}
 }
 </style>
 </head>
@@ -1283,10 +1305,8 @@ a{color:inherit;text-decoration:none}
         <option value="name">作品名順</option>
         <option value="created">作成数順</option>
       </select>
-    </div>
-    <div class="dl-row">
-      <button class="dl-btn ghost" onclick="downloadCoolHTML('current')"><i class="fas fa-file-download"></i> このクール保存</button>
-      <button class="dl-btn" onclick="downloadCoolHTML('all')"><i class="fas fa-file-download"></i> 全クール保存</button>
+      <button class="dl-btn ghost compact" onclick="downloadCoolHTML('current')" title="このクール保存"><i class="fas fa-file-download"></i><span class="dl-lbl">このクール</span></button>
+      <button class="dl-btn compact" onclick="downloadCoolHTML('all')" title="全クール保存"><i class="fas fa-file-download"></i><span class="dl-lbl">全クール</span></button>
     </div>
   </div>
   <div class="count-line"><i class="far fa-bookmark"></i><span id="coolCount">0</span> 作品</div>
@@ -1302,10 +1322,8 @@ a{color:inherit;text-decoration:none}
         <option value="count">歌唱数ランキング</option>
         <option value="user">歌唱人数ランキング</option>
       </select>
-    </div>
-    <div class="dl-row">
-      <button class="dl-btn ghost" onclick="downloadRankingHTML('current')"><i class="fas fa-file-download"></i> このクール保存</button>
-      <button class="dl-btn" onclick="downloadRankingHTML('all')"><i class="fas fa-file-download"></i> 全クール保存</button>
+      <button class="dl-btn ghost compact" onclick="downloadRankingHTML('current')" title="このクール保存"><i class="fas fa-file-download"></i><span class="dl-lbl">このクール</span></button>
+      <button class="dl-btn compact" onclick="downloadRankingHTML('all')" title="全クール保存"><i class="fas fa-file-download"></i><span class="dl-lbl">全クール</span></button>
     </div>
   </div>
   <div class="count-line"><i class="fas fa-list-ol"></i><span id="rankCount">0</span> 件</div>
@@ -1316,16 +1334,17 @@ a{color:inherit;text-decoration:none}
 <div class="tab-content" id="tab-trend">
   <div class="tab-toolbar">
     <div class="toolbar-row">
-      <span class="pill-text"><i class="fas fa-snowflake" style="color:var(--accent)"></i> __TREND_CAT__</span>
       <select class="pill-select" id="trendPeriod"></select>
       <select class="pill-select" id="trendSort">
         <option value="surge">急上昇順</option>
         <option value="new">新規ランクイン順</option>
         <option value="max">最大伸び順</option>
       </select>
-    </div>
-    <div class="dl-row">
-      <button class="dl-btn ghost" onclick="downloadTrendHTML()"><i class="fas fa-file-download"></i> HTML保存</button>
+      <select class="pill-select" id="trendMode">
+        <option value="count">歌唱数</option>
+        <option value="user">歌唱人数</option>
+      </select>
+      <button class="dl-btn ghost compact" onclick="downloadTrendHTML()" title="HTML保存"><i class="fas fa-file-download"></i><span class="dl-lbl">HTML保存</span></button>
     </div>
   </div>
   <div id="trendBody"></div>
@@ -1333,14 +1352,35 @@ a{color:inherit;text-decoration:none}
 
 <!-- Env -->
 <div class="tab-content" id="tab-env">
-  <div class="tab-toolbar">
-    <div class="toolbar-row">
-      <select class="pill-select" id="envCat"></select>
+  <div id="envLockScreen" class="env-lock">
+    <div class="env-lock-card">
+      <div class="env-lock-ico"><i class="fas fa-lock"></i></div>
+      <div class="env-lock-title">環境設定はパスワードで保護されています</div>
+      <input type="password" id="envPwInput" class="env-lock-input" placeholder="パスワードを入力" autocomplete="off">
+      <button class="env-lock-btn" id="envPwBtn">解除</button>
+      <div class="env-lock-msg" id="envPwMsg"></div>
     </div>
   </div>
-  <div class="count-line" style="margin-top:12px"><i class="fas fa-cog"></i> 作品サムネイル管理</div>
-  <div class="env-status" id="envStatus"></div>
-  <div id="envList"></div>
+  <div id="envContent" style="display:none">
+    <div class="tab-toolbar">
+      <div class="toolbar-row">
+        <select class="pill-select" id="envCat"></select>
+      </div>
+    </div>
+    <div class="count-line" style="margin-top:12px"><i class="fas fa-cog"></i> 作品サムネイル管理</div>
+    <div class="env-status" id="envStatus"></div>
+    <div id="envList"></div>
+
+    <div class="count-line" style="margin-top:18px"><i class="fas fa-file-csv"></i> cool_analysis.csv 編集</div>
+    <div class="env-csv-wrap">
+      <div class="env-csv-actions">
+        <button class="dl-btn ghost compact" id="envCsvLoad" type="button"><i class="fas fa-cloud-download-alt"></i><span class="dl-lbl">読み込み</span></button>
+        <button class="dl-btn compact" id="envCsvSave" type="button"><i class="fas fa-save"></i><span class="dl-lbl">保存</span></button>
+      </div>
+      <textarea id="envCsvText" class="env-csv-text" placeholder="「読み込み」を押すと cool_analysis.csv の内容を表示します。編集後「保存」を押すとGAS経由で書き込みます。" spellcheck="false"></textarea>
+      <div class="env-csv-msg" id="envCsvMsg"></div>
+    </div>
+  </div>
 </div>
 
 <div class="modal-overlay" id="modalOverlay">
