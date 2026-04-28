@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import pandas as pd
 import requests
 import datetime
@@ -29,12 +30,11 @@ EXPECTED_HISTORY_COLUMNS = ['取得日', '部屋主', '順番', '曲名（ファ
 ALLOWED_CATEGORIES = ["2026年春アニメ", "2026年冬アニメ", "2025年秋アニメ"]
 TREND_TARGET_CATEGORY = "2026年春アニメ"
 TREND_PERIOD_OPTIONS = [3, 7, 14, 30]
-TREND_PICKUP_TOTAL = 10  # 大カード1 + 注目9
+TREND_PICKUP_TOTAL = 10
 
 
 def load_df_from_github(filename, **kwargs):
     url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/{GITHUB_BRANCH}/{filename}"
-    print(f"[GitHub] {filename}")
     try:
         response = requests.get(url, timeout=30)
         if response.status_code == 200:
@@ -56,7 +56,7 @@ def load_df_from_github(filename, **kwargs):
 def load_df_from_gas_with_status(filename, **kwargs):
     try:
         response = requests.get(GAS_WEB_APP_URL, params={'filename': filename}, timeout=60)
-    except Exception as e:
+    except Exception:
         return pd.DataFrame(), "error"
     if response.status_code == 404:
         return pd.DataFrame(), "not_found"
@@ -168,7 +168,6 @@ def check_match(target_text, source_series):
     return source_series.str.contains(safe_target, case=False, na=False)
 
 
-# --- 履歴処理 ---
 HISTORY_MAX_ROWS = 9500
 HISTORY_ARCHIVE_MISS_LIMIT = 3
 ROOM_FETCH_TIMEOUT = 6
@@ -436,7 +435,6 @@ else:
     full_history = pd.DataFrame()
 
 
-# --- Cool解析 ---
 raw_df = load_df_from_gas("cool_analysis.csv", header=None)
 categorized_data = {}
 if not raw_df.empty:
@@ -541,7 +539,6 @@ for cat in ALLOWED_CATEGORIES:
         "max_user": max([w['total_user'] for w in works], default=0)
     }
 
-# --- ランキング ---
 ranking_data_by_cat = {}
 for cat in ALLOWED_CATEGORIES:
     flat = []
@@ -555,7 +552,6 @@ for cat in ALLOWED_CATEGORIES:
     ranking_data_by_cat[cat] = flat
 
 
-# --- 推移 ---
 trend_data_for_js = {}
 target_works = cool_data_for_js.get(TREND_TARGET_CATEGORY, {"works": []})['works']
 trend_items = []
@@ -596,20 +592,6 @@ for pd_days in TREND_PERIOD_OPTIONS:
             "all_count": ac, "all_user": au
         })
 
-    sf = sorted([x for x in stats if x['all_count'] > 0],
-                key=lambda x: (-x['all_count'], -x['all_user']))
-    rmap = {}
-    pv = None
-    cr = 0
-    for i, it in enumerate(sf):
-        v = it['all_count']
-        if v != pv:
-            cr = i + 1
-            pv = v
-        rmap[(it['anime'], it['song'])] = cr
-    for it in stats:
-        it['rank_now'] = rmap.get((it['anime'], it['song']), 0)
-
     surge_count = sum(1 for x in stats if x['delta'] > 0)
     new_in = sum(1 for x in stats if x['is_new'])
     max_delta = max([x['delta'] for x in stats], default=0)
@@ -626,37 +608,59 @@ if not isinstance(image_map, dict):
     image_map = {}
 
 
-# --- ★修正: history_for_js は full_df 全行から構築（dt_obj filterしない） ---
+# --- ★修正: history_for_js は列名を直接参照せず .get() で安全に構築 ---
+def _rescue_workname(wk_raw, sg_raw):
+    wks = str(wk_raw).strip() if wk_raw is not None else ""
+    if wks in ['-', '−', '', 'nan']:
+        m = re.search(r'【(.*?)】', str(sg_raw))
+        if m:
+            return m.group(1)
+    return wk_raw
+
 history_for_js = []
 if not full_df.empty:
-    h = full_df.copy().fillna("")
-    for c in ['取得日', '部屋主', '順番', '曲名（ファイル名）', '作品名', '歌手名', '歌った人']:
-        if c not in h.columns:
-            h[c] = ""
-    h['順番'] = h['���番'].astype(str)
-    h['_sn'] = h['曲名（ファイル名）'].apply(normalize_text)
+    try:
+        records = full_df.fillna("").to_dict('records')
+    except Exception as e:
+        print(f"[Warn] to_dict失敗: {e}")
+        records = []
 
-    def _resc2(row):
-        rw = str(row['作品名']) if pd.notna(row['作品名']) else ""
-        rs = str(row['曲名（ファイル名）']) if pd.notna(row['曲名（ファイル名）']) else ""
-        if rw.strip() in ["-", "−", "", "nan"]:
-            m = re.search(r'【(.*?)】', rs)
-            if m:
-                return normalize_text(m.group(1))
-        return normalize_text(rw)
+    col_aliases = {
+        'd':  ['取得日'],
+        'rm': ['部屋主'],
+        'o':  ['順番'],
+        'sg': ['曲名（ファイル名）', '曲名(ファイ���名)', '曲名'],
+        'wk': ['作品名'],
+        'ar': ['歌手名', '歌手'],
+        'u':  ['歌った人', '歌唱者'],
+    }
 
-    h['_wn'] = h.apply(_resc2, axis=1)
-    for _, r in h.iterrows():
+    def pick(rec, keys):
+        for k in keys:
+            if k in rec:
+                v = rec[k]
+                if v is None:
+                    return ""
+                return str(v)
+        return ""
+
+    for r in records:
+        d  = pick(r, col_aliases['d'])
+        rm = pick(r, col_aliases['rm'])
+        o  = pick(r, col_aliases['o'])
+        sg = pick(r, col_aliases['sg'])
+        wk = pick(r, col_aliases['wk'])
+        ar = pick(r, col_aliases['ar'])
+        u  = pick(r, col_aliases['u'])
+
+        sn = normalize_text(sg)
+        wn_src = _rescue_workname(wk, sg)
+        wn = normalize_text(wn_src)
+
         history_for_js.append({
-            "d": str(r['取得日']),
-            "rm": str(r['部屋主']),
-            "o": str(r['順番']),
-            "sg": str(r['曲名（ファイル名）']),
-            "wk": str(r['作品名']),
-            "ar": str(r['歌手名']),
-            "u": str(r['歌った人']),
-            "sn": str(r['_sn']),
-            "wn": str(r['_wn'])
+            "d": d, "rm": rm, "o": o,
+            "sg": sg, "wk": wk, "ar": ar, "u": u,
+            "sn": sn, "wn": wn
         })
 
 print(f"history_for_js件数: {len(history_for_js)}")
@@ -685,13 +689,13 @@ html_content = r"""<!DOCTYPE html>
 <style>
 :root{
   --primary:#1f2937; --accent:#6366f1; --accent-2:#7c3aed; --accent-soft:#a5b4fc; --accent-bg:#eef2ff;
-  --bg:#f5f5fa; --panel:#fff; --text:#1f2937; --text-sub:#6b7280; --text-mute:#9ca3af;
-  --border:#e5e7eb; --border-soft:#eef0f3;
+  --bg:#f7f7fb; --panel:#fff; --text:#1f2937; --text-sub:#6b7280; --text-mute:#9ca3af;
+  --border:#e8e8ef; --border-soft:#eef0f3;
   --green:#10b981; --green-bg:#ecfdf5; --green-bd:#a7f3d0;
   --orange:#f97316; --orange-bg:#fff7ed; --orange-bd:#fed7aa;
   --red:#ef4444; --amber:#f59e0b;
   --gold:#f59e0b; --silver:#9ca3af; --bronze:#d97706;
-  --radius:8px; --radius-lg:12px;
+  --radius:10px; --radius-lg:14px;
   --maxw:600px;
 }
 *{box-sizing:border-box}
@@ -710,17 +714,17 @@ input,select{font-family:inherit;font-size:inherit}
 a{color:inherit;text-decoration:none}
 
 /* Header */
-.app-header{max-width:var(--maxw);margin:0 auto;padding:16px 16px 0 16px}
-.brand{font-size:22px;font-weight:800;color:var(--primary);letter-spacing:-0.01em}
+.app-header{max-width:var(--maxw);margin:0 auto;padding:18px 16px 0 16px;display:flex;justify-content:space-between;align-items:center}
+.brand{font-size:24px;font-weight:800;color:var(--primary);letter-spacing:-0.01em}
 
 /* Top settings */
 .top-cards{
-  max-width:var(--maxw);margin:12px auto 0;padding:0 16px;
+  max-width:var(--maxw);margin:14px auto 0;padding:0 16px;
   display:grid;grid-template-columns:1fr 1fr;gap:10px;
 }
 .top-card{
-  background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 12px;
-  display:flex;align-items:center;gap:10px;
+  background:#fff;border:1px solid var(--border);border-radius:12px;padding:11px 14px;
+  display:flex;align-items:center;gap:11px;
 }
 .top-card .ico{
   width:34px;height:34px;border-radius:8px;background:var(--accent-bg);color:var(--accent);
@@ -728,17 +732,17 @@ a{color:inherit;text-decoration:none}
 }
 .top-card .lbl{font-size:11.5px;color:var(--text-sub);margin-bottom:2px;font-weight:500}
 .top-card input,.top-card select{
-  border:none;background:transparent;font-weight:700;font-size:15px;color:var(--primary);
+  border:none;background:transparent;font-weight:700;font-size:16px;color:var(--primary);
   outline:none;width:100%;cursor:pointer;
 }
 .top-card input[type=number]{cursor:text}
 
 /* Tabs */
-.tabs-wrap{max-width:var(--maxw);margin:14px auto 0;padding:0 16px}
+.tabs-wrap{max-width:var(--maxw);margin:16px auto 0;padding:0 16px}
 .tabs{display:flex;gap:0;border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
 .tabs::-webkit-scrollbar{display:none}
 .tab-btn{
-  padding:10px 12px;border:none;background:none;color:var(--text-sub);
+  padding:11px 12px;border:none;background:none;color:var(--text-sub);
   font-weight:600;font-size:13.5px;white-space:nowrap;cursor:pointer;
   border-bottom:2px solid transparent;display:inline-flex;align-items:center;gap:5px;
   transition:color .15s, border-color .15s;
@@ -747,16 +751,18 @@ a{color:inherit;text-decoration:none}
 .tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
 
 /* Toolbar */
-.tab-toolbar{max-width:var(--maxw);margin:12px auto 0;padding:0 16px;display:flex;flex-direction:column;gap:8px}
-.toolbar-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.tab-toolbar{max-width:var(--maxw);margin:14px auto 0;padding:0 16px;display:flex;flex-direction:column;gap:8px}
+.toolbar-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
 .search-pill{
-  flex:1;min-width:0;background:#fff;border:1px solid var(--border);border-radius:10px;padding:9px 14px;
-  display:flex;align-items:center;gap:8px;
+  flex:1;min-width:0;background:#fff;border:1px solid var(--border);border-radius:12px;padding:11px 16px;
+  display:flex;align-items:center;gap:10px;
 }
 .search-pill input{flex:1;border:none;outline:none;font-size:14px;background:transparent;min-width:0}
-.search-pill i{color:var(--text-mute)}
+.search-pill i{color:var(--text-mute);font-size:14px}
+
 .icon-btn{
-  width:40px;height:40px;border-radius:10px;background:#fff;border:1px solid var(--border);
+  width:44px;height:44px;border-radius:12px;background:#fff;border:1px solid var(--border);
   display:flex;align-items:center;justify-content:center;color:var(--text-sub);cursor:pointer;flex-shrink:0;
   font-size:14px;
 }
@@ -777,30 +783,29 @@ a{color:inherit;text-decoration:none}
 
 .dl-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
 .dl-btn{
-  background:linear-gradient(180deg,var(--accent),var(--accent-2));color:#fff;border:none;border-radius:8px;
-  padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;
+  background:linear-gradient(180deg,var(--accent),var(--accent-2));color:#fff;border:none;border-radius:10px;
+  padding:9px 14px;font-size:12.5px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;
 }
 .dl-btn.ghost{background:#fff;color:var(--accent);border:1px solid var(--accent-soft)}
 .dl-btn:hover{filter:brightness(1.05)}
 
 .update-line{
-  max-width:var(--maxw);margin:8px auto 0;padding:0 16px;
+  max-width:var(--maxw);margin:10px auto 0;padding:0 16px;
   display:flex;justify-content:flex-end;font-size:11.5px;color:var(--text-mute);
 }
 .count-line{
-  max-width:var(--maxw);margin:10px auto 0;padding:0 16px;
-  font-size:13.5px;color:var(--text-sub);font-weight:600;display:flex;align-items:center;gap:6px;
+  max-width:var(--maxw);margin:14px auto 0;padding:0 16px;
+  font-size:14px;color:var(--text-sub);font-weight:600;display:flex;align-items:center;gap:6px;
 }
 .count-line i{color:var(--accent)}
 
-/* Tab content */
-.tab-content{display:none;max-width:var(--maxw);margin:0 auto;padding:8px 16px 80px}
+.tab-content{display:none;max-width:var(--maxw);margin:0 auto;padding:6px 16px 80px}
 .tab-content.active{display:block}
 
-/* ===== Type pills (OP/ED/IN unified colors) ===== */
+/* ===== Type pills ===== */
 .type-pill{
-  display:inline-flex;align-items:center;gap:4px;padding:2px 8px;font-size:10.5px;font-weight:700;
-  border-radius:4px;letter-spacing:.02em;
+  display:inline-flex;align-items:center;gap:4px;padding:3px 10px;font-size:11px;font-weight:700;
+  border-radius:6px;letter-spacing:.02em;
 }
 .type-pill b{font-weight:800}
 .type-pill.tp-op{background:var(--accent-bg);border:1px solid #e0e7ff;color:var(--accent)}
@@ -808,62 +813,87 @@ a{color:inherit;text-decoration:none}
 .type-pill.tp-in{background:var(--green-bg);border:1px solid var(--green-bd);color:var(--green)}
 .type-pill.tp-none{background:#f3f4f6;border:1px solid var(--border);color:var(--text-sub)}
 
+/* Type chip (square, for cool song-row) */
+.type-chip{
+  width:38px;height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:800;letter-spacing:.04em;flex-shrink:0;
+}
+.type-chip.tp-op{background:var(--accent-bg);color:var(--accent);border:1px solid #e0e7ff}
+.type-chip.tp-ed{background:var(--orange-bg);color:var(--orange);border:1px solid var(--orange-bd)}
+.type-chip.tp-in{background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd)}
+.type-chip.tp-none{background:#f3f4f6;color:var(--text-sub);border:1px solid var(--border)}
+
 /* Card common */
 .card{
-  background:#fff;border:1px solid var(--border);border-radius:var(--radius);
-  margin-top:8px;overflow:hidden;transition:border-color .15s, box-shadow .15s;
+  background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);
+  margin-top:10px;overflow:hidden;transition:border-color .15s, box-shadow .15s;
+  box-shadow:0 1px 2px rgba(15,23,42,.03);
 }
-.card.expanded{border-color:var(--accent-soft);box-shadow:0 4px 12px rgba(99,102,241,.08)}
+.card.expanded{border-color:var(--accent-soft);box-shadow:0 4px 14px rgba(99,102,241,.10)}
+
 .num-badge{
-  width:30px;height:30px;border-radius:50%;background:linear-gradient(180deg,var(--accent),var(--accent-2));
-  color:#fff;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;
-  flex-shrink:0;box-shadow:0 2px 6px rgba(99,102,241,.25);
+  width:36px;height:36px;border-radius:50%;
+  background:linear-gradient(180deg,#7c83f7,var(--accent-2));
+  color:#fff;font-weight:700;font-size:15px;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;box-shadow:0 2px 6px rgba(99,102,241,.28);
+  font-variant-numeric:tabular-nums;
 }
 .num-badge.gold{background:linear-gradient(180deg,#fde68a,#f59e0b);color:#78350f;box-shadow:0 2px 6px rgba(245,158,11,.3)}
 .num-badge.silver{background:linear-gradient(180deg,#e5e7eb,#9ca3af);color:#1f2937}
 .num-badge.bronze{background:linear-gradient(180deg,#fed7aa,#d97706);color:#7c2d12}
-.card-chev{color:var(--text-mute);transition:transform .2s;font-size:12px;align-self:center}
+
+.card-chev{color:var(--text-mute);transition:transform .2s;font-size:13px;align-self:center}
 .card.expanded .card-chev{transform:rotate(180deg)}
 .card-detail{display:none;border-top:1px solid var(--border-soft);background:#fbfbfd}
 .card.expanded .card-detail{display:block}
 
-/* ===== Setlist card ===== */
-.sl-card-head{padding:12px 14px;display:flex;align-items:flex-start;gap:12px;cursor:pointer}
-.sl-body{flex:1;min-width:0}
-.sl-top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px}
-.room-tag{
-  display:inline-block;padding:2px 8px;font-size:11px;font-weight:600;
-  border-radius:5px;line-height:1.4;border:1px solid;
+/* ===== Setlist ===== */
+.sl-card-head{
+  padding:14px 16px;display:grid;grid-template-columns:36px 1fr 14px;gap:14px;
+  align-items:center;cursor:pointer;
 }
-.sl-date{font-size:12px;color:var(--text-mute);white-space:nowrap;font-variant-numeric:tabular-nums}
-.sl-song{font-weight:700;font-size:15.5px;color:var(--primary);margin:2px 0 2px;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sl-meta{font-size:12px;color:var(--text-sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sl-meta .sep{margin:0 6px;color:var(--text-mute)}
+.sl-body{min-width:0}
+.sl-top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px}
+.room-tag{
+  display:inline-block;padding:3px 10px;font-size:11.5px;font-weight:600;
+  border-radius:6px;line-height:1.4;border:1px solid;
+}
+.sl-date{font-size:12.5px;color:var(--text-mute);white-space:nowrap;font-variant-numeric:tabular-nums}
+.sl-song{
+  font-weight:700;font-size:17px;color:var(--primary);margin:0;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3;
+  display:flex;align-items:center;gap:6px;
+}
+.sl-song i.song-mic{color:var(--accent);font-size:14px;flex-shrink:0}
+.sl-meta{font-size:13px;color:var(--text-sub);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:3px;line-height:1.4}
+.sl-meta .sep{margin:0 8px;color:var(--text-mute)}
 
-.detail-table{padding:10px 14px}
+.detail-table{padding:12px 16px}
 .detail-row{
-  display:grid;grid-template-columns:88px 1fr;gap:8px;padding:7px 10px;
-  background:#fff;border-radius:6px;margin-bottom:5px;align-items:start;
+  display:grid;grid-template-columns:104px 1fr;gap:10px;padding:10px 14px;
+  background:#fff;border-radius:8px;margin-bottom:5px;align-items:start;
   border:1px solid var(--border-soft);
 }
-.detail-row .lbl{font-size:11.5px;color:var(--accent);font-weight:600;display:flex;align-items:center;gap:5px}
-.detail-row .val{font-size:13.5px;color:var(--primary);word-break:break-word;line-height:1.45}
+.detail-row .lbl{font-size:12.5px;color:var(--accent);font-weight:600;display:flex;align-items:center;gap:6px}
+.detail-row .lbl i{color:var(--accent);font-size:12px}
+.detail-row .val{font-size:14px;color:var(--primary);word-break:break-word;line-height:1.5}
 
-/* 控えめなボタン (modal trigger) */
+/* 控えめなボタン */
 .confirm-btn{
   display:flex;align-items:center;justify-content:center;gap:8px;
-  margin:8px 14px 12px;padding:8px 14px;
+  margin:10px 14px 14px;padding:10px 14px;
   background:#f3f4f6;color:var(--text-sub);
-  border:1px solid var(--border);border-radius:8px;
-  font-weight:600;font-size:12.5px;cursor:pointer;width:calc(100% - 28px);
+  border:1px solid var(--border);border-radius:10px;
+  font-weight:600;font-size:13px;cursor:pointer;width:calc(100% - 28px);
 }
 .confirm-btn:hover{background:#eef2ff;color:var(--accent);border-color:var(--accent-soft)}
-.confirm-btn i.fa-chevron-right{margin-left:auto;font-size:10px}
+.confirm-btn i.fa-chevron-right{margin-left:auto;font-size:11px}
 
 /* Pagination */
 .pager{
-  display:flex;justify-content:center;align-items:center;gap:6px;margin-top:14px;flex-wrap:wrap;
+  display:flex;justify-content:center;align-items:center;gap:6px;margin-top:18px;flex-wrap:wrap;
 }
 .pager button{
   background:#fff;border:1px solid var(--border);border-radius:8px;padding:6px 12px;
@@ -875,160 +905,164 @@ a{color:inherit;text-decoration:none}
 
 /* ===== Cool ===== */
 .cool-head{
-  padding:10px 12px;display:grid;grid-template-columns:30px 50px 1fr auto;gap:12px;align-items:center;cursor:pointer;
+  padding:13px 16px;display:grid;grid-template-columns:36px 1fr auto 14px;gap:14px;align-items:center;cursor:pointer;
 }
-.cool-thumb{
-  width:50px;height:50px;border-radius:8px;background:#e5e7eb;overflow:hidden;flex-shrink:0;
-  display:flex;align-items:center;justify-content:center;color:var(--text-mute);font-size:18px;
-}
-.cool-thumb img{width:100%;height:100%;object-fit:cover}
 .cool-info{min-width:0}
 .cool-anime{font-weight:700;font-size:14.5px;color:var(--primary);line-height:1.3;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cool-types{margin-top:5px;display:flex;gap:4px;flex-wrap:wrap}
-.cool-metrics{display:flex;gap:14px;align-items:center;padding-left:6px}
-.flat-metric{display:flex;align-items:center;gap:6px}
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.cool-types{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap}
+.cool-metrics{display:flex;gap:14px;align-items:center}
+
+/* flat metric (used in cool, ranking-row, notable, trend-pickup) */
+.flat-metric{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:46px}
+.flat-metric .lbl{font-size:10.5px;color:var(--text-sub);font-weight:600;letter-spacing:.02em}
+.flat-metric .val-row{display:flex;align-items:center;gap:6px}
+.flat-metric .val-row b{font-size:18px;font-weight:800;color:var(--primary);font-variant-numeric:tabular-nums;line-height:1}
 .flat-metric .icon-circle{
-  width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-  font-size:13px;flex-shrink:0;
+  width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:11px;flex-shrink:0;
 }
 .flat-metric .icon-circle.user{background:var(--accent-bg);color:var(--accent)}
 .flat-metric .icon-circle.song{background:var(--orange-bg);color:var(--orange)}
-.flat-metric .v{display:flex;flex-direction:column;line-height:1.05}
-.flat-metric .v b{font-size:17px;font-weight:800;color:var(--primary);font-variant-numeric:tabular-nums}
-.flat-metric .v small{font-size:10px;color:var(--text-sub);font-weight:600}
 
-/* Cool detail (songs list) */
+/* Cool detail rows */
 .song-row{
-  display:grid;grid-template-columns:40px 1fr auto;gap:10px;padding:9px 14px;
+  display:grid;grid-template-columns:38px 1fr auto;gap:12px;padding:12px 16px;
   border-bottom:1px solid var(--border-soft);align-items:center;
 }
 .song-row:last-child{border-bottom:none}
 .song-info-wrap{min-width:0}
-.song-name{font-weight:700;font-size:13.5px;color:var(--primary);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3}
-.song-artist{font-size:11.5px;color:var(--text-sub);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
-.song-metrics{display:flex;gap:10px;align-items:center}
-.song-metrics .flat-metric .icon-circle{width:26px;height:26px;font-size:11.5px}
-.song-metrics .flat-metric .v b{font-size:14px}
+.song-name{font-weight:700;font-size:14px;color:var(--primary);line-height:1.3;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.song-artist{font-size:12px;color:var(--text-sub);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:3px}
+.song-metrics{display:flex;gap:12px;align-items:center}
+.song-metrics .flat-metric{min-width:40px}
+.song-metrics .flat-metric .val-row b{font-size:15px}
+.song-metrics .flat-metric .icon-circle{width:20px;height:20px;font-size:9.5px}
 
 /* ===== Ranking ===== */
 .rank-card-top3{
-  background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);margin-top:10px;padding:16px 18px;
+  background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);margin-top:12px;padding:18px 20px;
+  display:grid;grid-template-columns:64px 1fr;gap:20px;align-items:center;
+  box-shadow:0 1px 2px rgba(15,23,42,.03);
 }
-.rank-card-top3.gold{background:linear-gradient(180deg,#fffbeb 0%,#fff 60%);border-color:#fde68a}
-.rank-card-top3.silver{background:linear-gradient(180deg,#f9fafb 0%,#fff 60%)}
-.rank-card-top3.bronze{background:linear-gradient(180deg,#fff7ed 0%,#fff 60%);border-color:#fed7aa}
-.rank-top3-row{display:grid;grid-template-columns:64px 1fr;gap:18px;align-items:start}
-.rank-top3-badgewrap{display:flex;flex-direction:column;align-items:center;gap:4px;position:relative}
-.rank-crown{font-size:20px;line-height:1}
+.rank-card-top3.gold{background:linear-gradient(180deg,#fffbeb 0%,#fff 70%);border-color:#fde68a}
+.rank-card-top3.silver{background:linear-gradient(180deg,#f9fafb 0%,#fff 70%)}
+.rank-card-top3.bronze{background:linear-gradient(180deg,#fff7ed 0%,#fff 70%);border-color:#fed7aa}
+
+.rank-top3-badgewrap{display:flex;flex-direction:column;align-items:center;gap:5px}
+.rank-crown{font-size:22px;line-height:1}
 .rank-crown.gold{color:var(--gold)}
 .rank-crown.silver{color:var(--silver)}
 .rank-crown.bronze{color:var(--bronze)}
 .rank-top3-num{
-  width:50px;height:50px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-  font-weight:800;font-size:20px;color:#fff;
-  border:3px solid #fff;box-shadow:0 0 0 2px var(--accent),0 4px 10px rgba(99,102,241,.3);
-  background:linear-gradient(180deg,var(--accent),var(--accent-2));
+  width:54px;height:54px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-weight:800;font-size:22px;color:#fff;
+  border:3px solid #fff;box-shadow:0 0 0 3px var(--accent),0 4px 10px rgba(99,102,241,.3);
+  background:linear-gradient(180deg,#7c83f7,var(--accent-2));
 }
-.rank-top3-num.gold{box-shadow:0 0 0 2px var(--gold),0 4px 10px rgba(245,158,11,.3);background:linear-gradient(180deg,#fbbf24,#f59e0b)}
-.rank-top3-num.silver{box-shadow:0 0 0 2px var(--silver),0 4px 10px rgba(156,163,175,.3);background:linear-gradient(180deg,#d1d5db,#9ca3af)}
-.rank-top3-num.bronze{box-shadow:0 0 0 2px var(--bronze),0 4px 10px rgba(217,119,6,.3);background:linear-gradient(180deg,#f97316,#d97706)}
+.rank-top3-num.gold{box-shadow:0 0 0 3px var(--gold),0 4px 10px rgba(245,158,11,.3);background:linear-gradient(180deg,#fbbf24,#f59e0b)}
+.rank-top3-num.silver{box-shadow:0 0 0 3px var(--silver),0 4px 10px rgba(156,163,175,.3);background:linear-gradient(180deg,#d1d5db,#9ca3af)}
+.rank-top3-num.bronze{box-shadow:0 0 0 3px var(--bronze),0 4px 10px rgba(217,119,6,.3);background:linear-gradient(180deg,#f97316,#d97706)}
+
 .rank-top3-info{min-width:0}
-.rank-top3-song{font-weight:800;font-size:18px;color:var(--primary);word-break:break-word;line-height:1.3}
-.rank-top3-anime{font-size:13px;color:var(--text-sub);margin-top:3px;line-height:1.35;
+.rank-top3-anime{font-weight:800;font-size:17px;color:var(--primary);line-height:1.3;word-break:break-word}
+.rank-top3-song{font-size:13px;color:var(--text-sub);margin-top:4px;line-height:1.4;
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .rank-top3-artist{font-size:13px;color:var(--text-sub);margin-top:1px}
 .rank-top3-types{margin-top:8px;display:flex;gap:5px;flex-wrap:wrap}
 .rank-top3-metrics{
-  margin-top:14px;display:flex;gap:24px;align-items:center;padding-left:82px;
+  margin-top:14px;display:flex;gap:18px;align-items:center;justify-content:flex-start;padding-left:84px;
+  flex-wrap:wrap;
 }
-.rank-top3-metrics .flat-metric .icon-circle{width:38px;height:38px;font-size:15px}
-.rank-top3-metrics .flat-metric .v b{font-size:22px}
+.rank-top3-metrics .flat-metric{min-width:84px;align-items:flex-start}
+.rank-top3-metrics .flat-metric .val-row b{font-size:24px}
+.rank-top3-metrics .flat-metric .icon-circle{width:32px;height:32px;font-size:14px}
 
-/* Normal rank (4位以下) - フラット */
+/* Normal rank flat */
 .rank-row-flat{
-  background:#fff;border:1px solid var(--border);border-radius:var(--radius);margin-top:8px;
-  padding:12px 16px;display:grid;grid-template-columns:36px 1fr auto auto;gap:16px;align-items:center;
+  background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);margin-top:8px;
+  padding:14px 18px;display:grid;grid-template-columns:36px 1fr auto auto;gap:18px;align-items:center;
+  box-shadow:0 1px 2px rgba(15,23,42,.03);
 }
 .rank-row-flat .rank-info{min-width:0}
-.rank-row-flat .rank-anime{font-weight:700;font-size:14px;color:var(--primary);line-height:1.3;
+.rank-row-flat .rank-anime{font-weight:700;font-size:14.5px;color:var(--primary);line-height:1.3;
   display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
-.rank-row-flat .rank-sub{font-size:11.5px;color:var(--text-sub);margin-top:2px;
+.rank-row-flat .rank-sub{font-size:12px;color:var(--text-sub);margin-top:3px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.rank-row-flat .rank-types-inline{margin-top:4px;display:flex;gap:4px;flex-wrap:wrap}
+.rank-row-flat .rank-types-inline{margin-top:5px;display:flex;gap:5px;flex-wrap:wrap}
+.rank-row-flat .flat-metric{min-width:54px}
+.rank-row-flat .flat-metric .val-row b{font-size:18px}
+.rank-row-flat .flat-metric .icon-circle{width:26px;height:26px;font-size:12px}
 
 /* ===== Trend ===== */
-.trend-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+.trend-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
 .trend-stat{
-  background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:11px 8px;text-align:center;
+  background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:13px 8px;text-align:center;
 }
 .trend-stat .ico{
-  width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;margin:0 auto 5px;
+  width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;
   font-size:14px;
 }
 .trend-stat .ico.up{background:var(--accent-bg);color:var(--accent)}
 .trend-stat .ico.new{background:var(--green-bg);color:var(--green)}
 .trend-stat .ico.max{background:var(--orange-bg);color:var(--orange)}
 .trend-stat .lbl{font-size:11px;color:var(--text-sub);font-weight:600}
-.trend-stat .val{font-size:18px;font-weight:800;color:var(--primary);margin-top:2px}
+.trend-stat .val{font-size:19px;font-weight:800;color:var(--primary);margin-top:3px}
 .trend-stat .val small{font-size:11px;font-weight:600;color:var(--text-sub);margin-left:2px}
 
 .trend-pickup{
-  background:linear-gradient(135deg,#eef2ff 0%,#fff 50%,#fef3c7 100%);
+  background:linear-gradient(135deg,#eef2ff 0%,#fff 60%,#fef3c7 100%);
   border:1px solid var(--accent-soft);border-radius:var(--radius-lg);
-  margin-top:14px;padding:16px;
+  margin-top:16px;padding:18px;
 }
-.trend-pickup-head{display:flex;align-items:center;gap:6px;margin-bottom:10px;font-weight:700;font-size:13.5px;color:var(--primary)}
+.trend-pickup-head{display:flex;align-items:center;gap:6px;margin-bottom:12px;font-weight:700;font-size:14px;color:var(--primary)}
 .trend-pickup-head i{color:var(--red)}
-.trend-pickup-body{display:grid;grid-template-columns:96px 1fr;gap:14px;align-items:flex-start}
+.trend-pickup-body{display:grid;grid-template-columns:104px 1fr;gap:14px;align-items:flex-start}
 .thumb-square{
-  width:96px;height:96px;border-radius:10px;background:#e5e7eb;overflow:hidden;flex-shrink:0;
+  width:104px;height:104px;border-radius:12px;background:#e5e7eb;overflow:hidden;flex-shrink:0;
   display:flex;align-items:center;justify-content:center;color:var(--text-mute);font-size:24px;position:relative;
 }
 .thumb-square img{width:100%;height:100%;object-fit:cover}
 .thumb-tag{
   position:absolute;top:0;left:0;background:linear-gradient(180deg,#fbbf24,#f59e0b);color:#78350f;
-  padding:2px 7px;font-size:10px;font-weight:800;border-radius:0 0 6px 0;letter-spacing:.04em;
+  padding:3px 9px;font-size:10.5px;font-weight:800;border-radius:0 0 8px 0;letter-spacing:.04em;
 }
 .tp-info{min-width:0}
-.tp-song{font-weight:800;font-size:18px;color:var(--primary);line-height:1.25;word-break:break-word}
-.tp-anime{font-size:13px;color:var(--text-sub);margin-top:3px;font-weight:600;
-  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.35}
+.tp-anime{font-weight:800;font-size:19px;color:var(--primary);line-height:1.25;word-break:break-word}
+.tp-song{font-size:13px;color:var(--text-sub);margin-top:4px;font-weight:600;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.4}
 .tp-artist{font-size:12.5px;color:var(--text-sub);margin-top:1px}
-.tp-type{margin-top:6px}
-
+.tp-type{margin-top:8px}
 .tp-metrics{
-  margin-top:14px;display:flex;gap:20px;align-items:center;padding-left:110px;
+  margin-top:16px;display:flex;gap:24px;align-items:center;padding-left:118px;flex-wrap:wrap;
 }
-.tp-metrics .flat-metric .icon-circle{width:36px;height:36px;font-size:14px}
-.tp-metrics .flat-metric .v b{font-size:20px}
+.tp-metrics .flat-metric{min-width:74px;align-items:flex-start}
+.tp-metrics .flat-metric .val-row b{font-size:22px}
+.tp-metrics .flat-metric .icon-circle{width:30px;height:30px;font-size:13px}
 
 .notable-head{
-  margin-top:18px;font-size:14px;font-weight:700;color:var(--primary);display:flex;align-items:center;gap:6px;
+  margin-top:20px;font-size:14.5px;font-weight:700;color:var(--primary);display:flex;align-items:center;gap:6px;
 }
 .notable-head i{color:var(--accent)}
 
 .notable-row{
-  background:#fff;border:1px solid var(--border);border-radius:var(--radius);margin-top:8px;
-  padding:10px 14px;display:grid;grid-template-columns:30px 52px 1fr auto auto;gap:12px;align-items:center;
+  background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);margin-top:8px;
+  padding:11px 16px;display:grid;grid-template-columns:36px 56px 1fr auto auto;gap:14px;align-items:center;
+  box-shadow:0 1px 2px rgba(15,23,42,.03);
 }
-.notable-num{
-  width:28px;height:28px;border-radius:50%;background:linear-gradient(180deg,var(--accent),var(--accent-2));
-  color:#fff;font-weight:800;font-size:12.5px;display:flex;align-items:center;justify-content:center;
-}
-.thumb-mini{width:50px;height:50px;border-radius:8px;background:#e5e7eb;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--text-mute);font-size:16px}
+.thumb-mini{width:54px;height:54px;border-radius:10px;background:#e5e7eb;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--text-mute);font-size:18px}
 .thumb-mini img{width:100%;height:100%;object-fit:cover}
 .notable-info{min-width:0}
-.notable-anime{font-weight:700;font-size:13.5px;color:var(--primary);line-height:1.3;
+.notable-anime{font-weight:700;font-size:14px;color:var(--primary);line-height:1.3;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .notable-artist{font-size:11.5px;color:var(--text-sub);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
-.notable-types{margin-top:4px;display:flex;gap:4px;flex-wrap:wrap}
-
-.notable-row .flat-metric .icon-circle{width:30px;height:30px;font-size:13px}
-.notable-row .flat-metric .v b{font-size:15px}
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:3px}
+.notable-types{margin-top:5px;display:flex;gap:5px;flex-wrap:wrap}
+.notable-row .flat-metric{min-width:48px}
+.notable-row .flat-metric .val-row b{font-size:16px}
+.notable-row .flat-metric .icon-circle{width:24px;height:24px;font-size:11px}
 
 /* Modal */
 .modal-overlay{
@@ -1042,7 +1076,7 @@ a{color:inherit;text-decoration:none}
 }
 @keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
 .modal-head{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
-.modal-head .ttl{flex:1;font-weight:700;font-size:14.5px;color:var(--primary)}
+.modal-head .ttl{flex:1;font-weight:700;font-size:15px;color:var(--primary)}
 .modal-head .ttl small{display:block;font-size:11.5px;color:var(--text-sub);margin-top:2px;font-weight:500}
 .modal-close{
   width:32px;height:32px;border-radius:50%;background:#f3f4f6;border:none;color:var(--text-sub);
@@ -1062,16 +1096,16 @@ a{color:inherit;text-decoration:none}
 .modal-row .meta{font-size:11.5px;color:var(--text-sub);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
-/* Filter popover (Setlist room filter) - 角丸長方形デザイン */
+/* Filter popover */
 .popover{
   display:none;position:absolute;top:100%;right:0;margin-top:6px;background:#fff;
-  border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.1);
-  padding:14px;width:300px;z-index:50;
+  border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.1);
+  padding:14px;width:320px;z-index:50;
 }
 .popover.open{display:block}
 .popover h4{margin:0 0 8px;font-size:11.5px;color:var(--text-sub);font-weight:700;text-transform:uppercase;letter-spacing:.05em}
 .popover .room-search{
-  width:100%;border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:13px;outline:none;margin-bottom:8px;
+  width:100%;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;outline:none;margin-bottom:8px;
 }
 .room-grid{
   display:grid;grid-template-columns:1fr 1fr;gap:6px;max-height:240px;overflow-y:auto;
@@ -1089,26 +1123,25 @@ a{color:inherit;text-decoration:none}
 .btn-apply{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12.5px;cursor:pointer;font-weight:600}
 .toolbar-rel{position:relative}
 
-/* Empty */
-.empty{padding:30px 16px;text-align:center;color:var(--text-mute);font-size:13.5px}
+.empty{padding:40px 16px;text-align:center;color:var(--text-mute);font-size:14px}
 
-/* ===== Env ===== */
+/* Env */
 .env-section{margin-top:14px}
 .env-work-row{
-  background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:6px;
-  display:flex;gap:10px;align-items:center;
+  background:#fff;border:1px solid var(--border);border-radius:12px;padding:11px;margin-bottom:6px;
+  display:flex;gap:11px;align-items:center;
 }
-.env-work-thumb{width:50px;height:50px;border-radius:8px;background:#e5e7eb;overflow:hidden;display:flex;align-items:center;justify-content:center;color:var(--text-mute);flex-shrink:0;font-size:16px}
+.env-work-thumb{width:54px;height:54px;border-radius:10px;background:#e5e7eb;overflow:hidden;display:flex;align-items:center;justify-content:center;color:var(--text-mute);flex-shrink:0;font-size:18px}
 .env-work-thumb img{width:100%;height:100%;object-fit:cover}
-.env-work-name{flex:1;font-weight:600;font-size:13.5px;color:var(--primary);min-width:0;
+.env-work-name{flex:1;font-weight:600;font-size:14px;color:var(--primary);min-width:0;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .env-upload-btn{
-  background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 12px;font-size:12px;cursor:pointer;
+  background:var(--accent);color:#fff;border:none;border-radius:8px;padding:9px 13px;font-size:12.5px;cursor:pointer;
   display:inline-flex;align-items:center;gap:5px;
 }
 .env-upload-btn:hover{filter:brightness(1.05)}
 .env-upload-btn input{display:none}
-.env-status{margin:8px 0;padding:9px 12px;background:var(--accent-bg);border-radius:8px;color:var(--accent);font-size:12.5px;display:none;font-weight:600}
+.env-status{margin:8px 0;padding:10px 12px;background:var(--accent-bg);border-radius:8px;color:var(--accent);font-size:13px;display:none;font-weight:600}
 .env-status.show{display:block}
 
 /* Print */
@@ -1125,9 +1158,10 @@ a{color:inherit;text-decoration:none}
 @media (max-width:420px){
   body{font-size:14.5px}
   .top-cards{grid-template-columns:1fr 1fr;gap:8px}
-  .tabs{padding:0}
   .rank-top3-metrics{padding-left:0;justify-content:space-around}
   .tp-metrics{padding-left:0;justify-content:space-around}
+  .notable-row{grid-template-columns:30px 50px 1fr auto auto;gap:10px;padding:10px 12px}
+  .rank-row-flat{padding:12px 14px;gap:14px}
 }
 </style>
 </head>
@@ -1175,12 +1209,12 @@ a{color:inherit;text-decoration:none}
     <div class="toolbar-row">
       <div class="search-pill">
         <i class="fas fa-search"></i>
-        <input type="text" id="slSearch" placeholder="曲名・作品名・歌手・歌った人で検索">
+        <input type="text" id="slSearch" placeholder="曲名・作品名・歌手名・歌った人で検索">
       </div>
       <div class="toolbar-rel">
-        <button class="icon-btn" id="slFilterBtn"><i class="fas fa-filter"></i></button>
+        <button class="icon-btn" id="slFilterBtn"><i class="fas fa-sliders"></i></button>
         <div class="popover" id="slPopover">
-          <h4>部屋でフィルタ</h4>
+          <h4>部屋でフィルタ（複数選択可）</h4>
           <input type="text" id="roomSearch" class="room-search" placeholder="部屋名で絞り込み">
           <div class="room-grid" id="slRoomChips"></div>
           <div class="actions">
@@ -1270,7 +1304,6 @@ a{color:inherit;text-decoration:none}
   <div id="envList"></div>
 </div>
 
-<!-- Modal (setlist + cool only) -->
 <div class="modal-overlay" id="modalOverlay">
   <div class="modal">
     <div class="modal-head">
@@ -1297,7 +1330,6 @@ const PAGE_SIZE = 200;
 
 document.getElementById('updateLine').innerText = UPDATE_TS + ' 更新';
 
-// === Utility ===
 function jsNormalize(s){
   if(!s) return "";
   s = String(s).normalize('NFKC');
@@ -1313,19 +1345,17 @@ function jsNormalize(s){
 function escHtml(s){return String(s||"").replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function escAttr(s){return String(s||"").replace(/'/g,"&#39;").replace(/"/g,'&quot;');}
 
-// 部屋ハッシュ→HSL色
 function roomColor(name){
   let h = 0;
   for(let i=0;i<name.length;i++) h = (h*31 + name.charCodeAt(i)) & 0xffffffff;
   const hue = Math.abs(h) % 360;
-  return {bg:`hsl(${hue},70%,95%)`, fg:`hsl(${hue},55%,38%)`, bd:`hsl(${hue},60%,85%)`};
+  return {bg:`hsl(${hue},65%,94%)`, fg:`hsl(${hue},45%,38%)`, bd:`hsl(${hue},55%,84%)`};
 }
 function roomTagHtml(name){
   const c = roomColor(name);
   return `<span class="room-tag" style="background:${c.bg};color:${c.fg};border-color:${c.bd}">${escHtml(name)}</span>`;
 }
 
-// type → CSS class
 function typeClass(t){
   if(!t) return 'tp-none';
   const u = String(t).toUpperCase();
@@ -1337,10 +1367,14 @@ function typeClass(t){
 function typePillHtml(t, count){
   if(typeof count === 'number'){
     const cls = typeClass(t);
-    return `<span class="type-pill ${cls}">${escHtml(t)} <b>${count}</b></span>`;
+    const dispVal = count > 0 ? count : '-';
+    return `<span class="type-pill ${cls}">${escHtml(t)} <b>${dispVal}</b></span>`;
   }
   const lbl = t || '-';
   return `<span class="type-pill ${typeClass(t)}">${escHtml(lbl)}</span>`;
+}
+function typeChipHtml(t){
+  return `<div class="type-chip ${typeClass(t)}">${escHtml(t||'-')}</div>`;
 }
 
 function getThumbUrl(cat, work){
@@ -1351,7 +1385,6 @@ function getThumbUrl(cat, work){
   return `https://drive.google.com/thumbnail?id=${fid}&sz=w200`;
 }
 
-// History match
 function findHistoryMatches(workName,songName){
   const sn=jsNormalize(songName);const wn=jsNormalize(workName);
   if(!sn&&!wn) return [];
@@ -1392,7 +1425,6 @@ function openSingersModal(workName, songName){
 function closeModal(){document.getElementById('modalOverlay').classList.remove('active');}
 document.getElementById('modalOverlay').addEventListener('click',e=>{if(e.target.id==='modalOverlay') closeModal();});
 
-// Tabs
 document.querySelectorAll('.tab-btn').forEach(b=>{
   b.addEventListener('click',()=>{
     document.querySelectorAll('.tab-btn').forEach(x=>x.classList.remove('active'));
@@ -1404,7 +1436,7 @@ document.querySelectorAll('.tab-btn').forEach(b=>{
 
 function toggleCard(headEl){headEl.parentElement.classList.toggle('expanded');}
 
-// === Setlist ===
+// ===== Setlist =====
 const SETLIST = HISTORY.map((h,i)=>({...h, idx:i, _orderNum: parseFloat(h.o) || -Infinity}));
 let slState = {rooms:new Set(), keyword:'', page:1, filtered:[]};
 
@@ -1418,7 +1450,6 @@ function applySlFilter(){
       return kws.every(k=>t.indexOf(k)>=0);
     });
   }
-  // 固定ソート: 日付↓, 順番↓
   arr.sort((a,b)=>{
     if(a.d!==b.d) return a.d<b.d?1:-1;
     return b._orderNum - a._orderNum;
@@ -1446,18 +1477,25 @@ function drawSetlistPage(){
   const slice = arr.slice(startIdx, startIdx + PAGE_SIZE);
 
   let html = '';
-  slice.forEach(x=>{
-    const orderDisp = x.o || '';
+  slice.forEach((x, idx)=>{
+    const dispNum = (startIdx + idx + 1).toString();
+    const metaPieces = [];
+    if(x.wk) metaPieces.push(escHtml(x.wk));
+    if(x.ar) metaPieces.push(escHtml(x.ar));
+    const metaLine = metaPieces.join('<span class="sep">|</span>');
+
+    const songIcon = x.sg && /singing|歌|うた/i.test(x.sg) ? '<i class="fas fa-microphone song-mic"></i>' : '';
+
     html += `<div class="card">
       <div class="sl-card-head" onclick="toggleCard(this)">
-        <div class="num-badge">${escHtml(orderDisp)}</div>
+        <div class="num-badge">${escHtml(dispNum)}</div>
         <div class="sl-body">
           <div class="sl-top">
             ${roomTagHtml(x.rm)}
             <span class="sl-date">${escHtml(x.d)}</span>
           </div>
-          <div class="sl-song">${escHtml(x.sg)}</div>
-          <div class="sl-meta">${escHtml(x.wk)}${x.wk&&x.ar?' <span class="sep">|</span> ':''}${escHtml(x.ar)}</div>
+          <div class="sl-song">${songIcon}<span style="overflow:hidden;text-overflow:ellipsis">${escHtml(x.sg)}</span></div>
+          ${metaLine?`<div class="sl-meta">${metaLine}</div>`:''}
         </div>
         <i class="fas fa-chevron-down card-chev"></i>
       </div>
@@ -1468,6 +1506,7 @@ function drawSetlistPage(){
           <div class="detail-row"><div class="lbl"><i class="fas fa-user"></i>歌手名</div><div class="val">${escHtml(x.ar)}</div></div>
           <div class="detail-row"><div class="lbl"><i class="fas fa-microphone"></i>歌った人</div><div class="val">${escHtml(x.u)}</div></div>
           <div class="detail-row"><div class="lbl"><i class="fas fa-door-open"></i>部屋</div><div class="val">${escHtml(x.rm)}</div></div>
+          <div class="detail-row"><div class="lbl"><i class="fas fa-hashtag"></i>順番</div><div class="val">${escHtml(x.o)}</div></div>
         </div>
         <button class="confirm-btn" onclick="event.stopPropagation();openSingersModal('${escAttr(x.wk)}','${escAttr(x.sg)}')">
           <i class="fas fa-users"></i> この曲を歌った人を確認 <i class="fas fa-chevron-right"></i>
@@ -1504,7 +1543,6 @@ function slGoPage(n){
   drawSetlistPage();
 }
 
-// Setlist popover
 const slPopover = document.getElementById('slPopover');
 const slFilterBtn = document.getElementById('slFilterBtn');
 slFilterBtn.addEventListener('click',e=>{
@@ -1552,7 +1590,7 @@ document.getElementById('slSearch').addEventListener('input',e=>{
   slSearchTimer = setTimeout(renderSetlist, 200);
 });
 
-// === Cool ===
+// ===== Cool =====
 const coolCatSel = document.getElementById('coolCat');
 const coolSortSel = document.getElementById('coolSort');
 CATS.forEach(c=>{const o=document.createElement('option');o.value=c;o.innerText=c;coolCatSel.appendChild(o);});
@@ -1561,19 +1599,18 @@ coolSortSel.addEventListener('change', renderCool);
 
 function flatMetricHtml(label, value, kind){
   const ic = kind==='user' ? '<i class="fas fa-users"></i>' : '<i class="fas fa-microphone"></i>';
-  return `<div class="flat-metric"><div class="v"><b>${value}</b><small>${label}</small></div><div class="icon-circle ${kind}">${ic}</div></div>`;
+  return `<div class="flat-metric"><div class="lbl">${label}</div><div class="val-row"><b>${value}</b><div class="icon-circle ${kind}">${ic}</div></div></div>`;
 }
 
 function buildCoolCard(w, rank, cat){
-  const thumbUrl = getThumbUrl(cat, w.anime);
-  const opTag = `<span class="type-pill tp-op">OP <b>${w.op_n}</b></span>`;
-  const edTag = `<span class="type-pill tp-ed">ED <b>${w.ed_n}</b></span>`;
-  const inTag = `<span class="type-pill tp-in">IN <b>${w.in_n}</b></span>`;
+  const opTag = `<span class="type-pill tp-op">OP <b>${w.op_n||'-'}</b></span>`;
+  const edTag = `<span class="type-pill tp-ed">ED <b>${w.ed_n||'-'}</b></span>`;
+  const inTag = `<span class="type-pill tp-in">IN <b>${w.in_n||'-'}</b></span>`;
   let songsHtml = '';
   w.songs.forEach(s=>{
-    const sm = `${flatMetricHtml('人数',s.user_count,'user')}${flatMetricHtml('歌唱',s.count,'song')}`;
+    const sm = `${flatMetricHtml('人数',s.user_count,'user')}${flatMetricHtml('歌唱数',s.count,'song')}`;
     songsHtml += `<div class="song-row">
-      ${typePillHtml(s.type)}
+      ${typeChipHtml(s.type)}
       <div class="song-info-wrap">
         <div class="song-name">${escHtml(s.song)}</div>
         <div class="song-artist">${escHtml(s.artist)}</div>
@@ -1584,7 +1621,6 @@ function buildCoolCard(w, rank, cat){
   return `<div class="card">
     <div class="cool-head" onclick="toggleCard(this)">
       <div class="num-badge${rank===1?' gold':rank===2?' silver':rank===3?' bronze':''}">${rank}</div>
-      <div class="cool-thumb">${thumbUrl?`<img src="${thumbUrl}" alt="">`:'<i class="far fa-image"></i>'}</div>
       <div class="cool-info">
         <div class="cool-anime">${escHtml(w.anime)}</div>
         <div class="cool-types">${opTag}${edTag}${inTag}</div>
@@ -1593,6 +1629,7 @@ function buildCoolCard(w, rank, cat){
         ${flatMetricHtml('人数',w.total_user,'user')}
         ${flatMetricHtml('歌唱数',w.total_count,'song')}
       </div>
+      <i class="fas fa-chevron-down card-chev"></i>
     </div>
     <div class="card-detail">${songsHtml}</div>
   </div>`;
@@ -1619,7 +1656,7 @@ function renderCool(){
   list.innerHTML = html;
 }
 
-// === Ranking (no folding, no modal) ===
+// ===== Ranking =====
 const rankCatSel = document.getElementById('rankCat');
 const rankModeSel = document.getElementById('rankMode');
 CATS.forEach(c=>{const o=document.createElement('option');o.value=c;o.innerText=c;rankCatSel.appendChild(o);});
@@ -1644,19 +1681,17 @@ function buildRankCardHtml(r){
   const grade = r.rank===1?'gold':r.rank===2?'silver':r.rank===3?'bronze':'';
   if(isTop3){
     return `<div class="rank-card-top3 ${grade}">
-      <div class="rank-top3-row">
-        <div class="rank-top3-badgewrap">
-          <div class="rank-crown ${grade}"><i class="fas fa-crown"></i></div>
-          <div class="rank-top3-num ${grade}">${r.rank}</div>
-        </div>
-        <div class="rank-top3-info">
-          <div class="rank-top3-song">${escHtml(r.song)}</div>
-          <div class="rank-top3-anime">${escHtml(r.anime)}</div>
-          <div class="rank-top3-artist">${escHtml(r.artist)}</div>
-          <div class="rank-top3-types">${typePillHtml(r.type)}</div>
-        </div>
+      <div class="rank-top3-badgewrap">
+        <div class="rank-crown ${grade}"><i class="fas fa-crown"></i></div>
+        <div class="rank-top3-num ${grade}">${r.rank}</div>
       </div>
-      <div class="rank-top3-metrics">
+      <div class="rank-top3-info">
+        <div class="rank-top3-anime">${escHtml(r.anime)}</div>
+        <div class="rank-top3-song">${escHtml(r.song)}</div>
+        <div class="rank-top3-artist">${escHtml(r.artist)}</div>
+        <div class="rank-top3-types">${typePillHtml(r.type)}</div>
+      </div>
+      <div class="rank-top3-metrics" style="grid-column:1/-1">
         ${flatMetricHtml('人数',r.user_count,'user')}
         ${flatMetricHtml('歌唱数',r.count,'song')}
       </div>
@@ -1686,7 +1721,7 @@ function renderRanking(){
   list.innerHTML = html;
 }
 
-// === Trend ===
+// ===== Trend =====
 const trendPeriodSel = document.getElementById('trendPeriod');
 const trendSortSel = document.getElementById('trendSort');
 TREND_PERIODS.forEach(p=>{
@@ -1728,8 +1763,8 @@ function buildTrendHtml(){
           <span class="thumb-tag">急上昇 No.1</span>
         </div>
         <div class="tp-info">
-          <div class="tp-song">${escHtml(p.song)}</div>
           <div class="tp-anime">${escHtml(p.anime)}</div>
+          <div class="tp-song">${escHtml(p.song)}</div>
           <div class="tp-artist">${escHtml(p.artist)}</div>
           <div class="tp-type">${typePillHtml(p.type)}</div>
         </div>
@@ -1747,11 +1782,11 @@ function buildTrendHtml(){
       const rank = idx+2;
       const thumbUrl = getThumbUrl(TREND_TARGET_CAT, it.anime);
       html += `<div class="notable-row">
-        <div class="notable-num">${rank}</div>
+        <div class="num-badge" style="width:30px;height:30px;font-size:13px">${rank}</div>
         <div class="thumb-mini">${thumbUrl?`<img src="${thumbUrl}" alt="">`:'<i class="far fa-image"></i>'}</div>
         <div class="notable-info">
-          <div class="notable-anime">${escHtml(it.song)}</div>
-          <div class="notable-artist">${escHtml(it.anime)} / ${escHtml(it.artist)}</div>
+          <div class="notable-anime">${escHtml(it.anime)}</div>
+          <div class="notable-artist">${escHtml(it.song)} / ${escHtml(it.artist)}</div>
           <div class="notable-types">${typePillHtml(it.type)}</div>
         </div>
         ${flatMetricHtml('人数',it.cur_user,'user')}
@@ -1767,7 +1802,7 @@ function renderTrend(){
   document.getElementById('trendBody').innerHTML = buildTrendHtml();
 }
 
-// === Env (image upload, with quarter selector) ===
+// ===== Env =====
 const envCatSel = document.getElementById('envCat');
 CATS.forEach(c=>{const o=document.createElement('option');o.value=c;o.innerText=c;envCatSel.appendChild(o);});
 envCatSel.addEventListener('change', renderEnv);
@@ -1852,7 +1887,7 @@ function cropToSquareDataUrl(file, size){
   });
 }
 
-// === HTML downloads ===
+// ===== HTML downloads =====
 function buildExportHtml(title, contentHtml){
   const port = document.getElementById('exportPort').value || '11059';
   const linkType = document.getElementById('exportLinkType').value;
@@ -1901,9 +1936,7 @@ function buildCoolHtmlForCatExport(cat){
   let h = `<div style="font-size:14px;font-weight:700;color:var(--primary);padding-left:10px;border-left:3px solid var(--accent);margin:14px 0 8px">${escHtml(cat)} - ${works.length}作品</div>`;
   works.forEach((w,i)=>{
     const card = buildCoolCard(w, i+1, cat);
-    // 曲名にリンク化
     h += card.replace(/(<div class="song-name">)([^<]+)(<\/div>)/g, (_,p1,n,p3)=>{
-      // 注意: anime名はwにあり、songNameはnそのもの → リンク化
       return p1 + `<a class="export-link" href="#search:${encodeURIComponent(w.anime+' '+n)}">${n}</a>` + p3;
     });
   });
@@ -1926,9 +1959,8 @@ function buildRankHtmlForCatExport(cat, mode){
   let h = `<div style="font-size:14px;font-weight:700;color:var(--primary);padding-left:10px;border-left:3px solid var(--accent);margin:14px 0 8px">${escHtml(cat)} ${modeT}</div>`;
   top20.forEach(r=>{
     const card = buildRankCardHtml(r);
-    // 曲名リンク化
     h += card
-      .replace(/(<div class="rank-top3-song">)([^<]+)(<\/div>)/, (_,p1,n,p3)=>p1+`<a class="export-link" href="#search:${encodeURIComponent(r.anime+' '+r.song)}">${n}</a>`+p3)
+      .replace(/(<div class="rank-top3-anime">)([^<]+)(<\/div>)/, (_,p1,n,p3)=>p1+`<a class="export-link" href="#search:${encodeURIComponent(r.anime+' '+r.song)}">${n}</a>`+p3)
       .replace(/(<div class="rank-sub">)([^<]+)(<\/div>)/, (_,p1,n,p3)=>p1+`<a class="export-link" href="#search:${encodeURIComponent(r.anime+' '+r.song)}">${n}</a>`+p3);
   });
   return h;
@@ -1957,7 +1989,6 @@ function downloadSetlistHTML(){
   downloadFile('karaoke_setlist.html', buildExportHtml('セットリスト', body));
 }
 
-// Init
 renderSetlist();
 renderCool();
 renderRanking();
