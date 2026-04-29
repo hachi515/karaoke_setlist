@@ -111,6 +111,48 @@ def save_df_to_gas(filename, df):
         return False
 
 
+# ==========================================
+# ローカル(リポジトリ)を履歴CSVの正本(プライマリ)として扱うためのヘルパー
+# ------------------------------------------
+# GAS のみに依存していた構成では、GAS が一時的に not_found / empty / error を
+# 返すと履歴データが丸ごと消失する事故が発生した。
+# リポジトリにコミットされたCSVを正本にすることで、GAS の状態に左右されずに
+# 履歴を恒久保持できるようにする。
+# ==========================================
+def load_df_from_local(filename, **kwargs):
+    if not filename or not os.path.exists(filename):
+        return pd.DataFrame()
+    try:
+        with open(filename, 'rb') as f:
+            content_bytes = f.read()
+        if not content_bytes or content_bytes.lstrip(CSV_EMPTY_PREFIX_BYTES) == b'':
+            return pd.DataFrame()
+        for enc in ['utf-8-sig', 'utf-8', 'cp932', 'shift_jis']:
+            try:
+                df = pd.read_csv(io.BytesIO(content_bytes), encoding=enc, engine='python', **kwargs)
+                if len(df.columns) > 0:
+                    df.columns = df.columns.astype(str).str.replace('\ufeff', '').str.strip()
+                print(f"[Local] OK {filename} rows={len(df)}")
+                return df
+            except Exception:
+                continue
+        return pd.DataFrame()
+    except Exception as e:
+        print(f"[Local] err {filename}: {e}")
+        return pd.DataFrame()
+
+
+def save_df_to_local(filename, df):
+    try:
+        if df is None or df.empty:
+            return False
+        df.to_csv(filename, index=False, encoding='utf-8-sig')
+        return True
+    except Exception as e:
+        print(f"[Local Save] err {filename}: {e}")
+        return False
+
+
 now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
 current_date_str = now.strftime("%Y/%m/%d")
 current_datetime_str = now.strftime("%Y/%m/%d %H:%M")
@@ -194,18 +236,19 @@ def get_history_filename(num, filename_by_num=None):
 
 def load_history_df_with_fallback(filename):
     """
-    履歴CSVは GAS 側に未配置でも、GitHub 側に存在するケースがあるため
-    GAS -> GitHub の順にフォールバックして読み込む。
+    履歴CSVは「ローカル(リポジトリ) → GitHub Raw → GAS」の順にフォールバックして読み込む。
+    リポジトリにコミットされたファイルを正本扱いすることで、GAS が一時的に
+    not_found / empty / error を返しても履歴データが消失しないようにする。
     """
-    df, st = load_df_from_gas_with_status(filename)
-    if st == "ok":
-        return df, "ok"
+    local_df = load_df_from_local(filename)
+    if not local_df.empty:
+        return local_df, "ok"
 
-    # GAS が not_found / empty のときは GitHub も確認
-    if st in {"not_found", "empty"}:
-        gh_df = load_df_from_github(filename)
-        if not gh_df.empty:
-            return gh_df, "ok"
+    gh_df = load_df_from_github(filename)
+    if not gh_df.empty:
+        return gh_df, "ok"
+
+    df, st = load_df_from_gas_with_status(filename)
     return df, st
 
 
@@ -302,6 +345,39 @@ def save_df_to_gas_checked(filename, df, min_existing_rows=0):
         return False
     if len(cleanup_history_df(verify_df)) < len(df):
         return False
+    return True
+
+
+def save_history_persistent(filename, df, min_existing_rows=0):
+    """
+    履歴CSVを「ローカル(リポジトリ)を正本」として保存する。
+
+    1) ローカルファイルへ必ず保存 (リポジトリにコミットされ恒久保存される)
+    2) GAS への保存は best-effort (失敗しても履歴自体は失われない)
+
+    既存行数 (min_existing_rows) より少ない行数を書き出すことは
+    「履歴の縮退」を意味するため、保存をブロックする。
+    """
+    if df is None:
+        return False
+    df = cleanup_history_df(df)
+    if df.empty or len(df) < min_existing_rows:
+        print(f"[STOP] {filename} would shrink: new={len(df)} prev={min_existing_rows}")
+        return False
+
+    if not save_df_to_local(filename, df):
+        return False
+
+    # GAS への保存はベストエフォート (バックアップ用途)。
+    # 失敗してもローカル(リポジトリ)に保存済みなので履歴は保全される。
+    try:
+        if save_df_to_gas(filename, df):
+            print(f"[GAS Save] OK {filename}")
+        else:
+            print(f"[GAS Save] WARN {filename}: GAS save failed (local primary OK)")
+    except Exception as e:
+        print(f"[GAS Save] WARN {filename}: {e} (local primary OK)")
+
     return True
 
 
@@ -419,7 +495,7 @@ else:
                     continue
                 part = remaining_df.iloc[:cap].copy()
                 nxt = cleanup_history_df(pd.concat([cur, part], ignore_index=True))
-                if save_df_to_gas_checked(fn, nxt, min_existing_rows=len(cur)):
+                if save_history_persistent(fn, nxt, min_existing_rows=len(cur)):
                     saved_parts[active_num] = nxt
                     remaining_df = remaining_df.iloc[cap:].reset_index(drop=True)
                     if not remaining_df.empty:
