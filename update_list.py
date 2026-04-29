@@ -1234,21 +1234,22 @@ body.dark .song-created-mark{background:#3f1d1d;border-color:#7f1d1d;color:#fca5
 .rank-row-flat .flat-metric .icon-circle{width:26px;height:26px;font-size:12px}
 
 /* ===== Trend ===== */
-.trend-stats{display:flex;flex-direction:column;gap:6px;margin-top:14px}
+.trend-stats{display:flex;flex-direction:row;gap:6px;margin-top:14px}
 .trend-stat{
   background:#fff;border:1px solid var(--border);border-radius:var(--radius);
-  padding:8px 14px;display:flex;align-items:center;gap:10px;
+  padding:8px 10px;display:flex;align-items:center;gap:8px;
+  flex:1 1 0;min-width:0;
 }
 .trend-stat .ico{
-  width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;
-  font-size:13px;flex-shrink:0;
+  width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+  font-size:12px;flex-shrink:0;
 }
 .trend-stat .ico.up{background:var(--accent-bg);color:var(--accent)}
 .trend-stat .ico.new{background:var(--green-bg);color:var(--green)}
 .trend-stat .ico.max{background:var(--orange-bg);color:var(--orange)}
-.trend-stat .lbl{flex:1;font-size:13px;color:var(--text-sub);font-weight:600}
-.trend-stat .val{font-size:18px;font-weight:800;color:var(--primary);font-variant-numeric:tabular-nums}
-.trend-stat .val small{font-size:11.5px;font-weight:600;color:var(--text-sub);margin-left:3px}
+.trend-stat .lbl{flex:1;min-width:0;font-size:11.5px;color:var(--text-sub);font-weight:600;line-height:1.25}
+.trend-stat .val{font-size:16px;font-weight:800;color:var(--primary);font-variant-numeric:tabular-nums;white-space:nowrap}
+.trend-stat .val small{font-size:10.5px;font-weight:600;color:var(--text-sub);margin-left:2px}
 
 .trend-pickup{
   background:linear-gradient(135deg,#fee2e2 0%,#fff5f5 60%,#fecaca 100%);
