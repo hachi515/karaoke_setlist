@@ -15,10 +15,10 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.9'
 
@@ -39,6 +39,10 @@ jobs:
           # index.html と一緒にリポジトリへコミットする。
           # history*.csv は初回など存在しないケースもあるため失敗を握り潰す。
           git add index.html
+          # update_list.py は viewer.html も生成するため、こちらも忘れずに add する。
+          # add しないと未ステージの変更が残り、後段の `git pull --rebase` が
+          # "cannot pull with rebase: You have unstaged changes." で失敗する (exit 128)。
+          git add viewer.html 2>/dev/null || true
           git add history*.csv 2>/dev/null || true
           
           # 変更がある場合のみコミット
