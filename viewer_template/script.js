@@ -799,12 +799,14 @@ function mlMove(id, direction){
   }
 }
 
-// CSV modal (export only - import 機能は不要)
+// CSV modal
 mlEls.csvBtn.addEventListener('click', ()=>document.getElementById('mlCsvOverlay').classList.add('active'));
 document.getElementById('mlCsvClose').addEventListener('click', ()=>document.getElementById('mlCsvOverlay').classList.remove('active'));
 document.getElementById('mlCsvOverlay').addEventListener('click', e=>{ if(e.target.id==='mlCsvOverlay') document.getElementById('mlCsvOverlay').classList.remove('active'); });
 document.getElementById('mlCsvExportAll').addEventListener('click', ()=>mlExportCSV(true));
 document.getElementById('mlCsvExportTpl').addEventListener('click', ()=>mlExportCSV(false));
+document.getElementById('mlCsvImportBtn').addEventListener('click', ()=>document.getElementById('mlImportCsvModal').click());
+document.getElementById('mlImportCsvModal').addEventListener('change', mlHandleImport);
 function mlExportCSV(withData){
   const BOM = '\uFEFF';
   const header = ['歌唱者','作品名','歌手','曲名','パート分け','練習中','要復習'];
@@ -830,7 +832,81 @@ function mlExportCSV(withData){
   document.getElementById('mlCsvOverlay').classList.remove('active');
 }
 
-// ============================== Local snapshot (failsafe) ==============================
+// CSV import (add/update only, never delete)
+function mlHandleImport(e){
+  const file = e.target.files[0];
+  e.target.value = '';
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev){
+    try {
+      const text = ev.target.result.replace(/^\uFEFF/, ''); // strip BOM
+      const lines = text.split(/\r?\n/).filter(l=>l.trim()!=='');
+      if(lines.length < 2){ showDialog('CSVにデータ行がありません。', 'alert'); return; }
+      const headerRaw = lines[0].split(',').map(h=>h.trim().replace(/^"|"$/g,''));
+      const idxId      = headerRaw.indexOf('id');
+      const idxSinger  = headerRaw.findIndex(h=>h==='歌唱者'||h==='singer');
+      const idxWork    = headerRaw.findIndex(h=>h==='作品名'||h==='work');
+      const idxArtist  = headerRaw.findIndex(h=>h==='歌手'||h==='artist');
+      const idxSong    = headerRaw.findIndex(h=>h==='曲名'||h==='song');
+      const idxPart    = headerRaw.findIndex(h=>h==='パート分け'||h==='isPartDivision');
+      const idxPrac    = headerRaw.findIndex(h=>h==='練習中'||h==='isPracticing');
+      const idxRev     = headerRaw.findIndex(h=>h==='要復習'||h==='isReviewNeeded');
+      const idxPrivate = headerRaw.findIndex(h=>h==='非公開'||h==='isPrivate');
+      if(idxSong === -1){ showDialog('CSVに「曲名」列が見つかりません。', 'alert'); return; }
+      function parseRow(line){
+        const cols = [];
+        let inQ = false, cur = '';
+        for(let i=0;i<line.length;i++){
+          const ch = line[i];
+          if(ch==='"'){ if(inQ&&line[i+1]==='"'){ cur+='"';i++; } else { inQ=!inQ; } }
+          else if(ch===','&&!inQ){ cols.push(cur); cur=''; }
+          else { cur+=ch; }
+        }
+        cols.push(cur);
+        return cols;
+      }
+      let added=0, updated=0, skipped=0;
+      mlSaveSnapshot('before-csv-import');
+      for(let i=1;i<lines.length;i++){
+        const cols = parseRow(lines[i]);
+        const g = idx=>idx>=0?(cols[idx]||'').trim():'';
+        const song = g(idxSong);
+        if(!song){ skipped++; continue; }
+        const data = {
+          singer: g(idxSinger),
+          work:   g(idxWork),
+          artist: g(idxArtist),
+          song:   song,
+          isPartDivision: g(idxPart)==='1',
+          isPracticing:   g(idxPrac)==='1',
+          isReviewNeeded: g(idxRev)==='1',
+          isPrivate:      idxPrivate>=0 ? g(idxPrivate)==='1' : false
+        };
+        const csvId = g(idxId);
+        if(csvId){
+          const existing = mlSongs.findIndex(s=>String(s.id)===csvId);
+          if(existing !== -1){
+            mlSongs[existing] = Object.assign({}, mlSongs[existing], data);
+            updated++;
+          } else {
+            mlSongs.push(Object.assign({id: Number(csvId)||Date.now()+Math.random()}, data));
+            added++;
+          }
+        } else {
+          mlSongs.push(Object.assign({id: Date.now()+Math.random()}, data));
+          added++;
+        }
+      }
+      mlRender();
+      document.getElementById('mlCsvOverlay').classList.remove('active');
+      showDialog('インポート完了:\n追加: '+added+'件、更新: '+updated+'件、スキップ: '+skipped+'件\n\n「同期して保存」でサーバーに反映できます。', 'alert');
+    } catch(err){
+      showDialog('CSVの読み込みに失敗しました:\n'+err.message, 'alert');
+    }
+  };
+  reader.readAsText(file, 'UTF-8');
+}
 // 同期エラー・複数端末競合等によるデータ消失防止のため、直近の状態をロールングで残す。
 const ML_SNAPSHOT_KEY = 'mylistSnapshots';
 const ML_SNAPSHOT_MAX = 5;
