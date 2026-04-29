@@ -124,6 +124,8 @@ document.querySelectorAll('input[name="rmSearchType"]').forEach(r=>{
   r.addEventListener('change', ()=>{
     viewerSearchType = r.value;
     try { localStorage.setItem('viewerSearchType', viewerSearchType); } catch(e){}
+    // Re-render mylist so its pre-rendered search links reflect the new search type immediately
+    if(typeof mlRender === 'function') try { mlRender(); } catch(e){}
   });
 });
 
@@ -132,6 +134,8 @@ function selectPort(p){
   viewerPort = p;
   try { localStorage.setItem('viewerPort', String(viewerPort)); } catch(e){}
   refreshRoomBtnLabel();
+  // Re-render mylist so its pre-rendered search links reflect the new port immediately
+  if(typeof mlRender === 'function') try { mlRender(); } catch(e){}
   closeRoomModal();
 }
 
