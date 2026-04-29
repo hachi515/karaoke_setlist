@@ -1357,16 +1357,37 @@ async function envCsvSave(){
   if(!content){ showCsvMsg('内容が空です', 'error'); return; }
   if(!confirm('cool_analysis.csv を保存します。よろしいですか？')) return;
   showCsvMsg('保存中...', '');
+  const body = JSON.stringify({filename:'cool_analysis.csv', content:content});
+  // 1st try: normal CORS fetch so we can read the response and confirm success.
   try{
     const res = await fetch(GAS_URL, {
       method:'POST',
       headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body: JSON.stringify({filename:'cool_analysis.csv', content:content})
+      body: body,
+      redirect:'follow'
     });
     if(!res.ok){ showCsvMsg('保存失敗: HTTP '+res.status, 'error'); return; }
     showCsvMsg('保存完了。次回更新で反映されます。', 'ok');
+    return;
   }catch(e){
-    showCsvMsg('保存エラー: '+e.message, 'error');
+    // "Failed to fetch" は GAS の 302 リダイレクト先 (script.googleusercontent.com) で
+    // CORS ヘッダや 3rd-party cookie の都合により、デプロイ者以外の端末から
+    // レスポンスを読めない場合に発生する。送信自体はサーバに届くので、
+    // no-cors でリトライして応答確認は諦めるフォールバックを行う。
+    console.warn('envCsvSave: primary fetch failed, falling back to no-cors:', e);
+    try{
+      await fetch(GAS_URL, {
+        method:'POST',
+        mode:'no-cors',
+        headers:{'Content-Type':'text/plain;charset=utf-8'},
+        body: body,
+        redirect:'follow'
+      });
+      showCsvMsg('送信を完了しましたが応答を取得できませんでした。次回更新で反映を確認してください。', 'ok');
+    }catch(e2){
+      console.error('envCsvSave: no-cors fallback also failed:', e2);
+      showCsvMsg('保存エラー: '+(e2.message || e.message || 'ネットワークエラー'), 'error');
+    }
   }
 }
 document.getElementById('envCsvLoad').addEventListener('click', envCsvLoad);

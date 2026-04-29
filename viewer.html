@@ -713,10 +713,13 @@ body.dark .viewer-icon-btn.js-search{background:var(--green-bg);border-color:var
   display:grid;grid-template-columns:1fr;gap:14px;
 }
 @media (min-width:880px){.ml-layout{grid-template-columns:320px 1fr}}
-/* Widen layout on PC so the "All Songs" pane matches the cool tab width (~--maxw). */
-@media (min-width:1280px){
-  .ml-layout{max-width:1248px}
-  .ml-footer{max-width:1248px}
+/* Widen layout on PC so the "All Songs" pane matches the cool tab width (~--maxw).
+   Use a responsive max-width so the widening applies on typical PC viewports
+   (laptops at 1280–1440px CSS width, where vertical scrollbars and zoom
+    can drop the actual viewport just under 1280px). */
+@media (min-width:1024px){
+  .ml-layout{max-width:min(1248px, calc(100vw - 24px))}
+  .ml-footer{max-width:min(1248px, calc(100vw - 24px))}
 }
 .ml-side{display:flex;flex-direction:column;gap:12px}
 .ml-card{
