@@ -2516,3 +2516,84 @@ html_content = (html_content
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
 print("HTML生成完了: index.html")
+
+# ==========================================
+# 外部閲覧用ページ viewer.html を生成
+# ==========================================
+# index.html とは独立した、クール集計/ランキング/推移/マイリスト のみのページ。
+# 機材係 (部屋) 選択モーダル、検索ボタン (各楽曲・別タブ無し)、
+# マイリスト登録ボタン (歌唱数の上)、マイリストタブ (KaraokeDB機能を移行) を備える。
+# テンプレートは viewer_template/ 配下に配置。
+import re as _re_v
+
+_viewer_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "viewer_template")
+try:
+    with open(os.path.join(_viewer_dir, "extra.css"), "r", encoding="utf-8") as f:
+        _v_css_extra = f.read()
+    with open(os.path.join(_viewer_dir, "body.html"), "r", encoding="utf-8") as f:
+        _v_body = f.read()
+    with open(os.path.join(_viewer_dir, "script.js"), "r", encoding="utf-8") as f:
+        _v_js = f.read()
+
+    # Base CSS (reuse the same <style> block we just embedded into index.html)
+    _m = _re_v.search(r"<style>([\s\S]*?)</style>", html_content)
+    _v_base_css = _m.group(1) if _m else ""
+
+    # 仕様で指定された機材係(部屋)マップ。viewer 専用として固定で持つ。
+    _viewer_rooms = {
+        11000: "ゆーふうりん部屋", 11001: "ゆーふうりん部屋", 11002: "ゆーふうりん部屋",
+        11003: "ゆーふうりん部屋", 11004: "ゆーふうりん部屋", 11005: "ゆーふうりん部屋",
+        11006: "ゆーふうりん部屋", 11007: "ゆーふうりん部屋", 11008: "ゆーふうりん部屋",
+        11009: "ゆーふうりん部屋",
+        11021: "成田部屋", 11022: "成田部屋", 11028: "タマ部屋",
+        11058: "すみた部屋", 11059: "つぼはち部屋", 11060: "れん部屋", 11061: "百合川部屋",
+        11063: "なぎ部屋", 11064: "naoo部屋", 11066: "芝ちゃん部屋", 11067: "crom部屋",
+        11068: "けんしん部屋", 11069: "けんちぃ部屋",
+        11070: "黒河部屋", 11071: "黒河部屋", 11073: "コウ艦長部屋", 11074: "tukinowa部屋",
+        11077: "v3部屋", 11078: "のんでるん部屋", 11079: "まどか部屋",
+        11082: "ヤマテル部屋", 11084: "タカヒロ部屋", 11085: "タカヒロ部屋",
+        11086: "タカヒロ部屋", 11087: "MiO部屋", 11088: "ほっしー部屋",
+        11101: "えみち部屋", 11102: "るえ部屋", 11103: "ながし部屋", 11104: "MrN部屋",
+        11105: "ヤマテル部屋", 11106: "遠見塚部屋", 11107: "ブルーベリー部屋",
+        11110: "加古部屋",
+    }
+    _viewer_rooms_json = json.dumps({str(k): v for k, v in _viewer_rooms.items()}, ensure_ascii=False)
+
+    _v_js_rendered = (_v_js
+        .replace("__COOL_DATA_LINE__", "const COOL_DATA = " + cool_json + ";")
+        .replace("__RANK_DATA_LINE__", "const RANK_DATA = " + ranking_json + ";")
+        .replace("__TREND_DATA_LINE__", "const TREND_DATA = " + trend_json + ";")
+        .replace("__HISTORY_DATA_LINE__", "const HISTORY = " + history_json + ";")
+        .replace("__ROOMS_JSON__", _viewer_rooms_json)
+        .replace("__CATS_JSON__", categories_json)
+        .replace("__TREND_PERIODS_JSON__", trend_periods_json)
+        .replace("__TREND_TARGET_JSON__", trend_target_json)
+        .replace("__UPDATE_TS__", current_datetime_str)
+    )
+    _v_body_rendered = _v_body.replace("__UPDATE__", current_datetime_str)
+
+    _viewer_html = (
+        '<!DOCTYPE html>\n'
+        '<html lang="ja">\n'
+        '<head>\n'
+        '<meta charset="UTF-8">\n'
+        '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
+        '<title>Karaoke Viewer</title>\n'
+        '<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">\n'
+        '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;600;700;800&display=swap" rel="stylesheet">\n'
+        '<style>\n'
+        + _v_base_css + '\n/* === viewer extra === */\n' + _v_css_extra +
+        '\n</style>\n'
+        '</head>\n'
+        + _v_body_rendered + '\n'
+        '<script>\n' + _v_js_rendered + '\n</script>\n'
+        '</body>\n'
+        '</html>\n'
+    )
+    with open("viewer.html", "w", encoding="utf-8") as f:
+        f.write(_viewer_html)
+    print("HTML生成完了: viewer.html")
+except FileNotFoundError as e:
+    print("[viewer] テンプレート未検出のためスキップ: {}".format(e))
+except Exception as e:
+    print("[viewer] 生成失敗: {}".format(e))
