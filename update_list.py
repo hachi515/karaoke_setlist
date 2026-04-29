@@ -630,6 +630,12 @@ for cat in ALLOWED_CATEGORIES:
             "op_n": sum(1 for x in g if 'OP' in x['type'].upper()),
             "ed_n": sum(1 for x in g if 'ED' in x['type'].upper()),
             "in_n": sum(1 for x in g if 'IN' in x['type'].upper()),
+            # 作成数: offline_list を参照して算出した creation_count を、
+            # 種別ごと（OP/ED/IN）と作品全体で合計する
+            "op_created": sum(min(1, x['creation_count']) for x in g if 'OP' in x['type'].upper()),
+            "ed_created": sum(min(1, x['creation_count']) for x in g if 'ED' in x['type'].upper()),
+            "in_created": sum(min(1, x['creation_count']) for x in g if 'IN' in x['type'].upper()),
+            "total_created": sum(min(1, x['creation_count']) for x in g),
             "total_count": sum(x['count'] for x in g),
             "total_user": sum(x['user_count'] for x in g)
         })
@@ -991,6 +997,17 @@ body.dark .trend-pickup-row .num-badge{background:#7f1d1d;color:#fecaca}
 .type-pill.tp-ed{background:var(--orange-bg);border:1px solid var(--orange-bd);color:var(--orange)}
 .type-pill.tp-in{background:var(--green-bg);border:1px solid var(--green-bd);color:var(--green)}
 .type-pill.tp-none{background:#f3f4f6;border:1px solid var(--border);color:var(--text-sub)}
+.type-pill.tp-created{background:#fef2f2;border:1px solid #fecaca;color:#dc2626}
+.type-pill.tp-created b{color:#dc2626}
+body.dark .type-pill.tp-created{background:#3f1d1d;border-color:#7f1d1d;color:#fca5a5}
+body.dark .type-pill.tp-created b{color:#fca5a5}
+.song-created-mark{display:inline-flex;align-items:center;gap:3px;margin-left:8px;
+  padding:1px 6px;font-size:10.5px;font-weight:700;
+  background:#fef2f2;border:1px solid #fecaca;color:#dc2626;border-radius:4px;letter-spacing:.02em}
+.song-created-mark i{font-size:9.5px}
+body.dark .song-created-mark{background:#3f1d1d;border-color:#7f1d1d;color:#fca5a5}
+.count-line .created-sum{margin-left:10px;color:#dc2626;font-weight:700}
+body.dark .count-line .created-sum{color:#fca5a5}
 
 /* Type chip (square, for cool song-row) */
 .type-chip{
@@ -1443,7 +1460,7 @@ body.dark .trend-pickup-row .num-badge{background:#7f1d1d;color:#fecaca}
       <button class="dl-btn compact" onclick="downloadCoolHTML('all')" title="全クール保存"><i class="fas fa-file-download"></i><span class="dl-lbl">全クール</span></button>
     </div>
   </div>
-  <div class="count-line"><i class="far fa-bookmark"></i><span id="coolCount">0</span> 作品</div>
+  <div class="count-line"><i class="far fa-bookmark"></i><span id="coolCount">0</span> 作品<span class="created-sum" id="coolCreatedSum"></span></div>
   <div id="coolList"></div>
 </div>
 
@@ -1826,17 +1843,28 @@ function flatMetricHtml(label, value, kind){
 }
 
 function buildCoolCard(w, rank, cat){
-  const opTag = `<span class="type-pill tp-op">OP <b>${w.op_n||'-'}</b></span>`;
-  const edTag = `<span class="type-pill tp-ed">ED <b>${w.ed_n||'-'}</b></span>`;
-  const inTag = `<span class="type-pill tp-in">IN <b>${w.in_n||'-'}</b></span>`;
+  // OP/ED/IN ピルは「作成済みの曲数」を表示する。種別ごとの曲が無い場合は '-'。
+  const opVal = (w.op_n||0)>0 ? (w.op_created||0) : '-';
+  const edVal = (w.ed_n||0)>0 ? (w.ed_created||0) : '-';
+  const inVal = (w.in_n||0)>0 ? (w.in_created||0) : '-';
+  const opTag = `<span class="type-pill tp-op">OP <b>${opVal}</b></span>`;
+  const edTag = `<span class="type-pill tp-ed">ED <b>${edVal}</b></span>`;
+  const inTag = `<span class="type-pill tp-in">IN <b>${inVal}</b></span>`;
+  // 作品単位の作成数合計（赤字）
+  const createdTag = (w.total_created||0) > 0
+    ? `<span class="type-pill tp-created" title="作成数の合計"><i class="fas fa-check"></i>作成 <b>${w.total_created}</b></span>`
+    : '';
   let songsHtml = '';
   w.songs.forEach(s=>{
     const sm = `${flatMetricHtml('人数',s.user_count,'user')}${flatMetricHtml('歌唱数',s.count,'song')}`;
+    const createdMark = (s.creation_count||0) > 0
+      ? `<span class="song-created-mark" title="offline_list 内の作成数"><i class="fas fa-check"></i>作成${s.creation_count>1?' '+s.creation_count:''}</span>`
+      : '';
     songsHtml += `<div class="song-row">
       ${typeChipHtml(s.type)}
       <div class="song-info-wrap">
         <div class="song-name">${escHtml(s.song)}</div>
-        <div class="song-artist">${escHtml(s.artist)}</div>
+        <div class="song-artist">${escHtml(s.artist)}${createdMark}</div>
       </div>
       <div class="song-metrics">${sm}</div>
     </div>`;
@@ -1846,7 +1874,7 @@ function buildCoolCard(w, rank, cat){
       <div class="num-badge${rank===1?' gold':rank===2?' silver':rank===3?' bronze':''}">${rank}</div>
       <div class="cool-info">
         <div class="cool-anime">${escHtml(w.anime)}</div>
-        <div class="cool-types">${opTag}${edTag}${inTag}</div>
+        <div class="cool-types">${opTag}${edTag}${inTag}${createdTag}</div>
       </div>
       <div class="cool-metrics">
         ${flatMetricHtml('人数',w.total_user,'user')}
@@ -1872,6 +1900,10 @@ function renderCool(){
     return bc-ac;
   });
   document.getElementById('coolCount').innerText = works.length;
+  // 作成数の合計（赤字）
+  const totalCreated = works.reduce((s,w)=>s+(w.total_created||0), 0);
+  const sumEl = document.getElementById('coolCreatedSum');
+  if(sumEl) sumEl.innerText = totalCreated>0 ? `／ 作成 ${totalCreated}` : '';
   const list = document.getElementById('coolList');
   if(works.length===0){list.innerHTML='<div class="empty">データがありません</div>';return;}
   let html = '';
@@ -2142,7 +2174,18 @@ function openSingersModal(w,s){const m=findHistoryMatches(w,s);const u={};m.forE
 function closeModal(){document.getElementById('modalOverlay').classList.remove('active');}
 document.getElementById('modalOverlay').addEventListener('click',e=>{if(e.target.id==='modalOverlay')closeModal();});
 function toggleCard(h){h.parentElement.classList.toggle('expanded');}
-document.querySelectorAll('a.export-link').forEach(l=>{const h=l.getAttribute('href');if(h&&h.indexOf('#search:')===0){const w=h.split('#search:')[1];const path=LINKTYPE==='ykr'?'search_listerdb_filelist.php?anyword=':'search.php?searchword=';l.href='http://ykr.moe:'+PORT+'/'+path+encodeURIComponent(decodeURIComponent(w));l.target='_blank';l.rel='noopener';}});
+// 検索キーワードから ()/（）/～/〜/／/~// および括弧内の付加情報を取り除く。
+// 例: "ようこそ実力至上主義の教室へ(4th Season) MONSTER"
+//   → "ようこそ実力至上主義の教室へ MONSTER"
+function cleanSearchKeyword(s){
+  if(!s) return '';
+  s = String(s);
+  s = s.replace(/\\([^)]*\\)/g,' ').replace(/（[^）]*）/g,' ');
+  s = s.replace(/[～〜~／\\/]/g,' ');
+  s = s.replace(/\\s+/g,' ').trim();
+  return s;
+}
+document.querySelectorAll('a.export-link').forEach(l=>{const h=l.getAttribute('href');if(h&&h.indexOf('#search:')===0){const w=h.split('#search:')[1];const path=LINKTYPE==='ykr'?'search_listerdb_filelist.php?anyword=':'search.php?searchword=';l.href='http://ykr.moe:'+PORT+'/'+path+encodeURIComponent(cleanSearchKeyword(decodeURIComponent(w)));l.target='_blank';l.rel='noopener';}});
 // ----- Row-level clickable area (full item navigates to its export-link) -----
 (function(){
   var rowSelectors=['.rank-row-flat','.notable-row','.trend-pickup-row','.song-row','.detail-row'];
