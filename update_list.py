@@ -1818,7 +1818,13 @@ function drawSetlistPage(){
 
   let html = '';
   slice.forEach((x, idx)=>{
-    const dispNum = (startIdx + idx + 1).toString();
+    // バッジには 順番 (x.o) を表示する。同一日付内では 順番 降順で並ぶため、
+    // 大きい番号が上に来る並びとバッジ表示が一致する。順番が空/数値でない場合は
+    // 行位置にフォールバック。
+    const fallbackNum = (startIdx + idx + 1).toString();
+    const dispNum = (x.o !== undefined && x.o !== null && String(x.o).trim() !== '')
+      ? String(x.o).trim()
+      : fallbackNum;
     const metaPieces = [];
     if(x.wk) metaPieces.push(escHtml(x.wk));
     if(x.ar) metaPieces.push(escHtml(x.ar));
@@ -2408,7 +2414,13 @@ function downloadSetlistHTML(){
 
   let cards = '';
   arr.forEach((x, idx)=>{
-    const dispNum = (idx + 1).toString();
+    // バッジには 順番 (x.o) を表示する。同一日付内では 順番 降順で並ぶため、
+    // 大きい番号が上に来る並びとバッジ表示が一致する。順番が空/数値でない場合は
+    // 行位置にフォールバック。
+    const fallbackNum = (idx + 1).toString();
+    const dispNum = (x.o !== undefined && x.o !== null && String(x.o).trim() !== '')
+      ? String(x.o).trim()
+      : fallbackNum;
     const metaPieces = [];
     if(x.wk) metaPieces.push(escHtml(x.wk));
     if(x.ar) metaPieces.push(escHtml(x.ar));
