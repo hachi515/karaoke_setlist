@@ -786,7 +786,7 @@ body.dark .viewer-icon-btn.js-search{background:var(--green-bg);border-color:var
 .ml-tag.pr{background:#dbeafe;color:#1d4ed8}
 .ml-tag.rv{background:#fef3c7;color:#a16207}
 .ml-tag.pv{background:#f3f4f6;color:#6b7280}
-.ml-actions{display:flex;align-items:center;gap:3px}
+.ml-actions{display:flex;align-items:center;gap:4px}
 .ml-actions a, .ml-actions button{
   border:none;background:transparent;cursor:pointer;color:var(--text-mute);width:28px;height:28px;
   border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-size:12px;
@@ -795,6 +795,8 @@ body.dark .viewer-icon-btn.js-search{background:var(--green-bg);border-color:var
 .ml-actions a.search:hover{background:var(--green);color:#fff}
 .ml-actions button:hover{background:var(--bg);color:var(--accent)}
 .ml-actions button.del:hover{color:var(--red);background:#fee2e2}
+.ml-actions-edit{display:grid;grid-template-columns:repeat(2, auto);grid-auto-rows:auto;gap:2px}
+.ml-actions-edit button{width:24px;height:24px;font-size:11px;border-radius:5px}
 .ml-pager{padding:8px 14px;border-top:1px solid var(--border-soft);display:flex;justify-content:center;align-items:center;gap:10px;font-size:12px}
 .ml-pager button{
   background:transparent;border:1px solid var(--border);border-radius:6px;padding:3px 8px;cursor:pointer;color:var(--text-sub);
@@ -1810,10 +1812,12 @@ function mlRender(){
         + '</div>'
         + '<div class="ml-actions">'
           + '<a class="search" href="'+escAttr(searchUrl)+'" target="_self" rel="noopener" title="検索"><i class="fas fa-search"></i></a>'
-          + '<button class="js-ml-edit" data-id="'+escAttr(song.id)+'" title="編集"><i class="fas fa-edit"></i></button>'
-          + '<button class="js-ml-up" data-id="'+escAttr(song.id)+'" title="上に"><i class="fas fa-arrow-up"></i></button>'
-          + '<button class="js-ml-down" data-id="'+escAttr(song.id)+'" title="下に"><i class="fas fa-arrow-down"></i></button>'
-          + '<button class="del js-ml-del" data-id="'+escAttr(song.id)+'" title="削除"><i class="fas fa-trash"></i></button>'
+          + '<div class="ml-actions-edit">'
+            + '<button class="js-ml-edit" data-id="'+escAttr(song.id)+'" title="編集"><i class="fas fa-edit"></i></button>'
+            + '<button class="del js-ml-del" data-id="'+escAttr(song.id)+'" title="削除"><i class="fas fa-trash"></i></button>'
+            + '<button class="js-ml-up" data-id="'+escAttr(song.id)+'" title="上に"><i class="fas fa-arrow-up"></i></button>'
+            + '<button class="js-ml-down" data-id="'+escAttr(song.id)+'" title="下に"><i class="fas fa-arrow-down"></i></button>'
+          + '</div>'
         + '</div>'
       + '</div>';
     });
