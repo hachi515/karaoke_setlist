@@ -208,8 +208,6 @@ body.dark .type-pill.tp-created b{color:#fca5a5}
   background:#fef2f2;border:1px solid #fecaca;color:#dc2626;border-radius:4px;letter-spacing:.02em}
 .song-created-mark i{font-size:9.5px}
 body.dark .song-created-mark{background:#3f1d1d;border-color:#7f1d1d;color:#fca5a5}
-.count-line .created-sum{margin-left:10px;color:#dc2626;font-weight:700}
-body.dark .count-line .created-sum{color:#fca5a5}
 
 /* Type chip (square, for cool song-row) */
 .type-chip{
@@ -662,7 +660,7 @@ body.dark .count-line .created-sum{color:#fca5a5}
       <button class="dl-btn compact" onclick="downloadCoolHTML('all')" title="全クール保存"><i class="fas fa-file-download"></i><span class="dl-lbl">全クール</span></button>
     </div>
   </div>
-  <div class="count-line"><i class="far fa-bookmark"></i><span id="coolCount">0</span> 作品<span class="created-sum" id="coolCreatedSum"></span></div>
+  <div class="count-line"><i class="far fa-bookmark"></i><span id="coolCount">0</span> 作品</div>
   <div id="coolList"></div>
 </div>
 
@@ -1102,10 +1100,6 @@ function renderCool(){
     return bc-ac;
   });
   document.getElementById('coolCount').innerText = works.length;
-  // 作成数の合計（赤字）
-  const totalCreated = works.reduce((s,w)=>s+(w.total_created||0), 0);
-  const sumEl = document.getElementById('coolCreatedSum');
-  if(sumEl) sumEl.innerText = totalCreated>0 ? `／ 作成 ${totalCreated}` : '';
   const list = document.getElementById('coolList');
   if(works.length===0){list.innerHTML='<div class="empty">データがありません</div>';return;}
   let html = '';
