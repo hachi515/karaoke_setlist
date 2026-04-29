@@ -1748,6 +1748,38 @@ function toggleCard(headEl){headEl.parentElement.classList.toggle('expanded');}
 
 // ===== Setlist =====
 const SETLIST = HISTORY.map((h,i)=>{const n=parseFloat(h.o);return {...h, idx:i, _orderNum: Number.isFinite(n) ? n : -Infinity};});
+
+// ============================================================
+// 【固定ソートルール / DO NOT BREAK】
+//   セットリストの並び順は以下の2段階比較に固定する:
+//     第一順位: 取得日 (x.d, "YYYY/MM/DD" 文字列) を降順 — 新しい日付が上
+//     第二順位: 順番   (x._orderNum, 数値)         を降順 — 大きい番号が上
+//   この関数 compareSetlistEntries が比較ロジックの唯一の定義。
+//   並び替えを行う箇所は arr.sort(compareSetlistEntries) を呼ぶこと。
+//   ソートロジックを変更する必要が出た場合は、必ずこの関数 1 箇所のみを修正し、
+//   呼び出し側にインラインで比較関数を書き直さないこと（過去に各所で
+//   ばらばらに書き換わって規約が破綻した経緯があるため）。
+// ============================================================
+function compareSetlistEntries(a, b){
+  if(a.d !== b.d) return a.d < b.d ? 1 : -1;
+  return b._orderNum - a._orderNum;
+}
+
+// 起動時セルフチェック: 規約に違反する変更が入った場合に気付けるようにする。
+(function _verifySetlistSortContract(){
+  try {
+    const sample = [
+      {d:'2026/04/29', _orderNum: 5},
+      {d:'2026/04/29', _orderNum: 10},
+      {d:'2026/04/30', _orderNum: 1},
+    ].sort(compareSetlistEntries);
+    const ok = sample[0].d === '2026/04/30'
+            && sample[1].d === '2026/04/29' && sample[1]._orderNum === 10
+            && sample[2].d === '2026/04/29' && sample[2]._orderNum === 5;
+    if(!ok) console.warn('[setlist-sort] 固定ソートルールが壊れています。compareSetlistEntries を確認してください。', sample);
+  } catch(e){ console.warn('[setlist-sort] self-check failed', e); }
+})();
+
 let slState = {rooms:new Set(), keyword:'', page:1, filtered:[]};
 
 function applySlFilter(){
@@ -1760,14 +1792,8 @@ function applySlFilter(){
       return kws.every(k=>t.indexOf(k)>=0);
     });
   }
-  // ===== 固定ソートルール =====
-  //   第一順位: 取得日 (新しい日付が上)
-  //   第二順位: 順番   (大きい番号が上)
-  // ※このルールは今後の修正で変更しないこと
-  arr.sort((a,b)=>{
-    if(a.d!==b.d) return a.d<b.d?1:-1;
-    return b._orderNum - a._orderNum;
-  });
+  // 並び順は compareSetlistEntries に集約 (第一=取得日 desc, 第二=順番 desc)
+  arr.sort(compareSetlistEntries);
   slState.filtered = arr;
   slState.page = 1;
 }
@@ -2377,11 +2403,8 @@ function downloadSetlistHTML(){
       return y === yearVal;
     });
   }
-  // 固定ソートルール: 第一=取得日(新が上), 第二=順番(大が上)
-  arr.sort((a,b)=>{
-    if(a.d!==b.d) return a.d<b.d?1:-1;
-    return b._orderNum - a._orderNum;
-  });
+  // 並び順は compareSetlistEntries に集約 (第一=取得日 desc, 第二=順番 desc)
+  arr.sort(compareSetlistEntries);
 
   let cards = '';
   arr.forEach((x, idx)=>{
