@@ -922,7 +922,7 @@ body.dark .room-btn.selected{background:var(--green);color:#fff}
   </div>
 </div>
 
-<div class="update-line"><i class="far fa-clock" style="margin-right:4px"></i><span id="updateLine">2026/04/30 02:04 更新</span></div>
+<div class="update-line"><i class="far fa-clock" style="margin-right:4px"></i><span id="updateLine">2026/04/30 02:22 更新</span></div>
 
 <!-- Cool -->
 <div class="tab-content active" id="tab-cool">
@@ -1095,7 +1095,7 @@ body.dark .room-btn.selected{background:var(--green);color:#fff}
       <div class="room-modal-section">
         <div class="room-modal-label">検索方式の設定 (基本)</div>
         <div class="room-search-mode">
-          <label><input type="radio" name="rmSearchType" value="ykr"> ゆかりすたー検索</label>
+          <label><input type="radio" name="rmSearchType" value="ykr" checked> ゆかりすたー検索</label>
           <label><input type="radio" name="rmSearchType" value="eve"> Everything検索</label>
         </div>
         <div class="room-modal-note">※ポート番号 11058(すみた部屋)、11060(れん部屋) を選択した場合は自動的にEverything検索になります。</div>
@@ -1193,7 +1193,7 @@ const ROOMS = {"11000": "ゆーふうりん部屋", "11001": "ゆーふうりん
 const CATS = ["2026年春アニメ", "2026年冬アニメ", "2025年秋アニメ"];
 const TREND_PERIODS = [3, 7, 14, 30];
 const TREND_TARGET_CAT = "2026年春アニメ";
-const UPDATE_TS = "2026/04/30 02:04";
+const UPDATE_TS = "2026/04/30 02:22";
 const MYLIST_GAS_URL = "https://script.google.com/macros/s/AKfycbwhx-_zhE7IJvRLgOegHpQ5WYqC6cBG3fENWtMa0sEX0Rwnh__dPoS25OPkkU9xvIDp/exec";
 
 document.getElementById('updateLine').innerText = UPDATE_TS + ' 更新';
@@ -1310,6 +1310,8 @@ document.querySelectorAll('input[name="rmSearchType"]').forEach(r=>{
   r.addEventListener('change', ()=>{
     viewerSearchType = r.value;
     try { localStorage.setItem('viewerSearchType', viewerSearchType); } catch(e){}
+    // Re-render mylist so its pre-rendered search links reflect the new search type immediately
+    if(typeof mlRender === 'function') try { mlRender(); } catch(e){}
   });
 });
 
@@ -1318,6 +1320,8 @@ function selectPort(p){
   viewerPort = p;
   try { localStorage.setItem('viewerPort', String(viewerPort)); } catch(e){}
   refreshRoomBtnLabel();
+  // Re-render mylist so its pre-rendered search links reflect the new port immediately
+  if(typeof mlRender === 'function') try { mlRender(); } catch(e){}
   closeRoomModal();
 }
 
