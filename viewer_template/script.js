@@ -627,10 +627,12 @@ function mlRender(){
         + '</div>'
         + '<div class="ml-actions">'
           + '<a class="search" href="'+escAttr(searchUrl)+'" target="_self" rel="noopener" title="検索"><i class="fas fa-search"></i></a>'
-          + '<button class="js-ml-edit" data-id="'+escAttr(song.id)+'" title="編集"><i class="fas fa-edit"></i></button>'
-          + '<button class="js-ml-up" data-id="'+escAttr(song.id)+'" title="上に"><i class="fas fa-arrow-up"></i></button>'
-          + '<button class="js-ml-down" data-id="'+escAttr(song.id)+'" title="下に"><i class="fas fa-arrow-down"></i></button>'
-          + '<button class="del js-ml-del" data-id="'+escAttr(song.id)+'" title="削除"><i class="fas fa-trash"></i></button>'
+          + '<div class="ml-actions-edit">'
+            + '<button class="js-ml-edit" data-id="'+escAttr(song.id)+'" title="編集"><i class="fas fa-edit"></i></button>'
+            + '<button class="del js-ml-del" data-id="'+escAttr(song.id)+'" title="削除"><i class="fas fa-trash"></i></button>'
+            + '<button class="js-ml-up" data-id="'+escAttr(song.id)+'" title="上に"><i class="fas fa-arrow-up"></i></button>'
+            + '<button class="js-ml-down" data-id="'+escAttr(song.id)+'" title="下に"><i class="fas fa-arrow-down"></i></button>'
+          + '</div>'
         + '</div>'
       + '</div>';
     });
