@@ -799,6 +799,11 @@ body.dark .viewer-icon-btn:hover{background:var(--accent-bg)}
 .ml-fbtn.danger:hover{background:#dc2626;color:#fff;border-color:#dc2626}
 body.dark .ml-fbtn.danger{background:#3f1d1d;color:#fca5a5;border-color:#7f1d1d}
 body.dark .ml-fbtn.danger:hover{background:#dc2626;color:#fff;border-color:#dc2626}
+/* ダークモードでは --accent が淡い色 (#818cf8) になるため、
+   白文字との十分なコントラストを得るために濃い indigo にする。
+   "同期して保存" など primary ボタンが読めない問題への対応。 */
+body.dark .ml-fbtn.primary{background:#4f46e5;color:#fff;border-color:#4f46e5}
+body.dark .ml-fbtn.primary:hover{background:#4338ca;color:#fff;border-color:#4338ca;filter:none}
 
 /* Bulk select bar above the mylist */
 .ml-bulkbar{
