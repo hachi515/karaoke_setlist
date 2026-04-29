@@ -204,10 +204,10 @@ body.dark .trend-pickup-row .num-badge{background:#7f1d1d;color:#fecaca}
 body.dark .type-pill.tp-created{background:#3f1d1d;border-color:#7f1d1d;color:#fca5a5}
 body.dark .type-pill.tp-created b{color:#fca5a5}
 .song-created-mark{display:inline-flex;align-items:center;gap:3px;margin-left:8px;
-  padding:1px 6px;font-size:10.5px;font-weight:700;
-  background:#fef2f2;border:1px solid #fecaca;color:#dc2626;border-radius:4px;letter-spacing:.02em}
+  padding:1px 6px;font-size:10.5px;font-weight:600;
+  background:#f3f4f6;border:1px solid var(--border);color:var(--text-sub);border-radius:4px;letter-spacing:.02em}
 .song-created-mark i{font-size:9.5px}
-body.dark .song-created-mark{background:#3f1d1d;border-color:#7f1d1d;color:#fca5a5}
+body.dark .song-created-mark{background:#262626;border-color:#3f3f46;color:#a1a1aa}
 .count-line .created-sum{margin-left:10px;color:#dc2626;font-weight:700}
 body.dark .count-line .created-sum{color:#fca5a5}
 
@@ -1052,15 +1052,13 @@ function buildCoolCard(w, rank, cat){
   const opTag = `<span class="type-pill tp-op">OP <b>${opVal}</b></span>`;
   const edTag = `<span class="type-pill tp-ed">ED <b>${edVal}</b></span>`;
   const inTag = `<span class="type-pill tp-in">IN <b>${inVal}</b></span>`;
-  // 作品単位の作成数合計（赤字）
-  const createdTag = (w.total_created||0) > 0
-    ? `<span class="type-pill tp-created" title="作成数の合計"><i class="fas fa-check"></i>作成 <b>${w.total_created}</b></span>`
-    : '';
+  // 作品単位の作成数合計は表示しない（曲ごとの作成マークのみ表示）
+  const createdTag = '';
   let songsHtml = '';
   w.songs.forEach(s=>{
     const sm = `${flatMetricHtml('人数',s.user_count,'user')}${flatMetricHtml('歌唱数',s.count,'song')}`;
     const createdMark = (s.creation_count||0) > 0
-      ? `<span class="song-created-mark" title="offline_list 内の作成数"><i class="fas fa-check"></i>作成${s.creation_count>1?' '+s.creation_count:''}</span>`
+      ? `<span class="song-created-mark" title="offline_list 内の作成数">作成${s.creation_count}</span>`
       : '';
     songsHtml += `<div class="song-row">
       ${typeChipHtml(s.type)}
@@ -1102,10 +1100,9 @@ function renderCool(){
     return bc-ac;
   });
   document.getElementById('coolCount').innerText = works.length;
-  // 作成数の合計（赤字）
-  const totalCreated = works.reduce((s,w)=>s+(w.total_created||0), 0);
+  // 全体の「／ 作成 N」表記は非表示（要望により）
   const sumEl = document.getElementById('coolCreatedSum');
-  if(sumEl) sumEl.innerText = totalCreated>0 ? `／ 作成 ${totalCreated}` : '';
+  if(sumEl) sumEl.innerText = '';
   const list = document.getElementById('coolList');
   if(works.length===0){list.innerHTML='<div class="empty">データがありません</div>';return;}
   let html = '';
@@ -1323,9 +1320,11 @@ async function envCsvSave(){
   if(!confirm('cool_analysis.csv を保存します。よろしいですか？')) return;
   showCsvMsg('保存中...', '');
   try{
+    // Content-Type を text/plain にすることで CORS preflight (OPTIONS) を回避する。
+    // GAS は OPTIONS をサポートしないため application/json だと "Failed to fetch" になる。
     const res = await fetch(GAS_URL, {
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
       body: JSON.stringify({filename:'cool_analysis.csv', content:content})
     });
     if(!res.ok){ showCsvMsg('保存失敗: HTTP '+res.status, 'error'); return; }
