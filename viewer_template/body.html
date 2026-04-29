@@ -1,0 +1,289 @@
+<body>
+
+<div class="app-header">
+  <div class="brand">Karaoke Viewer</div>
+  <button class="theme-toggle" id="themeToggle" type="button" title="ダークモード切替" aria-label="ダークモード切替"><i class="fas fa-moon"></i></button>
+</div>
+
+<div class="viewer-top-cards">
+  <div class="viewer-top-card">
+    <div class="ico"><i class="fas fa-user"></i></div>
+    <div style="flex:1;min-width:0">
+      <div class="lbl">歌唱者 (マイリスト用)</div>
+      <input type="text" id="viewerSinger" placeholder="未入力">
+    </div>
+  </div>
+  <div class="viewer-top-card">
+    <div class="ico" style="background:var(--green-bg);color:var(--green)"><i class="fas fa-desktop"></i></div>
+    <div style="flex:1;min-width:0">
+      <div class="lbl">機材係 (部屋) 選択</div>
+      <button type="button" class="room-pick-btn" id="roomPickBtn">
+        <span id="roomPickLabel">つぼはち部屋</span>
+        <span class="room-pick-port" id="roomPickPort">11059</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="tabs-wrap">
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="cool"><i class="far fa-clock"></i> クール集計</button>
+    <button class="tab-btn" data-tab="ranking"><i class="fas fa-trophy"></i> ランキング</button>
+    <button class="tab-btn" data-tab="trend"><i class="fas fa-chart-line"></i> 推移</button>
+    <button class="tab-btn" data-tab="mylist"><i class="fas fa-bookmark"></i> マイリスト</button>
+  </div>
+</div>
+
+<div class="update-line"><i class="far fa-clock" style="margin-right:4px"></i><span id="updateLine">__UPDATE__ 更新</span></div>
+
+<!-- Cool -->
+<div class="tab-content active" id="tab-cool">
+  <div class="tab-toolbar">
+    <div class="toolbar-row">
+      <select class="pill-select" id="coolCat"></select>
+      <select class="pill-select" id="coolSort">
+        <option value="user">人気順 (人数)</option>
+        <option value="count" selected>人気順 (歌唱数)</option>
+        <option value="name">作品名順</option>
+        <option value="created">作成数順</option>
+      </select>
+    </div>
+  </div>
+  <div class="count-line"><i class="far fa-bookmark"></i><span id="coolCount">0</span> 作品</div>
+  <div id="coolList"></div>
+</div>
+
+<!-- Ranking -->
+<div class="tab-content" id="tab-ranking">
+  <div class="tab-toolbar">
+    <div class="toolbar-row">
+      <select class="pill-select" id="rankCat"></select>
+      <select class="pill-select" id="rankMode">
+        <option value="count">歌唱数ランキング</option>
+        <option value="user">歌唱人数ランキング</option>
+      </select>
+    </div>
+  </div>
+  <div class="count-line"><i class="fas fa-list-ol"></i><span id="rankCount">0</span> 件</div>
+  <div id="rankList"></div>
+</div>
+
+<!-- Trend -->
+<div class="tab-content" id="tab-trend">
+  <div class="tab-toolbar">
+    <div class="toolbar-row">
+      <select class="pill-select" id="trendPeriod"></select>
+      <select class="pill-select" id="trendSort">
+        <option value="surge">急上昇順</option>
+        <option value="new">新規ランクイン順</option>
+        <option value="max">最大伸び順</option>
+      </select>
+      <select class="pill-select" id="trendMode">
+        <option value="count">歌唱数</option>
+        <option value="user">歌唱人数</option>
+      </select>
+    </div>
+  </div>
+  <div id="trendBody"></div>
+</div>
+
+<!-- Mylist -->
+<div class="tab-content" id="tab-mylist">
+  <div class="ml-layout">
+    <div class="ml-side">
+      <!-- Input form -->
+      <div class="ml-card" id="mlFormCard">
+        <h3><i class="fas fa-plus" id="mlFormIcon"></i> <span id="mlFormTitle">新規登録</span></h3>
+        <div class="ml-field">
+          <label>SINGER</label>
+          <input type="text" id="mlInputSinger" placeholder="歌唱者名を入力">
+        </div>
+        <div class="ml-field">
+          <label>INFO</label>
+          <input type="text" id="mlInputWork" placeholder="作品名" style="margin-bottom:6px">
+          <input type="text" id="mlInputArtist" placeholder="歌手名">
+        </div>
+        <div class="ml-field">
+          <label>SONG</label>
+          <input type="text" id="mlInputSong" class="song" placeholder="曲名 (必須)">
+        </div>
+        <div class="ml-checks">
+          <label><input type="checkbox" id="mlInputPart"> <span style="color:#dc2626;font-weight:700">パート分け</span></label>
+          <label><input type="checkbox" id="mlInputPrac"> <span style="color:#2563eb;font-weight:700">練習中</span></label>
+          <label><input type="checkbox" id="mlInputRev"> <span style="color:#a16207;font-weight:700">要復習</span></label>
+        </div>
+        <div class="ml-private-row">
+          <div class="ml-checks">
+            <label><input type="checkbox" id="mlInputPrivate"> <span style="color:#7c3aed;font-weight:700">非公開設定</span></label>
+          </div>
+          <div id="mlPrivatePwWrap" style="display:none;margin-top:6px">
+            <input type="text" id="mlInputPw" placeholder="閲覧用パスワードを設定" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--bg);color:var(--text);outline:none">
+          </div>
+        </div>
+        <button class="ml-submit-btn" id="mlSubmitBtn">リストに追加</button>
+        <button class="ml-cancel-btn" id="mlCancelBtn">キャンセル</button>
+      </div>
+
+      <!-- Filter -->
+      <div class="ml-card">
+        <h3><i class="fas fa-sliders"></i> 表示フィルター</h3>
+        <div class="ml-field">
+          <label>歌唱者</label>
+          <select id="mlSingerSelect">
+            <option value="ALL">全ての歌唱者を表示</option>
+          </select>
+          <div style="text-align:right;font-size:10px;color:var(--text-mute);margin-top:4px" id="mlSingerCount"></div>
+        </div>
+        <div class="ml-field">
+          <label>リスト内検索</label>
+          <div class="ml-search-wrap">
+            <input type="text" id="mlSearchInput" placeholder="スペースでAND検索">
+            <button class="ml-search-btn" id="mlSearchBtn"><i class="fas fa-search"></i></button>
+          </div>
+        </div>
+        <div class="ml-field">
+          <label>絞り込み</label>
+          <div class="ml-checks">
+            <label><input type="checkbox" id="mlFilterPart"> <span style="font-size:11px">パート分け</span></label>
+            <label><input type="checkbox" id="mlFilterPrac"> <span style="font-size:11px">練習中</span></label>
+            <label><input type="checkbox" id="mlFilterRev"> <span style="font-size:11px">要復習</span></label>
+          </div>
+        </div>
+        <div class="ml-field" style="border-top:1px dashed var(--border);padding-top:10px;margin-top:6px">
+          <label>非公開リスト閲覧</label>
+          <div class="ml-search-wrap">
+            <input type="password" id="mlViewPw" placeholder="パスワードを入力">
+            <button class="ml-search-btn" id="mlViewPwApply">適用</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main list -->
+    <div class="ml-main-card">
+      <div class="ml-toolbar">
+        <h2><i class="fas fa-list-music" id="mlListIcon"></i> <span id="mlListTitle">All Songs</span></h2>
+        <div class="count" id="mlListCount">0 tracks</div>
+      </div>
+      <div class="ml-list" id="mlList"></div>
+      <div class="ml-pager" id="mlPager"></div>
+    </div>
+  </div>
+  <div class="ml-footer">
+    <div class="ml-status" id="mlStatus"></div>
+    <div class="ml-footer-btns">
+      <button class="ml-fbtn" id="mlCsvBtn"><i class="fas fa-file-csv"></i> CSV</button>
+      <input type="file" id="mlImportJson" accept=".json" style="display:none">
+      <input type="file" id="mlImportCsv" accept=".csv" style="display:none">
+      <button class="ml-fbtn" id="mlImportJsonBtn"><i class="fas fa-folder-open"></i> 取込</button>
+      <button class="ml-fbtn primary" id="mlSyncBtn"><i class="fas fa-cloud-upload-alt"></i> 同期して保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Existing singer modal -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="ttl" id="modalTitle"></div>
+      <button class="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<!-- Room selection modal -->
+<div class="room-modal-overlay" id="roomModalOverlay">
+  <div class="room-modal">
+    <div class="room-modal-head">
+      <div class="ttl"><i class="fas fa-desktop"></i> 機材係 (部屋) 選択</div>
+      <button class="room-modal-close" id="roomModalClose"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="room-modal-body">
+      <div class="room-modal-section">
+        <div class="room-modal-label">検索方式の設定 (基本)</div>
+        <div class="room-search-mode">
+          <label><input type="radio" name="rmSearchType" value="ykr"> ゆかりすたー検索</label>
+          <label><input type="radio" name="rmSearchType" value="eve"> Everything検索</label>
+        </div>
+        <div class="room-modal-note">※ポート番号 11058(すみた部屋)、11060(れん部屋) を選択した場合は自動的にEverything検索になります。</div>
+      </div>
+      <div class="room-modal-section">
+        <div class="room-modal-label">ポート番号を直接入力 (任意)</div>
+        <div class="room-port-input-wrap">
+          <input type="number" id="roomPortInput" class="room-port-input" placeholder="11059">
+          <button class="room-port-set-btn" id="roomPortSet">設定</button>
+        </div>
+      </div>
+      <div class="room-grid-buttons" id="roomGridBtns"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Mylist register modal (from cool/ranking/trend rows) -->
+<div class="room-modal-overlay" id="mlRegOverlay">
+  <div class="room-modal mlreg-modal">
+    <div class="room-modal-head">
+      <div class="ttl" style="color:var(--accent)"><i class="fas fa-bookmark"></i> マイリスト登録</div>
+      <button class="room-modal-close" id="mlRegClose"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="room-modal-body">
+      <div class="mlreg-row">
+        <div class="lbl">歌唱者</div>
+        <input type="text" id="mlRegSinger" placeholder="歌唱者名 (上部の歌唱者欄から自動入力)">
+      </div>
+      <div class="mlreg-row">
+        <div class="lbl">作品名</div>
+        <div class="val" id="mlRegWork"></div>
+      </div>
+      <div class="mlreg-row">
+        <div class="lbl">歌手名</div>
+        <div class="val" id="mlRegArtist"></div>
+      </div>
+      <div class="mlreg-row">
+        <div class="lbl">曲名</div>
+        <div class="val" id="mlRegSong" style="font-weight:700"></div>
+      </div>
+      <div class="mlreg-checks">
+        <label><input type="checkbox" id="mlRegPart"> <span style="color:#dc2626;font-weight:700">パート分け</span></label>
+        <label><input type="checkbox" id="mlRegPrac"> <span style="color:#2563eb;font-weight:700">練習中</span></label>
+        <label><input type="checkbox" id="mlRegRev"> <span style="color:#a16207;font-weight:700">要復習</span></label>
+      </div>
+      <div class="mlreg-actions">
+        <button class="mlreg-cancel" id="mlRegCancel">キャンセル</button>
+        <button class="mlreg-submit" id="mlRegSubmit"><i class="fas fa-bookmark"></i> 登録</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CSV modal (mylist) -->
+<div class="room-modal-overlay" id="mlCsvOverlay">
+  <div class="room-modal csv-modal">
+    <div class="room-modal-head">
+      <div class="ttl" style="color:var(--green)"><i class="fas fa-file-csv"></i> CSV操作</div>
+      <button class="room-modal-close" id="mlCsvClose"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="room-modal-body csv-modal-body">
+      <p>用途に合わせて出力形式を選択してください。<br>※非公開設定の曲はエクスポートされません。</p>
+      <button class="csv-modal-btn outline" id="mlCsvExportAll"><i class="fas fa-download"></i> 全件エクスポート (バックアップ)</button>
+      <button class="csv-modal-btn outline-gray" id="mlCsvExportTpl"><i class="fas fa-file"></i> 様式のみエクスポート (追加用)</button>
+      <div class="csv-modal-divider"></div>
+      <p>CSVファイルを読み込んでリストを更新・追加します。<br>※歌唱者と曲名が一致するデータは上書き更新されます。</p>
+      <button class="csv-modal-btn solid" id="mlCsvImportBtn"><i class="fas fa-upload"></i> CSVインポート (更新/追加)</button>
+      <div class="csv-format-note">
+        <strong>CSV形式:</strong><br>
+        歌唱者, 作品名, 歌手, 曲名, パート分け(0/1), 練習中(0/1), 要復習(0/1)<br>
+        ※文字コード: UTF-8推奨
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Custom dialog (alert/confirm) -->
+<div class="cd-overlay" id="cdOverlay">
+  <div class="cd-dialog">
+    <div class="msg" id="cdMsg"></div>
+    <div class="cd-actions" id="cdActions"></div>
+  </div>
+</div>
