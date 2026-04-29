@@ -165,6 +165,12 @@
         <h2><i class="fas fa-list-music" id="mlListIcon"></i> <span id="mlListTitle">All Songs</span></h2>
         <div class="count" id="mlListCount">0 tracks</div>
       </div>
+      <div class="ml-bulkbar" id="mlBulkBar">
+        <label><input type="checkbox" id="mlBulkAll"> このページを全選択</label>
+        <span class="ml-bulk-spacer"></span>
+        <span class="ml-bulk-count" id="mlBulkCount">0 件選択</span>
+        <button class="ml-bulk-del" id="mlBulkDelBtn" disabled><i class="fas fa-trash"></i> 一括削除</button>
+      </div>
       <div class="ml-list" id="mlList"></div>
       <div class="ml-pager" id="mlPager"></div>
     </div>
@@ -173,9 +179,8 @@
     <div class="ml-status" id="mlStatus"></div>
     <div class="ml-footer-btns">
       <button class="ml-fbtn" id="mlCsvBtn"><i class="fas fa-file-csv"></i> CSV</button>
-      <input type="file" id="mlImportJson" accept=".json" style="display:none">
       <input type="file" id="mlImportCsv" accept=".csv" style="display:none">
-      <button class="ml-fbtn" id="mlImportJsonBtn"><i class="fas fa-folder-open"></i> 取込</button>
+      <button class="ml-fbtn" id="mlReloadBtn" title="サーバー上の最新データを再取得"><i class="fas fa-cloud-download-alt"></i> サーバーから再読込</button>
       <button class="ml-fbtn primary" id="mlSyncBtn"><i class="fas fa-cloud-upload-alt"></i> 同期して保存</button>
     </div>
   </div>
@@ -268,13 +273,11 @@
       <p>用途に合わせて出力形式を選択してください。<br>※非公開設定の曲はエクスポートされません。</p>
       <button class="csv-modal-btn outline" id="mlCsvExportAll"><i class="fas fa-download"></i> 全件エクスポート (バックアップ)</button>
       <button class="csv-modal-btn outline-gray" id="mlCsvExportTpl"><i class="fas fa-file"></i> 様式のみエクスポート (追加用)</button>
-      <div class="csv-modal-divider"></div>
-      <p>CSVファイルを読み込んでリストを更新・追加します。<br>※歌唱者と曲名が一致するデータは上書き更新されます。</p>
-      <button class="csv-modal-btn solid" id="mlCsvImportBtn"><i class="fas fa-upload"></i> CSVインポート (更新/追加)</button>
       <div class="csv-format-note">
         <strong>CSV形式:</strong><br>
         歌唱者, 作品名, 歌手, 曲名, パート分け(0/1), 練習中(0/1), 要復習(0/1)<br>
-        ※文字コード: UTF-8推奨
+        ※文字コード: UTF-8推奨<br>
+        ※リポジトリ内に <code>mylist_backup.csv</code> として日次バックアップが自動保存されます。
       </div>
     </div>
   </div>

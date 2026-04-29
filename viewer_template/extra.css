@@ -24,35 +24,31 @@
 .room-pick-btn .room-pick-port{font-size:11px;color:var(--text-mute);font-weight:600}
 .room-pick-btn:hover{opacity:0.85}
 
-/* Search button on song rows */
-.viewer-search-btn{
-  width:36px;height:36px;border-radius:50%;border:1px solid var(--green-bd);
-  background:var(--green-bg);color:var(--green);cursor:pointer;
-  display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;
-  font-size:14px;transition:all .15s;
+/* Search + Mylist register icon buttons (subtle - small icon-only) */
+.viewer-icon-btn{
+  width:24px;height:24px;border-radius:6px;border:none;background:transparent;
+  color:var(--text-mute);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;
+  font-size:12px;flex-shrink:0;padding:0;transition:color .12s, background .12s;
 }
-.viewer-search-btn:hover{background:var(--green);color:#fff}
-.viewer-search-btn:active{transform:scale(0.95)}
+.viewer-icon-btn:hover{color:var(--accent);background:var(--accent-bg)}
+.viewer-icon-btn.ml:hover{color:var(--accent)}
+.viewer-icon-btn.js-search:hover{color:var(--green);background:var(--green-bg)}
+.viewer-icon-btn:active{transform:scale(0.92)}
+body.dark .viewer-icon-btn:hover{background:var(--accent-bg)}
 
-/* Mylist add button on song rows */
-.viewer-mylist-btn{
-  display:inline-flex;align-items:center;gap:4px;
-  padding:3px 8px;border-radius:999px;border:1px solid var(--accent-soft);
-  background:var(--accent-bg);color:var(--accent);font-size:11px;font-weight:700;cursor:pointer;
-  margin-bottom:4px;white-space:nowrap;
+/* Action group placed at the right edge of cool song-row / rank/notable/pickup rows */
+.viewer-row-actions{
+  display:inline-flex;align-items:center;gap:2px;flex-shrink:0;margin-left:6px;
 }
-.viewer-mylist-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
-.viewer-mylist-btn:active{transform:scale(0.95)}
-.viewer-mylist-btn i{font-size:10px}
+.song-row .viewer-row-actions{margin-left:8px}
 
-/* Song row layout overrides for new buttons */
-.song-row .viewer-row-actions{display:flex;align-items:center;gap:6px;flex-shrink:0}
-.song-row .viewer-metrics-stack{display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0}
+/* Action group placed inside type-inline rows pushes to the right edge */
+.rank-types-inline .viewer-row-actions,
+.notable-types .viewer-row-actions,
+.pickup-types-inline .viewer-row-actions{margin-left:auto}
 
-/* Ranking / Trend rows: ensure search button + mylist button fit */
-.rank-row-flat .viewer-search-btn,
-.notable-row .viewer-search-btn,
-.trend-pickup-row .viewer-search-btn{flex-shrink:0}
+/* Cool song-row: action group sits to the right of metrics */
+.song-row .song-metrics .viewer-row-actions{margin-left:6px}
 
 /* Room modal */
 .room-modal-overlay{
@@ -219,8 +215,42 @@
   cursor:pointer;font-size:12px;font-weight:700;display:inline-flex;align-items:center;gap:5px;
 }
 .ml-fbtn:hover{background:var(--accent-bg);color:var(--accent);border-color:var(--accent-soft)}
-.ml-fbtn.primary{background:var(--primary);color:#fff;border-color:var(--primary)}
-.ml-fbtn.primary:hover{filter:brightness(1.15);background:var(--primary)}
+.ml-fbtn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.ml-fbtn.primary:hover{filter:brightness(1.08);background:var(--accent);color:#fff;border-color:var(--accent)}
+.ml-fbtn.danger{background:#fee2e2;color:#b91c1c;border-color:#fecaca}
+.ml-fbtn.danger:hover{background:#dc2626;color:#fff;border-color:#dc2626}
+body.dark .ml-fbtn.danger{background:#3f1d1d;color:#fca5a5;border-color:#7f1d1d}
+body.dark .ml-fbtn.danger:hover{background:#dc2626;color:#fff;border-color:#dc2626}
+/* ダークモードでは --accent が淡いため白文字の primary ボタンが読みづらい。
+   濃い indigo を使ってコントラストを確保する。 */
+body.dark .ml-fbtn.primary{background:#4f46e5;color:#fff;border-color:#4f46e5}
+body.dark .ml-fbtn.primary:hover{background:#4338ca;color:#fff;border-color:#4338ca;filter:none}
+
+/* Bulk select bar above the mylist */
+.ml-bulkbar{
+  display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--border-soft);
+  background:var(--bg);font-size:12px;color:var(--text-sub);
+}
+.ml-bulkbar label{display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-weight:600}
+.ml-bulkbar input[type="checkbox"]{cursor:pointer;width:14px;height:14px}
+.ml-bulkbar .ml-bulk-spacer{flex:1}
+.ml-bulkbar .ml-bulk-count{font-weight:700;color:var(--accent)}
+.ml-bulkbar .ml-bulk-del{
+  padding:5px 12px;background:#fee2e2;color:#b91c1c;border:1px solid #fecaca;border-radius:6px;
+  font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:4px;
+}
+.ml-bulkbar .ml-bulk-del:hover{background:#dc2626;color:#fff;border-color:#dc2626}
+.ml-bulkbar .ml-bulk-del:disabled{opacity:0.4;cursor:not-allowed}
+body.dark .ml-bulkbar{background:var(--bg)}
+body.dark .ml-bulkbar .ml-bulk-del{background:#3f1d1d;color:#fca5a5;border-color:#7f1d1d}
+body.dark .ml-bulkbar .ml-bulk-del:hover{background:#dc2626;color:#fff}
+
+/* Mylist row checkbox column */
+.ml-row{grid-template-columns:24px 28px 1fr auto !important}
+.ml-row .ml-check{display:flex;align-items:center;justify-content:center}
+.ml-row .ml-check input[type="checkbox"]{cursor:pointer;width:15px;height:15px}
+.ml-row.selected{background:var(--accent-bg);border-color:var(--accent-soft)}
+body.dark .ml-row.selected{background:#1e1b4b;border-color:#4338ca}
 
 /* CSV modal */
 .csv-modal{max-width:420px}

@@ -1,0 +1,47 @@
+name: Mylist Backup
+
+# GAS 上に保存されたマイリストを定期的に取得し、リポジトリ内に
+# `mylist_backup.csv` / `mylist_backup.json` として保存する。
+# GAS が消えた場合や同期エラーで意図せずデータが失われた場合の救済策として、
+# Git の履歴をバックアップとして利用する。
+
+on:
+  schedule:
+    # 6 時間ごと (UTC)
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mylist-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.9'
+
+      - name: Run backup script
+        run: python scripts/backup_mylist.py
+
+      - name: Commit and push if changed
+        run: |
+          git config --global user.name 'GitHub Action'
+          git config --global user.email 'action@github.com'
+          git add mylist_backup.csv mylist_backup.json 2>/dev/null || true
+          if ! git diff --staged --quiet; then
+            git commit -m "Auto backup mylist"
+            git pull --rebase origin main
+            git push origin main
+          else
+            echo "No changes to commit."
+          fi

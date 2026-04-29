@@ -185,29 +185,31 @@ function closeModal(){ document.getElementById('modalOverlay').classList.remove(
 document.getElementById('modalOverlay').addEventListener('click', e=>{ if(e.target.id==='modalOverlay') closeModal(); });
 function toggleCard(h){ h.parentElement.classList.toggle('expanded'); }
 
-// Type chips/pills
+// Type chips/pills (index.html 準拠 — type-chip でも tp-op/tp-ed/tp-in を使う)
+function typeClass(t){
+  const u = String(t||'').toUpperCase();
+  if(u.indexOf('OP')>=0) return 'tp-op';
+  if(u.indexOf('ED')>=0) return 'tp-ed';
+  if(u.indexOf('IN')>=0) return 'tp-in';
+  return 'tp-none';
+}
 function typeChipHtml(t){
-  if(t==='OP') return '<div class="type-chip tc-op">OP</div>';
-  if(t==='ED') return '<div class="type-chip tc-ed">ED</div>';
-  if(t==='IN') return '<div class="type-chip tc-in">IN</div>';
-  return '<div class="type-chip tc-other">'+escHtml(t||'')+'</div>';
+  return '<div class="type-chip '+typeClass(t)+'">'+escHtml(t||'-')+'</div>';
 }
 function typePillHtml(t){
-  if(t==='OP') return '<span class="type-pill tp-op">OP</span>';
-  if(t==='ED') return '<span class="type-pill tp-ed">ED</span>';
-  if(t==='IN') return '<span class="type-pill tp-in">IN</span>';
-  return '<span class="type-pill tp-other">'+escHtml(t||'')+'</span>';
+  return '<span class="type-pill '+typeClass(t)+'">'+escHtml(t||'-')+'</span>';
 }
-function flatMetricHtml(label, val, kind){
-  return '<div class="flat-metric flat-'+kind+'"><div class="lbl">'+label+'</div><div class="val">'+val+'</div></div>';
+function flatMetricHtml(label, value, kind){
+  const ic = kind==='user' ? '<i class="fas fa-users"></i>' : '<i class="fas fa-microphone"></i>';
+  return '<div class="flat-metric"><div class="lbl">'+label+'</div><div class="val-row"><b>'+value+'</b><div class="icon-circle '+kind+'">'+ic+'</div></div></div>';
 }
 
-// Search button + Mylist register button (for cool/ranking/trend rows)
+// Subtle search + mylist register icon buttons (for cool/ranking/trend rows)
 function rowActionsHtml(anime, song, artist){
   const data = 'data-anime="'+escAttr(anime)+'" data-song="'+escAttr(song)+'" data-artist="'+escAttr(artist||'')+'"';
-  const search = '<button type="button" class="viewer-search-btn js-search" '+data+' title="検索"><i class="fas fa-search"></i></button>';
-  const mylist = '<button type="button" class="viewer-mylist-btn js-mylist-add" '+data+' title="マイリストに登録"><i class="fas fa-bookmark"></i> マイリスト</button>';
-  return {search, mylist};
+  const search = '<button type="button" class="viewer-icon-btn js-search" '+data+' title="検索"><i class="fas fa-search"></i></button>';
+  const mylist = '<button type="button" class="viewer-icon-btn js-mylist-add ml" '+data+' title="マイリストに登録"><i class="far fa-bookmark"></i></button>';
+  return {search, mylist, group: '<div class="viewer-row-actions">'+mylist+search+'</div>'};
 }
 
 function buildCoolCard(w, rank, cat){
@@ -223,6 +225,7 @@ function buildCoolCard(w, rank, cat){
   let songsHtml = '';
   w.songs.forEach(s=>{
     const acts = rowActionsHtml(w.anime, s.song, s.artist);
+    const sm = flatMetricHtml('人数',s.user_count,'user')+flatMetricHtml('歌唱数',s.count,'song');
     const createdMark = (s.creation_count||0) > 0
       ? '<span class="song-created-mark" title="offline_list 内の作成数">作成'+s.creation_count+'</span>'
       : '';
@@ -232,11 +235,7 @@ function buildCoolCard(w, rank, cat){
         + '<div class="song-name">'+escHtml(s.song)+createdMark+'</div>'
         + '<div class="song-artist">'+escHtml(s.artist)+'</div>'
       + '</div>'
-      + '<div class="viewer-row-actions">'+acts.search+'</div>'
-      + '<div class="viewer-metrics-stack">'
-        + acts.mylist
-        + '<div class="song-metrics">'+flatMetricHtml('人数',s.user_count,'user')+flatMetricHtml('歌唱数',s.count,'song')+'</div>'
-      + '</div>'
+      + '<div class="song-metrics">'+sm+acts.group+'</div>'
       + '</div>';
   });
   return '<div class="card">'
@@ -300,10 +299,9 @@ function buildRankCardHtml(r, mode){
   const acts = rowActionsHtml(r.anime, r.song, r.artist);
   return '<div class="rank-row-flat '+grade+'">'
     + '<div class="num-badge '+grade+'">'+r.rank+'</div>'
-    + '<div class="rank-info"><div class="rank-anime">'+escHtml(r.anime)+'</div><div class="rank-sub">'+escHtml(r.song)+' / '+escHtml(r.artist)+'</div><div class="rank-types-inline">'+typePillHtml(r.type)+'</div></div>'
-    + '<div class="viewer-row-actions">'+acts.search+'</div>'
-    + '<div class="viewer-metrics-stack">'+acts.mylist
-    + '<div class="song-metrics">'+flatMetricHtml('人数',r.user_count,'user')+flatMetricHtml('歌唱数',r.count,'song')+'</div></div>'
+    + '<div class="rank-info"><div class="rank-anime">'+escHtml(r.anime)+'</div><div class="rank-sub">'+escHtml(r.song)+' / '+escHtml(r.artist)+'</div><div class="rank-types-inline">'+typePillHtml(r.type)+acts.group+'</div></div>'
+    + flatMetricHtml('人数',r.user_count,'user')
+    + flatMetricHtml('歌唱数',r.count,'song')
     + '</div>';
 }
 function renderRanking(){
@@ -379,12 +377,10 @@ function buildTrendHtml(){
       + '<div class="trend-pickup-head"><i class="fas fa-fire"></i> 急上昇ピックアップ</div>'
       + '<div class="trend-pickup-row">'
         + '<div class="num-badge">1</div>'
-        + '<div class="pickup-info"><div class="pickup-anime">'+escHtml(p.anime)+'</div><div class="pickup-sub">'+escHtml(p.song)+' / '+escHtml(p.artist)+'</div><div class="pickup-types-inline">'+typePillHtml(p.type)+'</div></div>'
-        + '<div class="viewer-row-actions">'+acts.search+'</div>'
-        + '<div class="viewer-metrics-stack">'+acts.mylist
-          + '<div class="song-metrics">'+flatMetricHtml('人数',p.cur_user||0,'user')+flatMetricHtml('歌唱数',p.cur_count||0,'song')+'</div>'
-          + growthBadgeHtml(p, mode)
-        + '</div>'
+        + '<div class="pickup-info"><div class="pickup-anime">'+escHtml(p.anime)+'</div><div class="pickup-sub">'+escHtml(p.song)+' / '+escHtml(p.artist)+'</div><div class="pickup-types-inline">'+typePillHtml(p.type)+acts.group+'</div></div>'
+        + flatMetricHtml('人数',p.cur_user||0,'user')
+        + flatMetricHtml('歌唱数',p.cur_count||0,'song')
+        + growthBadgeHtml(p, mode)
       + '</div></div>';
   }
   if(items.length>1){
@@ -394,12 +390,10 @@ function buildTrendHtml(){
       const acts = rowActionsHtml(it.anime, it.song, it.artist);
       html += '<div class="notable-row">'
         + '<div class="num-badge">'+rank+'</div>'
-        + '<div class="notable-info"><div class="notable-anime">'+escHtml(it.anime)+'</div><div class="notable-artist">'+escHtml(it.song)+' / '+escHtml(it.artist)+'</div><div class="notable-types">'+typePillHtml(it.type)+'</div></div>'
-        + '<div class="viewer-row-actions">'+acts.search+'</div>'
-        + '<div class="viewer-metrics-stack">'+acts.mylist
-          + '<div class="song-metrics">'+flatMetricHtml('人数',it.cur_user||0,'user')+flatMetricHtml('歌唱数',it.cur_count||0,'song')+'</div>'
-          + growthBadgeHtml(it, mode)
-        + '</div>'
+        + '<div class="notable-info"><div class="notable-anime">'+escHtml(it.anime)+'</div><div class="notable-artist">'+escHtml(it.song)+' / '+escHtml(it.artist)+'</div><div class="notable-types">'+typePillHtml(it.type)+acts.group+'</div></div>'
+        + flatMetricHtml('人数',it.cur_user||0,'user')
+        + flatMetricHtml('歌唱数',it.cur_count||0,'song')
+        + growthBadgeHtml(it, mode)
       + '</div>';
     });
   }
@@ -431,7 +425,7 @@ document.body.addEventListener('click', function(e){
   // For cool song-row body click -> show singer modal (existing behavior)
   const sr = e.target.closest('.song-row');
   if(sr){
-    if(e.target.closest('.viewer-search-btn, .viewer-mylist-btn, button, a')) return;
+    if(e.target.closest('.viewer-icon-btn, button, a')) return;
     const nameEl = sr.querySelector('.song-name');
     if(!nameEl) return;
     // Find anime by walking up to .card
@@ -497,7 +491,6 @@ let mlSearchQuery = '';
 let mlCurrentPage = 1;
 let mlEditingId = null;
 let mlFilterTags = {isPartDivision:false, isPracticing:false, isReviewNeeded:false};
-let mlForceOverwrite = false;
 
 try { mlSongs = JSON.parse(localStorage.getItem('myMusicList')||'[]'); } catch(e){ mlSongs = []; }
 if(!Array.isArray(mlSongs)) mlSongs = [];
@@ -533,11 +526,29 @@ const mlEls = {
   title: document.getElementById('mlListTitle'),
   status: document.getElementById('mlStatus'),
   csvBtn: document.getElementById('mlCsvBtn'),
-  importJsonBtn: document.getElementById('mlImportJsonBtn'),
-  importJson: document.getElementById('mlImportJson'),
-  importCsv: document.getElementById('mlImportCsv'),
-  syncBtn: document.getElementById('mlSyncBtn')
+  reloadBtn: document.getElementById('mlReloadBtn'),
+  syncBtn: document.getElementById('mlSyncBtn'),
+  bulkAll: document.getElementById('mlBulkAll'),
+  bulkCount: document.getElementById('mlBulkCount'),
+  bulkDel: document.getElementById('mlBulkDelBtn')
 };
+
+// Multi-select state
+let mlSelectedIds = new Set();
+let mlCurrentPageIds = [];
+
+function mlUpdateBulkBar(){
+  if(!mlEls.bulkAll) return;
+  // Sync "select all" checkbox state with current page selection
+  const pageIds = mlCurrentPageIds;
+  const allChecked = pageIds.length>0 && pageIds.every(id=>mlSelectedIds.has(id));
+  const someChecked = pageIds.some(id=>mlSelectedIds.has(id));
+  mlEls.bulkAll.checked = allChecked;
+  mlEls.bulkAll.indeterminate = !allChecked && someChecked;
+  const n = mlSelectedIds.size;
+  mlEls.bulkCount.innerText = n + ' 件選択';
+  mlEls.bulkDel.disabled = (n === 0);
+}
 
 function mlCleanForSearch(str){
   if(!str) return '';
@@ -590,7 +601,9 @@ function mlRender(){
 
   if(slice.length === 0){
     mlEls.list.innerHTML = '<div class="ml-empty"><i class="far fa-folder-open" style="font-size:32px;opacity:0.3"></i><div style="margin-top:8px">登録された曲はありません。</div></div>';
+    mlCurrentPageIds = [];
   } else {
+    mlCurrentPageIds = slice.map(s=>s.id);
     let html = '';
     slice.forEach(song=>{
       const displayIndex = mlSongs.indexOf(song) + 1;
@@ -603,7 +616,9 @@ function mlRender(){
       if(song.isReviewNeeded) tags += '<span class="ml-tag rv">要復習</span>';
       if(song.isPrivate) tags += '<span class="ml-tag pv">非公開</span>';
       const editing = song.id === mlEditingId;
-      html += '<div class="ml-row'+(editing?' editing':'')+'" data-id="'+escAttr(song.id)+'">'
+      const checked = mlSelectedIds.has(song.id);
+      html += '<div class="ml-row'+(editing?' editing':'')+(checked?' selected':'')+'" data-id="'+escAttr(song.id)+'">'
+        + '<div class="ml-check"><input type="checkbox" class="js-ml-sel" data-id="'+escAttr(song.id)+'"'+(checked?' checked':'')+'></div>'
         + '<div class="num">'+displayIndex+'</div>'
         + '<div class="info">'
           + '<div class="song">'+escHtml(song.song)+tags+'</div>'
@@ -621,6 +636,7 @@ function mlRender(){
     });
     mlEls.list.innerHTML = html;
   }
+  mlUpdateBulkBar();
 
   if(totalPages > 1){
     mlEls.pager.innerHTML = '<button id="mlPagePrev"'+(mlCurrentPage===1?' disabled':'')+'><i class="fas fa-chevron-left"></i></button>'
@@ -636,6 +652,15 @@ function mlRender(){
 }
 
 mlEls.list.addEventListener('click', e=>{
+  const cb = e.target.closest('.js-ml-sel');
+  if(cb){
+    const id = parseFloat(cb.getAttribute('data-id'));
+    if(cb.checked) mlSelectedIds.add(id); else mlSelectedIds.delete(id);
+    const row = cb.closest('.ml-row');
+    if(row) row.classList.toggle('selected', cb.checked);
+    mlUpdateBulkBar();
+    return;
+  }
   const ed = e.target.closest('.js-ml-edit');
   if(ed){ mlEdit(parseFloat(ed.getAttribute('data-id'))); return; }
   const up = e.target.closest('.js-ml-up');
@@ -645,6 +670,29 @@ mlEls.list.addEventListener('click', e=>{
   const dl = e.target.closest('.js-ml-del');
   if(dl){ mlDelete(parseFloat(dl.getAttribute('data-id'))); return; }
 });
+
+// Bulk select all on current page
+if(mlEls.bulkAll){
+  mlEls.bulkAll.addEventListener('change', ()=>{
+    const sel = mlEls.bulkAll.checked;
+    mlCurrentPageIds.forEach(id=>{ if(sel) mlSelectedIds.add(id); else mlSelectedIds.delete(id); });
+    mlRender();
+  });
+}
+if(mlEls.bulkDel){
+  mlEls.bulkDel.addEventListener('click', ()=>{
+    const ids = Array.from(mlSelectedIds);
+    if(ids.length===0) return;
+    showDialog(ids.length+'件のデータを削除します。\n本当によろしいですか？', 'confirm', ()=>{
+      mlSongs = mlSongs.filter(s=>!mlSelectedIds.has(s.id));
+      ids.forEach(id=>{ if(!mlDeletedIds.includes(id)) mlDeletedIds.push(id); });
+      localStorage.setItem('deletedIds', JSON.stringify(mlDeletedIds));
+      if(mlEditingId !== null && mlSelectedIds.has(mlEditingId)) mlCancelEdit();
+      mlSelectedIds.clear();
+      mlRender();
+    });
+  });
+}
 
 mlEls.singerSel.addEventListener('change', ()=>{ mlActiveTab = mlEls.singerSel.value; mlCurrentPage = 1; mlRender(); });
 mlEls.searchInput.addEventListener('keydown', e=>{ if(e.key==='Enter') mlTriggerSearch(); });
@@ -751,13 +799,12 @@ function mlMove(id, direction){
   }
 }
 
-// CSV modal
+// CSV modal (export only - import 機能は不要)
 mlEls.csvBtn.addEventListener('click', ()=>document.getElementById('mlCsvOverlay').classList.add('active'));
 document.getElementById('mlCsvClose').addEventListener('click', ()=>document.getElementById('mlCsvOverlay').classList.remove('active'));
 document.getElementById('mlCsvOverlay').addEventListener('click', e=>{ if(e.target.id==='mlCsvOverlay') document.getElementById('mlCsvOverlay').classList.remove('active'); });
 document.getElementById('mlCsvExportAll').addEventListener('click', ()=>mlExportCSV(true));
 document.getElementById('mlCsvExportTpl').addEventListener('click', ()=>mlExportCSV(false));
-document.getElementById('mlCsvImportBtn').addEventListener('click', ()=>mlEls.importCsv.click());
 function mlExportCSV(withData){
   const BOM = '\uFEFF';
   const header = ['歌唱者','作品名','歌手','曲名','パート分け','練習中','要復習'];
@@ -783,139 +830,106 @@ function mlExportCSV(withData){
   document.getElementById('mlCsvOverlay').classList.remove('active');
 }
 
-mlEls.importJsonBtn.addEventListener('click', ()=>mlEls.importJson.click());
-mlEls.importJson.addEventListener('change', function(){
-  const file = this.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = e=>{
-    try {
-      const d = JSON.parse(e.target.result);
-      if(Array.isArray(d)){
-        showDialog('ファイルから '+d.length+' 件のデータを読み込みました (JSON)。\n反映するには「同期して保存」を押してください。\n(次回保存時にサーバーのデータを完全に上書きします)', 'alert');
-        mlSongs = d;
-        mlForceOverwrite = true;
-        mlRender();
-      } else {
-        showDialog('JSONデータの形式が正しくありません。', 'alert');
-      }
-    } catch(err){ showDialog('ファイルの読み込みに失敗しました。', 'alert'); }
-  };
-  reader.readAsText(file);
-  this.value = '';
-});
-
-mlEls.importCsv.addEventListener('change', function(){
-  const file = this.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = e=>{
-    try { mlImportCSV(e.target.result); } catch(err){ showDialog('ファイルの読み込みに失敗しました。', 'alert'); }
-  };
-  reader.readAsText(file);
-  this.value = '';
-  document.getElementById('mlCsvOverlay').classList.remove('active');
-});
-function mlImportCSV(csvText){
-  const rows = csvText.split(/\r\n|\n/);
-  const dataRows = rows.slice(1).filter(r=>r.trim() !== '');
-  let added = 0, updated = 0;
-  dataRows.forEach(rowStr=>{
-    let row = []; let inQ = false; let cur = '';
-    for(let i=0;i<rowStr.length;i++){
-      const c = rowStr[i];
-      if(c === '"'){
-        if(i+1 < rowStr.length && rowStr[i+1] === '"'){ cur += '"'; i++; }
-        else inQ = !inQ;
-      } else if(c === ',' && !inQ){ row.push(cur); cur = ''; }
-      else { cur += c; }
-    }
-    row.push(cur);
-    row = row.map(f=>f.trim());
-    if(row.length < 4) return;
-    const newSinger = row[0], newWork = row[1], newArtist = row[2];
-    let newSong = row[3];
-    if(!newSong) return;
-    let isP = (row[4]==='1' || (row[4]||'').toLowerCase()==='true');
-    let isPr = (row[5]==='1' || (row[5]||'').toLowerCase()==='true');
-    let isR = (row[6]==='1' || (row[6]||'').toLowerCase()==='true');
-    const patterns = [
-      {regex: /[\(（]パート分け[\)）]/, key:'p'},
-      {regex: /[\(（]練習中[\)）]/, key:'pr'},
-      {regex: /[\(（]要復習[\)）]/, key:'r'}
-    ];
-    patterns.forEach(p=>{
-      if(p.regex.test(newSong)){
-        if(p.key==='p') isP = true;
-        if(p.key==='pr') isPr = true;
-        if(p.key==='r') isR = true;
-        newSong = newSong.replace(p.regex, '').trim();
-      }
-    });
-    const ns = mlNormalizeStr(newSinger), nso = mlNormalizeStr(newSong);
-    const idx = mlSongs.findIndex(s=>mlNormalizeStr(s.singer)===ns && mlNormalizeStr(s.song)===nso);
-    if(idx !== -1){
-      mlSongs[idx] = Object.assign({}, mlSongs[idx], {work:newWork, artist:newArtist, isPartDivision:isP, isPracticing:isPr, isReviewNeeded:isR});
-      updated++;
-    } else {
-      mlSongs.push({id: Date.now() + Math.random(), singer:newSinger, work:newWork, artist:newArtist, song:newSong, isPartDivision:isP, isPracticing:isPr, isReviewNeeded:isR, isPrivate:false, viewPassword:''});
-      added++;
-    }
-  });
-  showDialog('CSVインポート完了:\n追加: '+added+'件\n更新: '+updated+'件\n反映するには「同期して保存」を押してください。', 'alert');
-  mlRender();
+// ============================== Local snapshot (failsafe) ==============================
+// 同期エラー・複数端末競合等によるデータ消失防止のため、直近の状態をロールングで残す。
+const ML_SNAPSHOT_KEY = 'mylistSnapshots';
+const ML_SNAPSHOT_MAX = 5;
+function mlSaveSnapshot(reason){
+  try {
+    let arr = [];
+    try { arr = JSON.parse(localStorage.getItem(ML_SNAPSHOT_KEY) || '[]'); } catch(e){ arr = []; }
+    if(!Array.isArray(arr)) arr = [];
+    arr.unshift({ts: new Date().toISOString(), reason: reason||'', count: mlSongs.length, data: mlSongs});
+    if(arr.length > ML_SNAPSHOT_MAX) arr = arr.slice(0, ML_SNAPSHOT_MAX);
+    localStorage.setItem(ML_SNAPSHOT_KEY, JSON.stringify(arr));
+  } catch(e){ /* quota errors are non-fatal */ }
 }
 
-// Sync
+// ============================== Sync / Reload ==============================
 mlEls.syncBtn.addEventListener('click', mlSync);
+if(mlEls.reloadBtn){
+  mlEls.reloadBtn.addEventListener('click', ()=>{
+    const msg = mlSongs.length > 0
+      ? 'サーバー上の最新データで端末上のリストを置き換えます。\n'
+        + '（直近の状態はバックアップとして自動保存されます）\n'
+        + '本当によろしいですか？'
+      : 'サーバーから最新データを読み込みます。よろしいですか？';
+    showDialog(msg, 'confirm', ()=>{ mlLoadFromGAS(false); });
+  });
+}
+
 async function mlSync(){
   if(!MYLIST_GAS_URL){ showDialog('GASのURLが設定されていません。', 'alert'); return; }
+  mlSaveSnapshot('before-sync');
   mlUpdateStatus('サーバーと同期中...', true);
   try {
-    let merged = mlSongs;
-    if(!mlForceOverwrite){
-      let server = [];
-      try {
-        const res = await fetch(MYLIST_GAS_URL + '?t=' + Date.now());
-        if(!res.ok) throw new Error('Fetch failed');
-        const text = await res.text();
-        const data = JSON.parse(text);
-        if(Array.isArray(data)) server = data;
-      } catch(e){
-        showDialog('サーバーからのデータ取得に失敗しました。保存を中止します。\n(インターネット接続やGASの状態を確認してください)', 'alert');
-        mlUpdateStatus('保存中止');
-        return;
-      }
-      const localIds = new Set(mlSongs.map(s=>s.id));
-      const newServer = server.filter(s=>!localIds.has(s.id) && !mlDeletedIds.includes(s.id));
-      merged = mlSongs.concat(newServer);
+    // 1) サーバー側を取得して、ローカルに無い項目をマージする (multi-device 競合対策)
+    let server = [];
+    try {
+      const res = await fetch(MYLIST_GAS_URL + '?t=' + Date.now());
+      if(!res.ok) throw new Error('HTTP ' + res.status);
+      const text = await res.text();
+      const data = JSON.parse(text);
+      if(Array.isArray(data)) server = data;
+      else throw new Error('Server returned non-array data');
+    } catch(e){
+      // フェイルセーフ: サーバーから読めなかった場合は保存を中止し、ローカルデータは保持
+      showDialog('サーバーからのデータ取得に失敗しました。保存を中止します。\n'
+        + '（ローカルのデータは保持されます。インターネット接続やGASの状態を確認してください）\n\n'
+        + '詳細: ' + (e && e.message ? e.message : 'unknown'), 'alert');
+      mlUpdateStatus('保存中止');
+      return;
+    }
+    const localIds = new Set(mlSongs.map(s=>s.id));
+    const newServer = server.filter(s=>s && s.id != null && !localIds.has(s.id) && !mlDeletedIds.includes(s.id));
+    const merged = mlSongs.concat(newServer);
+    // 2) マージ後を保存。空配列での意図しない上書きを避けるため、サーバーが非空 & merged が空の異常状態は中止。
+    if(server.length > 0 && merged.length === 0){
+      showDialog('保存中止: マージ結果が空のため安全のため保存しません。', 'alert');
+      mlUpdateStatus('保存中止');
+      return;
     }
     mlSongs = merged; mlRender();
-    await fetch(MYLIST_GAS_URL, {method:'POST', body: JSON.stringify(merged), headers:{'Content-Type':'text/plain;charset=utf-8'}});
+    let postResp;
+    try {
+      postResp = await fetch(MYLIST_GAS_URL, {method:'POST', body: JSON.stringify(merged), headers:{'Content-Type':'text/plain;charset=utf-8'}});
+    } catch(e){
+      showDialog('サーバーへの保存に失敗しました。\n（ローカル & スナップショットには保持されています）\n\n詳細: '+(e&&e.message?e.message:'unknown'), 'alert');
+      mlUpdateStatus('保存失敗');
+      return;
+    }
+    if(postResp && !postResp.ok){
+      showDialog('サーバーへの保存に失敗しました (HTTP '+postResp.status+')。\n（ローカル & スナップショットには保持されています）', 'alert');
+      mlUpdateStatus('保存失敗');
+      return;
+    }
     mlDeletedIds = []; localStorage.setItem('deletedIds', JSON.stringify(mlDeletedIds));
-    mlForceOverwrite = false;
-    mlUpdateStatus('同期・保存完了！');
+    mlSaveSnapshot('after-sync-ok');
+    mlUpdateStatus('同期・保存完了！(' + merged.length + '件)');
     setTimeout(()=>mlUpdateStatus(''), 3000);
   } catch(err){
-    showDialog('保存エラー: '+err.message, 'alert');
+    showDialog('保存エラー: '+(err && err.message ? err.message : err), 'alert');
     mlUpdateStatus('保存失敗');
   }
 }
 async function mlLoadFromGAS(silent){
   if(!MYLIST_GAS_URL) return;
+  mlSaveSnapshot('before-reload');
   mlUpdateStatus('読み込み中...', true);
   try {
     const res = await fetch(MYLIST_GAS_URL + '?t=' + Date.now());
+    if(!res.ok) throw new Error('HTTP ' + res.status);
     const text = await res.text();
     let data;
     try { data = JSON.parse(text); } catch(e){ throw new Error('サーバーからの応答が不正です。'); }
     if(Array.isArray(data)){
-      mlSongs = data; mlDeletedIds = []; localStorage.setItem('deletedIds', JSON.stringify(mlDeletedIds));
+      mlSongs = data; mlDeletedIds = []; mlSelectedIds.clear();
+      localStorage.setItem('deletedIds', JSON.stringify(mlDeletedIds));
       mlActiveTab = 'ALL'; mlCurrentPage = 1; mlRender();
-      mlUpdateStatus('読み込み完了'); setTimeout(()=>mlUpdateStatus(''), 3000);
+      mlUpdateStatus('読み込み完了 ('+data.length+'件)'); setTimeout(()=>mlUpdateStatus(''), 3000);
     } else throw new Error('データ形式が不正です');
   } catch(err){
-    if(!silent) showDialog('【通信エラー】\n'+err.message, 'alert');
+    if(!silent) showDialog('【通信エラー】\n'+(err && err.message ? err.message : err), 'alert');
     mlUpdateStatus('エラー');
   }
 }

@@ -579,7 +579,10 @@ body.dark .song-created-mark{background:#3f1d1d;border-color:#7f1d1d;color:#fca5
 
 <div class="app-header">
   <div class="brand">Karaoke Dashboard</div>
-  <button class="theme-toggle" id="themeToggle" type="button" title="ダークモード切替" aria-label="ダークモード切替"><i class="fas fa-moon"></i></button>
+  <div style="display:flex;align-items:center;gap:8px">
+    <a class="theme-toggle" id="viewerLink" href="viewer.html" title="Karaoke Viewer を開く" aria-label="Karaoke Viewer を開く" style="text-decoration:none;width:auto;padding:0 10px;font-size:11px;font-weight:700;color:var(--accent);border-color:var(--accent-soft)"><i class="fas fa-external-link-alt" style="margin-right:5px"></i>Viewer</a>
+    <button class="theme-toggle" id="themeToggle" type="button" title="ダークモード切替" aria-label="ダークモード切替"><i class="fas fa-moon"></i></button>
+  </div>
 </div>
 
 <div class="top-cards">
@@ -718,8 +721,9 @@ body.dark .song-created-mark{background:#3f1d1d;border-color:#7f1d1d;color:#fca5
       <div class="env-csv-actions">
         <button class="dl-btn ghost compact" id="envCsvLoad" type="button"><i class="fas fa-cloud-download-alt"></i><span class="dl-lbl">読み込み</span></button>
         <button class="dl-btn compact" id="envCsvSave" type="button"><i class="fas fa-save"></i><span class="dl-lbl">保存</span></button>
+        <button class="dl-btn ghost compact" id="envCsvDownload" type="button" title="編集内容を cool_analysis.csv ファイルとしてダウンロード (GAS 不通時の手動バックアップ用)"><i class="fas fa-file-download"></i><span class="dl-lbl">ダウンロード</span></button>
       </div>
-      <textarea id="envCsvText" class="env-csv-text" placeholder="「読み込み」を押すと cool_analysis.csv の内容を表示します。編集後「保存」を押すとGAS経由で書き込みます。" spellcheck="false"></textarea>
+      <textarea id="envCsvText" class="env-csv-text" placeholder="「読み込み」を押すと cool_analysis.csv の内容を表示します。編集後「保存」を押すとGAS経由で書き込みます。GAS が不通の場合は「ダウンロード」で手元に保存しリポジトリへ手動コミットできます。" spellcheck="false"></textarea>
       <div class="env-csv-msg" id="envCsvMsg"></div>
     </div>
   </div>
@@ -1331,6 +1335,22 @@ function showCsvMsg(msg, kind){
   el.innerText = msg;
   el.className = 'env-csv-msg' + (kind ? ' '+kind : '');
 }
+function envCsvDownloadFallback(){
+  // GAS が到達不能 (Failed to fetch) でも編集内容を失わないよう、
+  // ローカルにダウンロードして手動でリポジトリにコミットできるようにする。
+  const content = document.getElementById('envCsvText').value;
+  if(!content){ showCsvMsg('内容が空のためダウンロードできません', 'error'); return; }
+  try{
+    const blob = new Blob([content], {type:'text/csv;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'cool_analysis.csv';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 1000);
+  }catch(e){
+    showCsvMsg('ダウンロード失敗: '+e.message, 'error');
+  }
+}
 async function envCsvLoad(){
   showCsvMsg('読み込み中...', '');
   try{
@@ -1340,7 +1360,7 @@ async function envCsvLoad(){
     document.getElementById('envCsvText').value = text;
     showCsvMsg('読み込み完了 ('+text.length+' 文字)', 'ok');
   }catch(e){
-    showCsvMsg('読み込みエラー: '+e.message, 'error');
+    showCsvMsg('読み込みエラー: '+e.message+' (ネットワーク / GAS の状態を確認してください)', 'error');
   }
 }
 async function envCsvSave(){
@@ -1351,17 +1371,26 @@ async function envCsvSave(){
   try{
     const res = await fetch(GAS_URL, {
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
       body: JSON.stringify({filename:'cool_analysis.csv', content:content})
     });
-    if(!res.ok){ showCsvMsg('保存失敗: HTTP '+res.status, 'error'); return; }
+    if(!res.ok){
+      showCsvMsg('保存失敗: HTTP '+res.status+' — ダウンロードへフォールバックします。', 'error');
+      envCsvDownloadFallback();
+      return;
+    }
     showCsvMsg('保存完了。次回更新で反映されます。', 'ok');
   }catch(e){
-    showCsvMsg('保存エラー: '+e.message, 'error');
+    // "Failed to fetch" などネットワーク/CORS エラー時は CSV をダウンロードして
+    // 手動でリポジトリにコミットしてもらうことで編集内容を救済する。
+    showCsvMsg('保存エラー: '+e.message+' — 編集内容を CSV としてダウンロードします。リポジトリの cool_analysis.csv を手動で置き換えてください。', 'error');
+    envCsvDownloadFallback();
   }
 }
 document.getElementById('envCsvLoad').addEventListener('click', envCsvLoad);
 document.getElementById('envCsvSave').addEventListener('click', envCsvSave);
+const envCsvDownloadBtn = document.getElementById('envCsvDownload');
+if(envCsvDownloadBtn) envCsvDownloadBtn.addEventListener('click', envCsvDownloadFallback);
 
 // ===== HTML downloads =====
 function buildExportHtml(title, contentHtml){

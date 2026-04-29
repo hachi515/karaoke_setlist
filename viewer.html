@@ -602,35 +602,31 @@ body.dark .song-created-mark{background:#3f1d1d;border-color:#7f1d1d;color:#fca5
 .room-pick-btn .room-pick-port{font-size:11px;color:var(--text-mute);font-weight:600}
 .room-pick-btn:hover{opacity:0.85}
 
-/* Search button on song rows */
-.viewer-search-btn{
-  width:36px;height:36px;border-radius:50%;border:1px solid var(--green-bd);
-  background:var(--green-bg);color:var(--green);cursor:pointer;
-  display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;
-  font-size:14px;transition:all .15s;
+/* Search + Mylist register icon buttons (subtle - small icon-only) */
+.viewer-icon-btn{
+  width:24px;height:24px;border-radius:6px;border:none;background:transparent;
+  color:var(--text-mute);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;
+  font-size:12px;flex-shrink:0;padding:0;transition:color .12s, background .12s;
 }
-.viewer-search-btn:hover{background:var(--green);color:#fff}
-.viewer-search-btn:active{transform:scale(0.95)}
+.viewer-icon-btn:hover{color:var(--accent);background:var(--accent-bg)}
+.viewer-icon-btn.ml:hover{color:var(--accent)}
+.viewer-icon-btn.js-search:hover{color:var(--green);background:var(--green-bg)}
+.viewer-icon-btn:active{transform:scale(0.92)}
+body.dark .viewer-icon-btn:hover{background:var(--accent-bg)}
 
-/* Mylist add button on song rows */
-.viewer-mylist-btn{
-  display:inline-flex;align-items:center;gap:4px;
-  padding:3px 8px;border-radius:999px;border:1px solid var(--accent-soft);
-  background:var(--accent-bg);color:var(--accent);font-size:11px;font-weight:700;cursor:pointer;
-  margin-bottom:4px;white-space:nowrap;
+/* Action group placed at the right edge of cool song-row / rank/notable/pickup rows */
+.viewer-row-actions{
+  display:inline-flex;align-items:center;gap:2px;flex-shrink:0;margin-left:6px;
 }
-.viewer-mylist-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
-.viewer-mylist-btn:active{transform:scale(0.95)}
-.viewer-mylist-btn i{font-size:10px}
+.song-row .viewer-row-actions{margin-left:8px}
 
-/* Song row layout overrides for new buttons */
-.song-row .viewer-row-actions{display:flex;align-items:center;gap:6px;flex-shrink:0}
-.song-row .viewer-metrics-stack{display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0}
+/* Action group placed inside type-inline rows pushes to the right edge */
+.rank-types-inline .viewer-row-actions,
+.notable-types .viewer-row-actions,
+.pickup-types-inline .viewer-row-actions{margin-left:auto}
 
-/* Ranking / Trend rows: ensure search button + mylist button fit */
-.rank-row-flat .viewer-search-btn,
-.notable-row .viewer-search-btn,
-.trend-pickup-row .viewer-search-btn{flex-shrink:0}
+/* Cool song-row: action group sits to the right of metrics */
+.song-row .song-metrics .viewer-row-actions{margin-left:6px}
 
 /* Room modal */
 .room-modal-overlay{
@@ -797,8 +793,43 @@ body.dark .song-created-mark{background:#3f1d1d;border-color:#7f1d1d;color:#fca5
   cursor:pointer;font-size:12px;font-weight:700;display:inline-flex;align-items:center;gap:5px;
 }
 .ml-fbtn:hover{background:var(--accent-bg);color:var(--accent);border-color:var(--accent-soft)}
-.ml-fbtn.primary{background:var(--primary);color:#fff;border-color:var(--primary)}
-.ml-fbtn.primary:hover{filter:brightness(1.15);background:var(--primary)}
+.ml-fbtn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.ml-fbtn.primary:hover{filter:brightness(1.08);background:var(--accent);color:#fff;border-color:var(--accent)}
+.ml-fbtn.danger{background:#fee2e2;color:#b91c1c;border-color:#fecaca}
+.ml-fbtn.danger:hover{background:#dc2626;color:#fff;border-color:#dc2626}
+body.dark .ml-fbtn.danger{background:#3f1d1d;color:#fca5a5;border-color:#7f1d1d}
+body.dark .ml-fbtn.danger:hover{background:#dc2626;color:#fff;border-color:#dc2626}
+/* ダークモードでは --accent が淡い色 (#818cf8) になるため、
+   白文字との十分なコントラストを得るために濃い indigo にする。
+   "同期して保存" など primary ボタンが読めない問題への対応。 */
+body.dark .ml-fbtn.primary{background:#4f46e5;color:#fff;border-color:#4f46e5}
+body.dark .ml-fbtn.primary:hover{background:#4338ca;color:#fff;border-color:#4338ca;filter:none}
+
+/* Bulk select bar above the mylist */
+.ml-bulkbar{
+  display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--border-soft);
+  background:var(--bg);font-size:12px;color:var(--text-sub);
+}
+.ml-bulkbar label{display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-weight:600}
+.ml-bulkbar input[type="checkbox"]{cursor:pointer;width:14px;height:14px}
+.ml-bulkbar .ml-bulk-spacer{flex:1}
+.ml-bulkbar .ml-bulk-count{font-weight:700;color:var(--accent)}
+.ml-bulkbar .ml-bulk-del{
+  padding:5px 12px;background:#fee2e2;color:#b91c1c;border:1px solid #fecaca;border-radius:6px;
+  font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:4px;
+}
+.ml-bulkbar .ml-bulk-del:hover{background:#dc2626;color:#fff;border-color:#dc2626}
+.ml-bulkbar .ml-bulk-del:disabled{opacity:0.4;cursor:not-allowed}
+body.dark .ml-bulkbar{background:var(--bg)}
+body.dark .ml-bulkbar .ml-bulk-del{background:#3f1d1d;color:#fca5a5;border-color:#7f1d1d}
+body.dark .ml-bulkbar .ml-bulk-del:hover{background:#dc2626;color:#fff}
+
+/* Mylist row checkbox column */
+.ml-row{grid-template-columns:24px 28px 1fr auto !important}
+.ml-row .ml-check{display:flex;align-items:center;justify-content:center}
+.ml-row .ml-check input[type="checkbox"]{cursor:pointer;width:15px;height:15px}
+.ml-row.selected{background:var(--accent-bg);border-color:var(--accent-soft)}
+body.dark .ml-row.selected{background:#1e1b4b;border-color:#4338ca}
 
 /* CSV modal */
 .csv-modal{max-width:420px}
@@ -1000,6 +1031,12 @@ body.dark .room-btn.selected{background:var(--green);color:#fff}
         <h2><i class="fas fa-list-music" id="mlListIcon"></i> <span id="mlListTitle">All Songs</span></h2>
         <div class="count" id="mlListCount">0 tracks</div>
       </div>
+      <div class="ml-bulkbar" id="mlBulkBar">
+        <label><input type="checkbox" id="mlBulkAll"> このページを全選択</label>
+        <span class="ml-bulk-spacer"></span>
+        <span class="ml-bulk-count" id="mlBulkCount">0 件選択</span>
+        <button class="ml-bulk-del" id="mlBulkDelBtn" disabled><i class="fas fa-trash"></i> 一括削除</button>
+      </div>
       <div class="ml-list" id="mlList"></div>
       <div class="ml-pager" id="mlPager"></div>
     </div>
@@ -1008,9 +1045,8 @@ body.dark .room-btn.selected{background:var(--green);color:#fff}
     <div class="ml-status" id="mlStatus"></div>
     <div class="ml-footer-btns">
       <button class="ml-fbtn" id="mlCsvBtn"><i class="fas fa-file-csv"></i> CSV</button>
-      <input type="file" id="mlImportJson" accept=".json" style="display:none">
       <input type="file" id="mlImportCsv" accept=".csv" style="display:none">
-      <button class="ml-fbtn" id="mlImportJsonBtn"><i class="fas fa-folder-open"></i> 取込</button>
+      <button class="ml-fbtn" id="mlReloadBtn" title="サーバー上の最新データを再取得"><i class="fas fa-cloud-download-alt"></i> サーバーから再読込</button>
       <button class="ml-fbtn primary" id="mlSyncBtn"><i class="fas fa-cloud-upload-alt"></i> 同期して保存</button>
     </div>
   </div>
@@ -1103,13 +1139,11 @@ body.dark .room-btn.selected{background:var(--green);color:#fff}
       <p>用途に合わせて出力形式を選択してください。<br>※非公開設定の曲はエクスポートされません。</p>
       <button class="csv-modal-btn outline" id="mlCsvExportAll"><i class="fas fa-download"></i> 全件エクスポート (バックアップ)</button>
       <button class="csv-modal-btn outline-gray" id="mlCsvExportTpl"><i class="fas fa-file"></i> 様式のみエクスポート (追加用)</button>
-      <div class="csv-modal-divider"></div>
-      <p>CSVファイルを読み込んでリストを更新・追加します。<br>※歌唱者と曲名が一致するデータは上書き更新されます。</p>
-      <button class="csv-modal-btn solid" id="mlCsvImportBtn"><i class="fas fa-upload"></i> CSVインポート (更新/追加)</button>
       <div class="csv-format-note">
         <strong>CSV形式:</strong><br>
         歌唱者, 作品名, 歌手, 曲名, パート分け(0/1), 練習中(0/1), 要復習(0/1)<br>
-        ※文字コード: UTF-8推奨
+        ※文字コード: UTF-8推奨<br>
+        ※リポジトリ内に <code>mylist_backup.csv</code> として日次バックアップが自動保存されます。
       </div>
     </div>
   </div>
@@ -1311,29 +1345,31 @@ function closeModal(){ document.getElementById('modalOverlay').classList.remove(
 document.getElementById('modalOverlay').addEventListener('click', e=>{ if(e.target.id==='modalOverlay') closeModal(); });
 function toggleCard(h){ h.parentElement.classList.toggle('expanded'); }
 
-// Type chips/pills
+// Type chips/pills (index.html 準拠 — type-chip でも tp-op/tp-ed/tp-in を使う)
+function typeClass(t){
+  const u = String(t||'').toUpperCase();
+  if(u.indexOf('OP')>=0) return 'tp-op';
+  if(u.indexOf('ED')>=0) return 'tp-ed';
+  if(u.indexOf('IN')>=0) return 'tp-in';
+  return 'tp-none';
+}
 function typeChipHtml(t){
-  if(t==='OP') return '<div class="type-chip tc-op">OP</div>';
-  if(t==='ED') return '<div class="type-chip tc-ed">ED</div>';
-  if(t==='IN') return '<div class="type-chip tc-in">IN</div>';
-  return '<div class="type-chip tc-other">'+escHtml(t||'')+'</div>';
+  return '<div class="type-chip '+typeClass(t)+'">'+escHtml(t||'-')+'</div>';
 }
 function typePillHtml(t){
-  if(t==='OP') return '<span class="type-pill tp-op">OP</span>';
-  if(t==='ED') return '<span class="type-pill tp-ed">ED</span>';
-  if(t==='IN') return '<span class="type-pill tp-in">IN</span>';
-  return '<span class="type-pill tp-other">'+escHtml(t||'')+'</span>';
+  return '<span class="type-pill '+typeClass(t)+'">'+escHtml(t||'-')+'</span>';
 }
-function flatMetricHtml(label, val, kind){
-  return '<div class="flat-metric flat-'+kind+'"><div class="lbl">'+label+'</div><div class="val">'+val+'</div></div>';
+function flatMetricHtml(label, value, kind){
+  const ic = kind==='user' ? '<i class="fas fa-users"></i>' : '<i class="fas fa-microphone"></i>';
+  return '<div class="flat-metric"><div class="lbl">'+label+'</div><div class="val-row"><b>'+value+'</b><div class="icon-circle '+kind+'">'+ic+'</div></div></div>';
 }
 
-// Search button + Mylist register button (for cool/ranking/trend rows)
+// Subtle search + mylist register icon buttons (for cool/ranking/trend rows)
 function rowActionsHtml(anime, song, artist){
   const data = 'data-anime="'+escAttr(anime)+'" data-song="'+escAttr(song)+'" data-artist="'+escAttr(artist||'')+'"';
-  const search = '<button type="button" class="viewer-search-btn js-search" '+data+' title="検索"><i class="fas fa-search"></i></button>';
-  const mylist = '<button type="button" class="viewer-mylist-btn js-mylist-add" '+data+' title="マイリストに登録"><i class="fas fa-bookmark"></i> マイリスト</button>';
-  return {search, mylist};
+  const search = '<button type="button" class="viewer-icon-btn js-search" '+data+' title="検索"><i class="fas fa-search"></i></button>';
+  const mylist = '<button type="button" class="viewer-icon-btn js-mylist-add ml" '+data+' title="マイリストに登録"><i class="far fa-bookmark"></i></button>';
+  return {search, mylist, group: '<div class="viewer-row-actions">'+mylist+search+'</div>'};
 }
 
 function buildCoolCard(w, rank, cat){
@@ -1349,6 +1385,7 @@ function buildCoolCard(w, rank, cat){
   let songsHtml = '';
   w.songs.forEach(s=>{
     const acts = rowActionsHtml(w.anime, s.song, s.artist);
+    const sm = flatMetricHtml('人数',s.user_count,'user')+flatMetricHtml('歌唱数',s.count,'song');
     const createdMark = (s.creation_count||0) > 0
       ? '<span class="song-created-mark" title="offline_list 内の作成数">作成'+s.creation_count+'</span>'
       : '';
@@ -1358,11 +1395,7 @@ function buildCoolCard(w, rank, cat){
         + '<div class="song-name">'+escHtml(s.song)+createdMark+'</div>'
         + '<div class="song-artist">'+escHtml(s.artist)+'</div>'
       + '</div>'
-      + '<div class="viewer-row-actions">'+acts.search+'</div>'
-      + '<div class="viewer-metrics-stack">'
-        + acts.mylist
-        + '<div class="song-metrics">'+flatMetricHtml('人数',s.user_count,'user')+flatMetricHtml('歌唱数',s.count,'song')+'</div>'
-      + '</div>'
+      + '<div class="song-metrics">'+sm+acts.group+'</div>'
       + '</div>';
   });
   return '<div class="card">'
@@ -1426,10 +1459,9 @@ function buildRankCardHtml(r, mode){
   const acts = rowActionsHtml(r.anime, r.song, r.artist);
   return '<div class="rank-row-flat '+grade+'">'
     + '<div class="num-badge '+grade+'">'+r.rank+'</div>'
-    + '<div class="rank-info"><div class="rank-anime">'+escHtml(r.anime)+'</div><div class="rank-sub">'+escHtml(r.song)+' / '+escHtml(r.artist)+'</div><div class="rank-types-inline">'+typePillHtml(r.type)+'</div></div>'
-    + '<div class="viewer-row-actions">'+acts.search+'</div>'
-    + '<div class="viewer-metrics-stack">'+acts.mylist
-    + '<div class="song-metrics">'+flatMetricHtml('人数',r.user_count,'user')+flatMetricHtml('歌唱数',r.count,'song')+'</div></div>'
+    + '<div class="rank-info"><div class="rank-anime">'+escHtml(r.anime)+'</div><div class="rank-sub">'+escHtml(r.song)+' / '+escHtml(r.artist)+'</div><div class="rank-types-inline">'+typePillHtml(r.type)+acts.group+'</div></div>'
+    + flatMetricHtml('人数',r.user_count,'user')
+    + flatMetricHtml('歌唱数',r.count,'song')
     + '</div>';
 }
 function renderRanking(){
@@ -1505,12 +1537,10 @@ function buildTrendHtml(){
       + '<div class="trend-pickup-head"><i class="fas fa-fire"></i> 急上昇ピックアップ</div>'
       + '<div class="trend-pickup-row">'
         + '<div class="num-badge">1</div>'
-        + '<div class="pickup-info"><div class="pickup-anime">'+escHtml(p.anime)+'</div><div class="pickup-sub">'+escHtml(p.song)+' / '+escHtml(p.artist)+'</div><div class="pickup-types-inline">'+typePillHtml(p.type)+'</div></div>'
-        + '<div class="viewer-row-actions">'+acts.search+'</div>'
-        + '<div class="viewer-metrics-stack">'+acts.mylist
-          + '<div class="song-metrics">'+flatMetricHtml('人数',p.cur_user||0,'user')+flatMetricHtml('歌唱数',p.cur_count||0,'song')+'</div>'
-          + growthBadgeHtml(p, mode)
-        + '</div>'
+        + '<div class="pickup-info"><div class="pickup-anime">'+escHtml(p.anime)+'</div><div class="pickup-sub">'+escHtml(p.song)+' / '+escHtml(p.artist)+'</div><div class="pickup-types-inline">'+typePillHtml(p.type)+acts.group+'</div></div>'
+        + flatMetricHtml('人数',p.cur_user||0,'user')
+        + flatMetricHtml('歌唱数',p.cur_count||0,'song')
+        + growthBadgeHtml(p, mode)
       + '</div></div>';
   }
   if(items.length>1){
@@ -1520,12 +1550,10 @@ function buildTrendHtml(){
       const acts = rowActionsHtml(it.anime, it.song, it.artist);
       html += '<div class="notable-row">'
         + '<div class="num-badge">'+rank+'</div>'
-        + '<div class="notable-info"><div class="notable-anime">'+escHtml(it.anime)+'</div><div class="notable-artist">'+escHtml(it.song)+' / '+escHtml(it.artist)+'</div><div class="notable-types">'+typePillHtml(it.type)+'</div></div>'
-        + '<div class="viewer-row-actions">'+acts.search+'</div>'
-        + '<div class="viewer-metrics-stack">'+acts.mylist
-          + '<div class="song-metrics">'+flatMetricHtml('人数',it.cur_user||0,'user')+flatMetricHtml('歌唱数',it.cur_count||0,'song')+'</div>'
-          + growthBadgeHtml(it, mode)
-        + '</div>'
+        + '<div class="notable-info"><div class="notable-anime">'+escHtml(it.anime)+'</div><div class="notable-artist">'+escHtml(it.song)+' / '+escHtml(it.artist)+'</div><div class="notable-types">'+typePillHtml(it.type)+acts.group+'</div></div>'
+        + flatMetricHtml('人数',it.cur_user||0,'user')
+        + flatMetricHtml('歌唱数',it.cur_count||0,'song')
+        + growthBadgeHtml(it, mode)
       + '</div>';
     });
   }
@@ -1557,7 +1585,7 @@ document.body.addEventListener('click', function(e){
   // For cool song-row body click -> show singer modal (existing behavior)
   const sr = e.target.closest('.song-row');
   if(sr){
-    if(e.target.closest('.viewer-search-btn, .viewer-mylist-btn, button, a')) return;
+    if(e.target.closest('.viewer-icon-btn, button, a')) return;
     const nameEl = sr.querySelector('.song-name');
     if(!nameEl) return;
     // Find anime by walking up to .card
@@ -1623,7 +1651,6 @@ let mlSearchQuery = '';
 let mlCurrentPage = 1;
 let mlEditingId = null;
 let mlFilterTags = {isPartDivision:false, isPracticing:false, isReviewNeeded:false};
-let mlForceOverwrite = false;
 
 try { mlSongs = JSON.parse(localStorage.getItem('myMusicList')||'[]'); } catch(e){ mlSongs = []; }
 if(!Array.isArray(mlSongs)) mlSongs = [];
@@ -1659,11 +1686,29 @@ const mlEls = {
   title: document.getElementById('mlListTitle'),
   status: document.getElementById('mlStatus'),
   csvBtn: document.getElementById('mlCsvBtn'),
-  importJsonBtn: document.getElementById('mlImportJsonBtn'),
-  importJson: document.getElementById('mlImportJson'),
-  importCsv: document.getElementById('mlImportCsv'),
-  syncBtn: document.getElementById('mlSyncBtn')
+  reloadBtn: document.getElementById('mlReloadBtn'),
+  syncBtn: document.getElementById('mlSyncBtn'),
+  bulkAll: document.getElementById('mlBulkAll'),
+  bulkCount: document.getElementById('mlBulkCount'),
+  bulkDel: document.getElementById('mlBulkDelBtn')
 };
+
+// Multi-select state
+let mlSelectedIds = new Set();
+let mlCurrentPageIds = [];
+
+function mlUpdateBulkBar(){
+  if(!mlEls.bulkAll) return;
+  // Sync "select all" checkbox state with current page selection
+  const pageIds = mlCurrentPageIds;
+  const allChecked = pageIds.length>0 && pageIds.every(id=>mlSelectedIds.has(id));
+  const someChecked = pageIds.some(id=>mlSelectedIds.has(id));
+  mlEls.bulkAll.checked = allChecked;
+  mlEls.bulkAll.indeterminate = !allChecked && someChecked;
+  const n = mlSelectedIds.size;
+  mlEls.bulkCount.innerText = n + ' 件選択';
+  mlEls.bulkDel.disabled = (n === 0);
+}
 
 function mlCleanForSearch(str){
   if(!str) return '';
@@ -1716,7 +1761,9 @@ function mlRender(){
 
   if(slice.length === 0){
     mlEls.list.innerHTML = '<div class="ml-empty"><i class="far fa-folder-open" style="font-size:32px;opacity:0.3"></i><div style="margin-top:8px">登録された曲はありません。</div></div>';
+    mlCurrentPageIds = [];
   } else {
+    mlCurrentPageIds = slice.map(s=>s.id);
     let html = '';
     slice.forEach(song=>{
       const displayIndex = mlSongs.indexOf(song) + 1;
@@ -1729,7 +1776,9 @@ function mlRender(){
       if(song.isReviewNeeded) tags += '<span class="ml-tag rv">要復習</span>';
       if(song.isPrivate) tags += '<span class="ml-tag pv">非公開</span>';
       const editing = song.id === mlEditingId;
-      html += '<div class="ml-row'+(editing?' editing':'')+'" data-id="'+escAttr(song.id)+'">'
+      const checked = mlSelectedIds.has(song.id);
+      html += '<div class="ml-row'+(editing?' editing':'')+(checked?' selected':'')+'" data-id="'+escAttr(song.id)+'">'
+        + '<div class="ml-check"><input type="checkbox" class="js-ml-sel" data-id="'+escAttr(song.id)+'"'+(checked?' checked':'')+'></div>'
         + '<div class="num">'+displayIndex+'</div>'
         + '<div class="info">'
           + '<div class="song">'+escHtml(song.song)+tags+'</div>'
@@ -1747,6 +1796,7 @@ function mlRender(){
     });
     mlEls.list.innerHTML = html;
   }
+  mlUpdateBulkBar();
 
   if(totalPages > 1){
     mlEls.pager.innerHTML = '<button id="mlPagePrev"'+(mlCurrentPage===1?' disabled':'')+'><i class="fas fa-chevron-left"></i></button>'
@@ -1762,6 +1812,15 @@ function mlRender(){
 }
 
 mlEls.list.addEventListener('click', e=>{
+  const cb = e.target.closest('.js-ml-sel');
+  if(cb){
+    const id = parseFloat(cb.getAttribute('data-id'));
+    if(cb.checked) mlSelectedIds.add(id); else mlSelectedIds.delete(id);
+    const row = cb.closest('.ml-row');
+    if(row) row.classList.toggle('selected', cb.checked);
+    mlUpdateBulkBar();
+    return;
+  }
   const ed = e.target.closest('.js-ml-edit');
   if(ed){ mlEdit(parseFloat(ed.getAttribute('data-id'))); return; }
   const up = e.target.closest('.js-ml-up');
@@ -1771,6 +1830,29 @@ mlEls.list.addEventListener('click', e=>{
   const dl = e.target.closest('.js-ml-del');
   if(dl){ mlDelete(parseFloat(dl.getAttribute('data-id'))); return; }
 });
+
+// Bulk select all on current page
+if(mlEls.bulkAll){
+  mlEls.bulkAll.addEventListener('change', ()=>{
+    const sel = mlEls.bulkAll.checked;
+    mlCurrentPageIds.forEach(id=>{ if(sel) mlSelectedIds.add(id); else mlSelectedIds.delete(id); });
+    mlRender();
+  });
+}
+if(mlEls.bulkDel){
+  mlEls.bulkDel.addEventListener('click', ()=>{
+    const ids = Array.from(mlSelectedIds);
+    if(ids.length===0) return;
+    showDialog(ids.length+'件のデータを削除します。\n本当によろしいですか？', 'confirm', ()=>{
+      mlSongs = mlSongs.filter(s=>!mlSelectedIds.has(s.id));
+      ids.forEach(id=>{ if(!mlDeletedIds.includes(id)) mlDeletedIds.push(id); });
+      localStorage.setItem('deletedIds', JSON.stringify(mlDeletedIds));
+      if(mlEditingId !== null && mlSelectedIds.has(mlEditingId)) mlCancelEdit();
+      mlSelectedIds.clear();
+      mlRender();
+    });
+  });
+}
 
 mlEls.singerSel.addEventListener('change', ()=>{ mlActiveTab = mlEls.singerSel.value; mlCurrentPage = 1; mlRender(); });
 mlEls.searchInput.addEventListener('keydown', e=>{ if(e.key==='Enter') mlTriggerSearch(); });
@@ -1877,13 +1959,12 @@ function mlMove(id, direction){
   }
 }
 
-// CSV modal
+// CSV modal (export only - import 機能は不要)
 mlEls.csvBtn.addEventListener('click', ()=>document.getElementById('mlCsvOverlay').classList.add('active'));
 document.getElementById('mlCsvClose').addEventListener('click', ()=>document.getElementById('mlCsvOverlay').classList.remove('active'));
 document.getElementById('mlCsvOverlay').addEventListener('click', e=>{ if(e.target.id==='mlCsvOverlay') document.getElementById('mlCsvOverlay').classList.remove('active'); });
 document.getElementById('mlCsvExportAll').addEventListener('click', ()=>mlExportCSV(true));
 document.getElementById('mlCsvExportTpl').addEventListener('click', ()=>mlExportCSV(false));
-document.getElementById('mlCsvImportBtn').addEventListener('click', ()=>mlEls.importCsv.click());
 function mlExportCSV(withData){
   const BOM = '\uFEFF';
   const header = ['歌唱者','作品名','歌手','曲名','パート分け','練習中','要復習'];
@@ -1909,139 +1990,106 @@ function mlExportCSV(withData){
   document.getElementById('mlCsvOverlay').classList.remove('active');
 }
 
-mlEls.importJsonBtn.addEventListener('click', ()=>mlEls.importJson.click());
-mlEls.importJson.addEventListener('change', function(){
-  const file = this.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = e=>{
-    try {
-      const d = JSON.parse(e.target.result);
-      if(Array.isArray(d)){
-        showDialog('ファイルから '+d.length+' 件のデータを読み込みました (JSON)。\n反映するには「同期して保存」を押してください。\n(次回保存時にサーバーのデータを完全に上書きします)', 'alert');
-        mlSongs = d;
-        mlForceOverwrite = true;
-        mlRender();
-      } else {
-        showDialog('JSONデータの形式が正しくありません。', 'alert');
-      }
-    } catch(err){ showDialog('ファイルの読み込みに失敗しました。', 'alert'); }
-  };
-  reader.readAsText(file);
-  this.value = '';
-});
-
-mlEls.importCsv.addEventListener('change', function(){
-  const file = this.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = e=>{
-    try { mlImportCSV(e.target.result); } catch(err){ showDialog('ファイルの読み込みに失敗しました。', 'alert'); }
-  };
-  reader.readAsText(file);
-  this.value = '';
-  document.getElementById('mlCsvOverlay').classList.remove('active');
-});
-function mlImportCSV(csvText){
-  const rows = csvText.split(/\r\n|\n/);
-  const dataRows = rows.slice(1).filter(r=>r.trim() !== '');
-  let added = 0, updated = 0;
-  dataRows.forEach(rowStr=>{
-    let row = []; let inQ = false; let cur = '';
-    for(let i=0;i<rowStr.length;i++){
-      const c = rowStr[i];
-      if(c === '"'){
-        if(i+1 < rowStr.length && rowStr[i+1] === '"'){ cur += '"'; i++; }
-        else inQ = !inQ;
-      } else if(c === ',' && !inQ){ row.push(cur); cur = ''; }
-      else { cur += c; }
-    }
-    row.push(cur);
-    row = row.map(f=>f.trim());
-    if(row.length < 4) return;
-    const newSinger = row[0], newWork = row[1], newArtist = row[2];
-    let newSong = row[3];
-    if(!newSong) return;
-    let isP = (row[4]==='1' || (row[4]||'').toLowerCase()==='true');
-    let isPr = (row[5]==='1' || (row[5]||'').toLowerCase()==='true');
-    let isR = (row[6]==='1' || (row[6]||'').toLowerCase()==='true');
-    const patterns = [
-      {regex: /[\(（]パート分け[\)）]/, key:'p'},
-      {regex: /[\(（]練習中[\)）]/, key:'pr'},
-      {regex: /[\(（]要復習[\)）]/, key:'r'}
-    ];
-    patterns.forEach(p=>{
-      if(p.regex.test(newSong)){
-        if(p.key==='p') isP = true;
-        if(p.key==='pr') isPr = true;
-        if(p.key==='r') isR = true;
-        newSong = newSong.replace(p.regex, '').trim();
-      }
-    });
-    const ns = mlNormalizeStr(newSinger), nso = mlNormalizeStr(newSong);
-    const idx = mlSongs.findIndex(s=>mlNormalizeStr(s.singer)===ns && mlNormalizeStr(s.song)===nso);
-    if(idx !== -1){
-      mlSongs[idx] = Object.assign({}, mlSongs[idx], {work:newWork, artist:newArtist, isPartDivision:isP, isPracticing:isPr, isReviewNeeded:isR});
-      updated++;
-    } else {
-      mlSongs.push({id: Date.now() + Math.random(), singer:newSinger, work:newWork, artist:newArtist, song:newSong, isPartDivision:isP, isPracticing:isPr, isReviewNeeded:isR, isPrivate:false, viewPassword:''});
-      added++;
-    }
-  });
-  showDialog('CSVインポート完了:\n追加: '+added+'件\n更新: '+updated+'件\n反映するには「同期して保存」を押してください。', 'alert');
-  mlRender();
+// ============================== Local snapshot (failsafe) ==============================
+// 同期エラー・複数端末競合等によるデータ消失防止のため、直近の状態をロールングで残す。
+const ML_SNAPSHOT_KEY = 'mylistSnapshots';
+const ML_SNAPSHOT_MAX = 5;
+function mlSaveSnapshot(reason){
+  try {
+    let arr = [];
+    try { arr = JSON.parse(localStorage.getItem(ML_SNAPSHOT_KEY) || '[]'); } catch(e){ arr = []; }
+    if(!Array.isArray(arr)) arr = [];
+    arr.unshift({ts: new Date().toISOString(), reason: reason||'', count: mlSongs.length, data: mlSongs});
+    if(arr.length > ML_SNAPSHOT_MAX) arr = arr.slice(0, ML_SNAPSHOT_MAX);
+    localStorage.setItem(ML_SNAPSHOT_KEY, JSON.stringify(arr));
+  } catch(e){ /* quota errors are non-fatal */ }
 }
 
-// Sync
+// ============================== Sync / Reload ==============================
 mlEls.syncBtn.addEventListener('click', mlSync);
+if(mlEls.reloadBtn){
+  mlEls.reloadBtn.addEventListener('click', ()=>{
+    const msg = mlSongs.length > 0
+      ? 'サーバー上の最新データで端末上のリストを置き換えます。\n'
+        + '（直近の状態はバックアップとして自動保存されます）\n'
+        + '本当によろしいですか？'
+      : 'サーバーから最新データを読み込みます。よろしいですか？';
+    showDialog(msg, 'confirm', ()=>{ mlLoadFromGAS(false); });
+  });
+}
+
 async function mlSync(){
   if(!MYLIST_GAS_URL){ showDialog('GASのURLが設定されていません。', 'alert'); return; }
+  mlSaveSnapshot('before-sync');
   mlUpdateStatus('サーバーと同期中...', true);
   try {
-    let merged = mlSongs;
-    if(!mlForceOverwrite){
-      let server = [];
-      try {
-        const res = await fetch(MYLIST_GAS_URL + '?t=' + Date.now());
-        if(!res.ok) throw new Error('Fetch failed');
-        const text = await res.text();
-        const data = JSON.parse(text);
-        if(Array.isArray(data)) server = data;
-      } catch(e){
-        showDialog('サーバーからのデータ取得に失敗しました。保存を中止します。\n(インターネット接続やGASの状態を確認してください)', 'alert');
-        mlUpdateStatus('保存中止');
-        return;
-      }
-      const localIds = new Set(mlSongs.map(s=>s.id));
-      const newServer = server.filter(s=>!localIds.has(s.id) && !mlDeletedIds.includes(s.id));
-      merged = mlSongs.concat(newServer);
+    // 1) サーバー側を取得して、ローカルに無い項目をマージする (multi-device 競合対策)
+    let server = [];
+    try {
+      const res = await fetch(MYLIST_GAS_URL + '?t=' + Date.now());
+      if(!res.ok) throw new Error('HTTP ' + res.status);
+      const text = await res.text();
+      const data = JSON.parse(text);
+      if(Array.isArray(data)) server = data;
+      else throw new Error('Server returned non-array data');
+    } catch(e){
+      // フェイルセーフ: サーバーから読めなかった場合は保存を中止し、ローカルデータは保持
+      showDialog('サーバーからのデータ取得に失敗しました。保存を中止します。\n'
+        + '（ローカルのデータは保持されます。インターネット接続やGASの状態を確認してください）\n\n'
+        + '詳細: ' + (e && e.message ? e.message : 'unknown'), 'alert');
+      mlUpdateStatus('保存中止');
+      return;
+    }
+    const localIds = new Set(mlSongs.map(s=>s.id));
+    const newServer = server.filter(s=>s && s.id != null && !localIds.has(s.id) && !mlDeletedIds.includes(s.id));
+    const merged = mlSongs.concat(newServer);
+    // 2) マージ後を保存。空配列での意図しない上書きを避けるため、サーバーが非空 & merged が空の異常状態は中止。
+    if(server.length > 0 && merged.length === 0){
+      showDialog('保存中止: マージ結果が空のため安全のため保存しません。', 'alert');
+      mlUpdateStatus('保存中止');
+      return;
     }
     mlSongs = merged; mlRender();
-    await fetch(MYLIST_GAS_URL, {method:'POST', body: JSON.stringify(merged), headers:{'Content-Type':'text/plain;charset=utf-8'}});
+    let postResp;
+    try {
+      postResp = await fetch(MYLIST_GAS_URL, {method:'POST', body: JSON.stringify(merged), headers:{'Content-Type':'text/plain;charset=utf-8'}});
+    } catch(e){
+      showDialog('サーバーへの保存に失敗しました。\n（ローカル & スナップショットには保持されています）\n\n詳細: '+(e&&e.message?e.message:'unknown'), 'alert');
+      mlUpdateStatus('保存失敗');
+      return;
+    }
+    if(postResp && !postResp.ok){
+      showDialog('サーバーへの保存に失敗しました (HTTP '+postResp.status+')。\n（ローカル & スナップショットには保持されています）', 'alert');
+      mlUpdateStatus('保存失敗');
+      return;
+    }
     mlDeletedIds = []; localStorage.setItem('deletedIds', JSON.stringify(mlDeletedIds));
-    mlForceOverwrite = false;
-    mlUpdateStatus('同期・保存完了！');
+    mlSaveSnapshot('after-sync-ok');
+    mlUpdateStatus('同期・保存完了！(' + merged.length + '件)');
     setTimeout(()=>mlUpdateStatus(''), 3000);
   } catch(err){
-    showDialog('保存エラー: '+err.message, 'alert');
+    showDialog('保存エラー: '+(err && err.message ? err.message : err), 'alert');
     mlUpdateStatus('保存失敗');
   }
 }
 async function mlLoadFromGAS(silent){
   if(!MYLIST_GAS_URL) return;
+  mlSaveSnapshot('before-reload');
   mlUpdateStatus('読み込み中...', true);
   try {
     const res = await fetch(MYLIST_GAS_URL + '?t=' + Date.now());
+    if(!res.ok) throw new Error('HTTP ' + res.status);
     const text = await res.text();
     let data;
     try { data = JSON.parse(text); } catch(e){ throw new Error('サーバーからの応答が不正です。'); }
     if(Array.isArray(data)){
-      mlSongs = data; mlDeletedIds = []; localStorage.setItem('deletedIds', JSON.stringify(mlDeletedIds));
+      mlSongs = data; mlDeletedIds = []; mlSelectedIds.clear();
+      localStorage.setItem('deletedIds', JSON.stringify(mlDeletedIds));
       mlActiveTab = 'ALL'; mlCurrentPage = 1; mlRender();
-      mlUpdateStatus('読み込み完了'); setTimeout(()=>mlUpdateStatus(''), 3000);
+      mlUpdateStatus('読み込み完了 ('+data.length+'件)'); setTimeout(()=>mlUpdateStatus(''), 3000);
     } else throw new Error('データ形式が不正です');
   } catch(err){
-    if(!silent) showDialog('【通信エラー】\n'+err.message, 'alert');
+    if(!silent) showDialog('【通信エラー】\n'+(err && err.message ? err.message : err), 'alert');
     mlUpdateStatus('エラー');
   }
 }

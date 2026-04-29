@@ -1453,7 +1453,10 @@ body.dark .song-created-mark{background:#3f1d1d;border-color:#7f1d1d;color:#fca5
 
 <div class="app-header">
   <div class="brand">Karaoke Dashboard</div>
-  <button class="theme-toggle" id="themeToggle" type="button" title="ダークモード切替" aria-label="ダークモード切替"><i class="fas fa-moon"></i></button>
+  <div style="display:flex;align-items:center;gap:8px">
+    <a class="theme-toggle" id="viewerLink" href="viewer.html" title="Karaoke Viewer を開く" aria-label="Karaoke Viewer を開く" style="text-decoration:none;width:auto;padding:0 10px;font-size:11px;font-weight:700;color:var(--accent);border-color:var(--accent-soft)"><i class="fas fa-external-link-alt" style="margin-right:5px"></i>Viewer</a>
+    <button class="theme-toggle" id="themeToggle" type="button" title="ダークモード切替" aria-label="ダークモード切替"><i class="fas fa-moon"></i></button>
+  </div>
 </div>
 
 <div class="top-cards">
@@ -2225,7 +2228,7 @@ async function envCsvSave(){
   try{
     const res = await fetch(GAS_URL, {
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
       body: JSON.stringify({filename:'cool_analysis.csv', content:content})
     });
     if(!res.ok){ showCsvMsg('保存失敗: HTTP '+res.status, 'error'); return; }
