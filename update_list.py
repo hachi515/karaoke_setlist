@@ -1412,6 +1412,14 @@ body.dark .song-created-mark{background:#3f1d1d;border-color:#7f1d1d;color:#fca5
 }
 .env-lock-btn:hover{filter:brightness(1.05)}
 .env-lock-msg{margin-top:10px;font-size:12px;color:var(--red);min-height:16px}
+/* Site-wide password gate (shown until unlocked) */
+.site-lock{
+  position:fixed;inset:0;z-index:9999;background:var(--bg);
+  display:flex;align-items:center;justify-content:center;padding:30px 16px;overflow:auto;
+}
+body.site-locked{overflow:hidden}
+body.site-locked > *:not(#siteLockScreen){display:none !important}
+body.dark .site-lock{background:var(--bg)}
 .env-csv-wrap{margin-top:8px}
 .env-csv-actions{display:flex;gap:6px;justify-content:flex-end;margin-bottom:6px}
 .env-csv-text{
@@ -1449,7 +1457,44 @@ body.dark .song-created-mark{background:#3f1d1d;border-color:#7f1d1d;color:#fca5
 }
 </style>
 </head>
-<body>
+<body class="site-locked">
+
+<!-- Site-wide password gate -->
+<div id="siteLockScreen" class="site-lock">
+  <div class="env-lock-card">
+    <div class="env-lock-ico"><i class="fas fa-lock"></i></div>
+    <div class="env-lock-title">Karaoke Dashboard はパスワードで保護されています</div>
+    <input type="password" id="siteLockPwInput" class="env-lock-input" placeholder="パスワードを入力" autocomplete="off">
+    <button class="env-lock-btn" id="siteLockPwBtn" type="button">解除</button>
+    <div class="env-lock-msg" id="siteLockPwMsg"></div>
+  </div>
+</div>
+<script>
+(function(){
+  var SITE_PASSWORD='0515';
+  function unlock(){
+    sessionStorage.setItem('siteUnlocked','1');
+    document.body.classList.remove('site-locked');
+    var s=document.getElementById('siteLockScreen'); if(s) s.style.display='none';
+  }
+  if(sessionStorage.getItem('siteUnlocked')==='1'){
+    unlock();
+    return;
+  }
+  function tryUnlock(){
+    var v=document.getElementById('siteLockPwInput').value;
+    var msg=document.getElementById('siteLockPwMsg');
+    if(v===SITE_PASSWORD){ msg.innerText=''; unlock(); }
+    else{ msg.innerText='パスワードが正しくありません'; document.getElementById('siteLockPwInput').value=''; }
+  }
+  document.addEventListener('DOMContentLoaded', function(){
+    var btn=document.getElementById('siteLockPwBtn');
+    var inp=document.getElementById('siteLockPwInput');
+    if(btn) btn.addEventListener('click', tryUnlock);
+    if(inp){ inp.addEventListener('keydown', function(e){ if(e.key==='Enter') tryUnlock(); }); inp.focus(); }
+  });
+})();
+</script>
 
 <div class="app-header">
   <div class="brand">Karaoke Dashboard</div>
@@ -1580,16 +1625,7 @@ body.dark .song-created-mark{background:#3f1d1d;border-color:#7f1d1d;color:#fca5
 
 <!-- Env -->
 <div class="tab-content" id="tab-env">
-  <div id="envLockScreen" class="env-lock">
-    <div class="env-lock-card">
-      <div class="env-lock-ico"><i class="fas fa-lock"></i></div>
-      <div class="env-lock-title">環境設定はパスワードで保護されています</div>
-      <input type="password" id="envPwInput" class="env-lock-input" placeholder="パスワードを入力" autocomplete="off">
-      <button class="env-lock-btn" id="envPwBtn">解除</button>
-      <div class="env-lock-msg" id="envPwMsg"></div>
-    </div>
-  </div>
-  <div id="envContent" style="display:none">
+  <div id="envContent">
     <div class="count-line" style="margin-top:18px"><i class="fas fa-file-csv"></i> cool_analysis.csv 編集</div>
     <div class="env-csv-wrap">
       <div class="env-csv-actions">
@@ -2172,36 +2208,6 @@ function renderTrend(){
 }
 
 // ===== Env =====
-const ENV_PASSWORD = '0515';
-
-function envIsUnlocked(){return sessionStorage.getItem('envUnlocked')==='1';}
-function envApplyLockState(){
-  const lock = document.getElementById('envLockScreen');
-  const content = document.getElementById('envContent');
-  if(envIsUnlocked()){
-    lock.style.display='none';
-    content.style.display='';
-  } else {
-    lock.style.display='';
-    content.style.display='none';
-  }
-}
-function envTryUnlock(){
-  const v = document.getElementById('envPwInput').value;
-  const msg = document.getElementById('envPwMsg');
-  if(v===ENV_PASSWORD){
-    sessionStorage.setItem('envUnlocked','1');
-    msg.innerText='';
-    envApplyLockState();
-  } else {
-    msg.innerText = 'パスワードが正しくありません';
-    document.getElementById('envPwInput').value='';
-  }
-}
-document.getElementById('envPwBtn').addEventListener('click', envTryUnlock);
-document.getElementById('envPwInput').addEventListener('keydown', e=>{ if(e.key==='Enter') envTryUnlock(); });
-envApplyLockState();
-
 // CSV editor for cool_analysis.csv
 function showCsvMsg(msg, kind){
   const el = document.getElementById('envCsvMsg');

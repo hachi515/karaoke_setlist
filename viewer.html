@@ -713,6 +713,11 @@ body.dark .viewer-icon-btn.js-search{background:var(--green-bg);border-color:var
   display:grid;grid-template-columns:1fr;gap:14px;
 }
 @media (min-width:880px){.ml-layout{grid-template-columns:320px 1fr}}
+/* Widen layout on PC so the "All Songs" pane matches the cool tab width (~--maxw). */
+@media (min-width:1280px){
+  .ml-layout{max-width:1248px}
+  .ml-footer{max-width:1248px}
+}
 .ml-side{display:flex;flex-direction:column;gap:12px}
 .ml-card{
   background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;
