@@ -111,6 +111,30 @@ body.dark .trend-pickup-row .num-badge{background:#7f1d1d;color:#fecaca}
   outline:none;width:100%;cursor:pointer;padding:0;line-height:1.2;
 }
 .top-card input[type=number]{cursor:text}
+.top-card .port-pick-btn{
+  width:28px;height:28px;border-radius:7px;background:#f3f4f6;border:1px solid var(--border);
+  color:var(--text-sub);display:flex;align-items:center;justify-content:center;cursor:pointer;
+  font-size:12px;flex-shrink:0;padding:0;
+}
+.top-card .port-pick-btn:hover{color:var(--accent);border-color:var(--accent-soft);background:var(--accent-bg)}
+
+/* Port/Room picker */
+.port-room-grid{
+  display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:6px 2px 4px;
+}
+.port-room-card{
+  background:#f3f4f6;border:1px solid transparent;border-radius:12px;
+  padding:18px 12px;text-align:center;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  transition:background .15s, border-color .15s;
+}
+.port-room-card:hover{background:#eef2ff;border-color:var(--accent-soft)}
+.port-room-card.selected{background:var(--accent-bg);border-color:var(--accent);}
+.port-room-card .pr-name{font-weight:700;font-size:14px;color:var(--primary);line-height:1.3}
+.port-room-card .pr-port{font-size:12px;color:var(--text-mute);font-variant-numeric:tabular-nums;line-height:1.2}
+body.dark .port-room-card{background:#1f2937;border-color:transparent}
+body.dark .port-room-card:hover{background:#1e293b}
+body.dark .port-room-card.selected{background:rgba(99,102,241,.15);border-color:var(--accent)}
 
 /* Saved HTML export-link inherits surrounding text styling */
 .export-link{color:inherit;text-decoration:none}
@@ -589,6 +613,7 @@ body.dark .song-created-mark{background:#3f1d1d;border-color:#7f1d1d;color:#fca5
       <div class="lbl">保存時ポート</div>
       <input type="number" id="exportPort" value="11059">
     </div>
+    <button type="button" class="port-pick-btn" id="portPickBtn" title="部屋から選択" aria-label="部屋から選択"><i class="fas fa-list"></i></button>
   </div>
   <div class="top-card">
     <div class="ico"><i class="fas fa-link"></i></div>
@@ -860,6 +885,53 @@ function openSingersModal(workName, songName){
 }
 function closeModal(){document.getElementById('modalOverlay').classList.remove('active');}
 document.getElementById('modalOverlay').addEventListener('click',e=>{if(e.target.id==='modalOverlay') closeModal();});
+
+// ===== Port/Room picker =====
+const PORT_ROOMS = {
+  11000:"ゆーふうりん部屋",11001:"ゆーふうりん部屋",11002:"ゆーふうりん部屋",11003:"ゆーふうりん部屋",11004:"ゆーふうりん部屋",
+  11005:"ゆーふうりん部屋",11006:"ゆーふうりん部屋",11007:"ゆーふうりん部屋",11008:"ゆーふうりん部屋",11009:"ゆーふうりん部屋",
+  11021:"成田部屋",11022:"成田部屋",
+  11028:"タマ部屋",
+  11058:"すみた部屋",11059:"つぼはち部屋",11060:"れん部屋",11061:"百合川部屋",
+  11063:"なぎ部屋",11064:"naoo部屋",
+  11066:"芝ちゃん部屋",11067:"crom部屋",11068:"けんしん部屋",11069:"けんちぃ部屋",
+  11070:"黒河部屋",11071:"黒河部屋",
+  11073:"コウ艦長部屋",11074:"tukinowa部屋",
+  11077:"v3部屋",11078:"のんでる部屋",11079:"まどか部屋",
+  11082:"ヤマテル部屋",
+  11084:"タカヒロ部屋",11085:"タカヒロ部屋",11086:"タカヒロ部屋",
+  11087:"MiO部屋",11088:"ほっしー部屋",
+  11101:"えみち部屋",11102:"るえ部屋",11103:"ながし部屋",11104:"MrN部屋",
+  11105:"ヤマテル部屋",11106:"遠見塚部屋",11107:"ブルーベリー部屋",
+  11110:"加古部屋"
+};
+function openPortPickerModal(){
+  const cur = String(document.getElementById('exportPort').value || '').trim();
+  const ports = Object.keys(PORT_ROOMS).map(Number).sort((a,b)=>a-b);
+  document.getElementById('modalTitle').innerHTML = '部屋を選択<small>ポート番号と部屋名</small>';
+  let body = '<div class="port-room-grid">';
+  ports.forEach(p=>{
+    const sel = (String(p)===cur) ? ' selected' : '';
+    body += `<div class="port-room-card${sel}" data-port="${p}" role="button" tabindex="0">`
+         +  `<div class="pr-name">${escHtml(PORT_ROOMS[p])}</div>`
+         +  `<div class="pr-port">${p}</div>`
+         +  `</div>`;
+  });
+  body += '</div>';
+  const mb = document.getElementById('modalBody');
+  mb.innerHTML = body;
+  mb.querySelectorAll('.port-room-card').forEach(el=>{
+    el.addEventListener('click',()=>{
+      document.getElementById('exportPort').value = el.dataset.port;
+      closeModal();
+    });
+    el.addEventListener('keydown',ev=>{
+      if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();el.click();}
+    });
+  });
+  document.getElementById('modalOverlay').classList.add('active');
+}
+document.getElementById('portPickBtn').addEventListener('click',openPortPickerModal);
 
 document.querySelectorAll('.tab-btn').forEach(b=>{
   b.addEventListener('click',()=>{
