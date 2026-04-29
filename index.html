@@ -1052,21 +1052,21 @@ function buildCoolCard(w, rank, cat){
   const opTag = `<span class="type-pill tp-op">OP <b>${opVal}</b></span>`;
   const edTag = `<span class="type-pill tp-ed">ED <b>${edVal}</b></span>`;
   const inTag = `<span class="type-pill tp-in">IN <b>${inVal}</b></span>`;
-  // 作品単位の作成数合計（赤字）
+  // 作品単位の作成数合計（赤字）: X／Y 作成 形式（X=作成済み曲数, Y=総曲数）
   const createdTag = (w.total_created||0) > 0
-    ? `<span class="type-pill tp-created" title="作成数の合計"><i class="fas fa-check"></i>作成 <b>${w.total_created}</b></span>`
+    ? `<span class="type-pill tp-created" title="作成数の合計"><b>${w.total_created}</b>／${w.songs.length} 作成</span>`
     : '';
   let songsHtml = '';
   w.songs.forEach(s=>{
     const sm = `${flatMetricHtml('人数',s.user_count,'user')}${flatMetricHtml('歌唱数',s.count,'song')}`;
     const createdMark = (s.creation_count||0) > 0
-      ? `<span class="song-created-mark" title="offline_list 内の作成数"><i class="fas fa-check"></i>作成${s.creation_count>1?' '+s.creation_count:''}</span>`
+      ? `<span class="song-created-mark" title="offline_list 内の作成数">作成${s.creation_count}</span>`
       : '';
     songsHtml += `<div class="song-row">
       ${typeChipHtml(s.type)}
       <div class="song-info-wrap">
-        <div class="song-name">${escHtml(s.song)}</div>
-        <div class="song-artist">${escHtml(s.artist)}${createdMark}</div>
+        <div class="song-name">${escHtml(s.song)}${createdMark}</div>
+        <div class="song-artist">${escHtml(s.artist)}</div>
       </div>
       <div class="song-metrics">${sm}</div>
     </div>`;
@@ -1435,8 +1435,8 @@ function buildCoolHtmlForCatExport(cat){
   let h = `<div style="font-size:14px;font-weight:700;color:var(--primary);padding-left:10px;border-left:3px solid var(--accent);margin:14px 0 8px">${escHtml(cat)} - ${works.length}作品</div>`;
   works.forEach((w,i)=>{
     const card = buildCoolCard(w, i+1, cat);
-    h += card.replace(/(<div class="song-name">)([^<]+)(<\/div>)/g, (_,p1,n,p3)=>{
-      return p1 + `<a class="export-link" href="#search:${encodeURIComponent(w.anime+' '+n)}">${n}</a>` + p3;
+    h += card.replace(/(<div class="song-name">)([^<]+)(<span class="song-created-mark"[\s\S]*?<\/span>)?(<\/div>)/g, (_,p1,n,mark,p4)=>{
+      return p1 + `<a class="export-link" href="#search:${encodeURIComponent(w.anime+' '+n)}">${n}</a>` + (mark||'') + p4;
     });
   });
   return h;
