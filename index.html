@@ -615,7 +615,7 @@ body.dark .song-created-mark{background:#3f1d1d;border-color:#7f1d1d;color:#fca5
   </div>
 </div>
 
-<div class="update-line"><i class="far fa-clock" style="margin-right:4px"></i><span id="updateLine">2026/04/29 21:52 更新</span></div>
+<div class="update-line"><i class="far fa-clock" style="margin-right:4px"></i><span id="updateLine">2026/04/29 22:39 更新</span></div>
 
 <!-- Setlist -->
 <div class="tab-content active" id="tab-setlist">
@@ -721,9 +721,8 @@ body.dark .song-created-mark{background:#3f1d1d;border-color:#7f1d1d;color:#fca5
       <div class="env-csv-actions">
         <button class="dl-btn ghost compact" id="envCsvLoad" type="button"><i class="fas fa-cloud-download-alt"></i><span class="dl-lbl">読み込み</span></button>
         <button class="dl-btn compact" id="envCsvSave" type="button"><i class="fas fa-save"></i><span class="dl-lbl">保存</span></button>
-        <button class="dl-btn ghost compact" id="envCsvDownload" type="button" title="編集内容を cool_analysis.csv ファイルとしてダウンロード (GAS 不通時の手動バックアップ用)"><i class="fas fa-file-download"></i><span class="dl-lbl">ダウンロード</span></button>
       </div>
-      <textarea id="envCsvText" class="env-csv-text" placeholder="「読み込み」を押すと cool_analysis.csv の内容を表示します。編集後「保存」を押すとGAS経由で書き込みます。GAS が不通の場合は「ダウンロード」で手元に保存しリポジトリへ手動コミットできます。" spellcheck="false"></textarea>
+      <textarea id="envCsvText" class="env-csv-text" placeholder="「読み込み」を押すと cool_analysis.csv の内容を表示します。編集後「保存」を押すとGAS経由で書き込みます。" spellcheck="false"></textarea>
       <div class="env-csv-msg" id="envCsvMsg"></div>
     </div>
   </div>
@@ -750,7 +749,7 @@ const CATS = ["2026年春アニメ", "2026年冬アニメ", "2025年秋アニメ
 const TREND_PERIODS = [3, 7, 14, 30];
 const TREND_TARGET_CAT = "2026年春アニメ";
 const GAS_URL = "https://script.google.com/macros/s/AKfycbyzKEPfj0bYcRyEdizwQXcduIOQFt2_njtFQSyGP9jBjrhR8pyVKwDol6VN7bLPrktq/exec";
-const UPDATE_TS = "2026/04/29 21:52";
+const UPDATE_TS = "2026/04/29 22:39";
 const PAGE_SIZE = 200;
 
 document.getElementById('updateLine').innerText = UPDATE_TS + ' 更新';
@@ -1335,22 +1334,6 @@ function showCsvMsg(msg, kind){
   el.innerText = msg;
   el.className = 'env-csv-msg' + (kind ? ' '+kind : '');
 }
-function envCsvDownloadFallback(){
-  // GAS が到達不能 (Failed to fetch) でも編集内容を失わないよう、
-  // ローカルにダウンロードして手動でリポジトリにコミットできるようにする。
-  const content = document.getElementById('envCsvText').value;
-  if(!content){ showCsvMsg('内容が空のためダウンロードできません', 'error'); return; }
-  try{
-    const blob = new Blob([content], {type:'text/csv;charset=utf-8'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'cool_analysis.csv';
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url), 1000);
-  }catch(e){
-    showCsvMsg('ダウンロード失敗: '+e.message, 'error');
-  }
-}
 async function envCsvLoad(){
   showCsvMsg('読み込み中...', '');
   try{
@@ -1360,7 +1343,7 @@ async function envCsvLoad(){
     document.getElementById('envCsvText').value = text;
     showCsvMsg('読み込み完了 ('+text.length+' 文字)', 'ok');
   }catch(e){
-    showCsvMsg('読み込みエラー: '+e.message+' (ネットワーク / GAS の状態を確認してください)', 'error');
+    showCsvMsg('読み込みエラー: '+e.message, 'error');
   }
 }
 async function envCsvSave(){
@@ -1374,23 +1357,14 @@ async function envCsvSave(){
       headers:{'Content-Type':'text/plain;charset=utf-8'},
       body: JSON.stringify({filename:'cool_analysis.csv', content:content})
     });
-    if(!res.ok){
-      showCsvMsg('保存失敗: HTTP '+res.status+' — ダウンロードへフォールバックします。', 'error');
-      envCsvDownloadFallback();
-      return;
-    }
+    if(!res.ok){ showCsvMsg('保存失敗: HTTP '+res.status, 'error'); return; }
     showCsvMsg('保存完了。次回更新で反映されます。', 'ok');
   }catch(e){
-    // "Failed to fetch" などネットワーク/CORS エラー時は CSV をダウンロードして
-    // 手動でリポジトリにコミットしてもらうことで編集内容を救済する。
-    showCsvMsg('保存エラー: '+e.message+' — 編集内容を CSV としてダウンロードします。リポジトリの cool_analysis.csv を手動で置き換えてください。', 'error');
-    envCsvDownloadFallback();
+    showCsvMsg('保存エラー: '+e.message, 'error');
   }
 }
 document.getElementById('envCsvLoad').addEventListener('click', envCsvLoad);
 document.getElementById('envCsvSave').addEventListener('click', envCsvSave);
-const envCsvDownloadBtn = document.getElementById('envCsvDownload');
-if(envCsvDownloadBtn) envCsvDownloadBtn.addEventListener('click', envCsvDownloadFallback);
 
 // ===== HTML downloads =====
 function buildExportHtml(title, contentHtml){

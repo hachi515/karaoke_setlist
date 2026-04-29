@@ -799,9 +799,8 @@ body.dark .viewer-icon-btn:hover{background:var(--accent-bg)}
 .ml-fbtn.danger:hover{background:#dc2626;color:#fff;border-color:#dc2626}
 body.dark .ml-fbtn.danger{background:#3f1d1d;color:#fca5a5;border-color:#7f1d1d}
 body.dark .ml-fbtn.danger:hover{background:#dc2626;color:#fff;border-color:#dc2626}
-/* ダークモードでは --accent が淡い色 (#818cf8) になるため、
-   白文字との十分なコントラストを得るために濃い indigo にする。
-   "同期して保存" など primary ボタンが読めない問題への対応。 */
+/* ダークモードでは --accent が淡いため白文字の primary ボタンが読みづらい。
+   濃い indigo を使ってコントラストを確保する。 */
 body.dark .ml-fbtn.primary{background:#4f46e5;color:#fff;border-color:#4f46e5}
 body.dark .ml-fbtn.primary:hover{background:#4338ca;color:#fff;border-color:#4338ca;filter:none}
 
@@ -900,7 +899,7 @@ body.dark .room-btn.selected{background:var(--green);color:#fff}
   </div>
 </div>
 
-<div class="update-line"><i class="far fa-clock" style="margin-right:4px"></i><span id="updateLine">2026/04/29 21:52 更新</span></div>
+<div class="update-line"><i class="far fa-clock" style="margin-right:4px"></i><span id="updateLine">2026/04/29 22:39 更新</span></div>
 
 <!-- Cool -->
 <div class="tab-content active" id="tab-cool">
@@ -1167,7 +1166,7 @@ const ROOMS = {"11000": "ゆーふうりん部屋", "11001": "ゆーふうりん
 const CATS = ["2026年春アニメ", "2026年冬アニメ", "2025年秋アニメ"];
 const TREND_PERIODS = [3, 7, 14, 30];
 const TREND_TARGET_CAT = "2026年春アニメ";
-const UPDATE_TS = "2026/04/29 21:52";
+const UPDATE_TS = "2026/04/29 22:39";
 const MYLIST_GAS_URL = "https://script.google.com/macros/s/AKfycbwhx-_zhE7IJvRLgOegHpQ5WYqC6cBG3fENWtMa0sEX0Rwnh__dPoS25OPkkU9xvIDp/exec";
 
 document.getElementById('updateLine').innerText = UPDATE_TS + ' 更新';
