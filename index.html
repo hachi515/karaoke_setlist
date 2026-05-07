@@ -58,11 +58,13 @@ body.dark .top-card,body.dark .card,body.dark .icon-btn,body.dark .pill-select,b
 body.dark .search-pill,body.dark .rank-row-flat,body.dark .notable-row,body.dark .trend-stat,
 body.dark .modal,body.dark .modal-row,body.dark .env-csv-text,body.dark .env-work-row,
 body.dark .env-lock-card,body.dark .popover,body.dark .pager button,body.dark .theme-toggle,
-body.dark .room-chip,body.dark .env-lock-input{
+body.dark .room-chip,body.dark .env-lock-input,body.dark .ass-card,body.dark .ass-input,
+body.dark .ass-text,body.dark .ass-toolbar-note,body.dark .ass-raw-panel{
   background:var(--panel);color:var(--text);border-color:var(--border);
 }
 body.dark .top-card input,body.dark .top-card select,body.dark .search-pill input,
-body.dark .env-csv-text,body.dark .env-lock-input,body.dark .room-search{
+body.dark .env-csv-text,body.dark .env-lock-input,body.dark .room-search,
+body.dark .ass-input,body.dark .ass-text{
   color:var(--text);background:transparent;
 }
 body.dark .room-search{border-color:var(--border)}
@@ -561,6 +563,30 @@ body.dark .site-lock{background:var(--bg)}
 .env-csv-msg.error{color:var(--red)}
 .env-csv-msg.ok{color:var(--green)}
 
+/* ===== ASS tag extension editor ===== */
+.ass-intro{font-size:12.5px;color:var(--text-sub);margin:6px 0 0;line-height:1.5}
+.ass-msg{margin:8px 0 0;font-size:12px;color:var(--text-sub);min-height:16px;font-weight:600}
+.ass-msg.error{color:var(--red)}
+.ass-msg.ok{color:var(--green)}
+.ass-actions{display:flex;gap:6px;justify-content:flex-end;align-items:center;flex-wrap:wrap;margin:8px 0 10px}
+.ass-toolbar-note{background:#fff;border:1px solid var(--border);border-radius:10px;padding:9px 12px;font-size:12px;color:var(--text-sub);line-height:1.5;margin-top:8px}
+.ass-list{display:flex;flex-direction:column;gap:10px;margin-top:10px}
+.ass-card{background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:0 1px 2px rgba(15,23,42,.03)}
+.ass-card-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border-soft)}
+.ass-card-no{width:30px;height:30px;border-radius:50%;background:var(--accent-bg);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex-shrink:0;font-variant-numeric:tabular-nums}
+.ass-input{flex:1;min-width:0;border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--primary);padding:8px 10px;font-size:13px;font-weight:700;outline:none}
+.ass-input:focus,.ass-text:focus{border-color:var(--accent)}
+.ass-delete{width:34px;height:34px;border-radius:8px;border:1px solid var(--border);background:#fff;color:var(--text-sub);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
+.ass-delete:hover{color:var(--red);border-color:#fecaca;background:#fef2f2}
+.ass-fields{padding:12px;display:grid;grid-template-columns:1fr;gap:10px}
+.ass-field-label{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:800;color:var(--accent);margin-bottom:5px;letter-spacing:.02em}
+.ass-text{width:100%;min-height:70px;border:1px solid var(--border);border-radius:10px;background:#fff;color:var(--text);padding:10px 12px;font-size:12.5px;line-height:1.55;font-family:"Noto Sans JP",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;resize:vertical;outline:none;white-space:pre;overflow:auto}
+.ass-text.char{min-height:112px}
+.ass-raw-panel{display:none;background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);padding:10px;margin-top:10px}
+.ass-raw-panel.show{display:block}
+.ass-raw-panel .env-csv-text{min-height:460px}
+.ass-hidden{display:none !important}
+
 /* Print */
 @media print{
   *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
@@ -657,11 +683,12 @@ body.dark .site-lock{background:var(--bg)}
     <button class="tab-btn" data-tab="cool"><i class="far fa-clock"></i> クール集計</button>
     <button class="tab-btn" data-tab="ranking"><i class="fas fa-trophy"></i> ランキング</button>
     <button class="tab-btn" data-tab="trend"><i class="fas fa-chart-line"></i> 推移</button>
+    <button class="tab-btn" data-tab="ass"><i class="fas fa-tags"></i> ASSタグ拡張</button>
     <button class="tab-btn" data-tab="env"><i class="fas fa-cog"></i> 環境設定</button>
   </div>
 </div>
 
-<div class="update-line"><i class="far fa-clock" style="margin-right:4px"></i><span id="updateLine">2026/05/08 00:39 更新</span></div>
+<div class="update-line"><i class="far fa-clock" style="margin-right:4px"></i><span id="updateLine">2026/05/08 01:15 更新</span></div>
 
 <!-- Setlist -->
 <div class="tab-content active" id="tab-setlist">
@@ -750,6 +777,28 @@ body.dark .site-lock{background:var(--bg)}
   <div id="trendBody"></div>
 </div>
 
+<!-- ASS Tags -->
+<div class="tab-content" id="tab-ass">
+  <div class="tab-toolbar">
+    <div class="toolbar-row">
+      <button class="dl-btn ghost compact" id="assLoad" type="button"><i class="fas fa-cloud-download-alt"></i><span class="dl-lbl">読み込み</span></button>
+      <button class="dl-btn compact" id="assSave" type="button"><i class="fas fa-save"></i><span class="dl-lbl">保存</span></button>
+      <button class="dl-btn ghost compact" id="assAdd" type="button"><i class="fas fa-plus"></i><span class="dl-lbl">項目追加</span></button>
+      <button class="dl-btn ghost compact" id="assRawToggle" type="button"><i class="fas fa-code"></i><span class="dl-lbl">テキスト編集</span></button>
+    </div>
+    <div class="ass-toolbar-note"><i class="fas fa-info-circle"></i> 【タイトル】を1項目として扱い、各項目の「行」「文字」を別ブロックで編集します。未保存の初期値は下のプリセットです。</div>
+  </div>
+  <div class="count-line"><i class="fas fa-tags"></i><span id="assCount">0</span> 項目</div>
+  <div class="ass-msg" id="assMsg"></div>
+  <div id="assList" class="ass-list"></div>
+  <div id="assRawPanel" class="ass-raw-panel">
+    <div class="ass-actions">
+      <button class="dl-btn ghost compact" id="assApplyRaw" type="button"><i class="fas fa-check"></i><span class="dl-lbl">テキストを項目へ反映</span></button>
+    </div>
+    <textarea id="assRawText" class="env-csv-text" placeholder="【タイトル】&#10;行：...&#10;文字：..." spellcheck="false"></textarea>
+  </div>
+</div>
+
 <!-- Env -->
 <div class="tab-content" id="tab-env">
   <div id="envContent">
@@ -786,7 +835,9 @@ const CATS = ["2026年春アニメ", "2026年冬アニメ", "2025年秋アニメ
 const TREND_PERIODS = [3, 7, 14, 30];
 const TREND_TARGET_CAT = "2026年春アニメ";
 const GAS_URL = "https://script.google.com/macros/s/AKfycbyzKEPfj0bYcRyEdizwQXcduIOQFt2_njtFQSyGP9jBjrhR8pyVKwDol6VN7bLPrktq/exec";
-const UPDATE_TS = "2026/05/08 00:39";
+const UPDATE_TS = "2026/05/08 01:15";
+const ASS_TAGS_FILENAME = "ass_tag_extensions.txt";
+const ASS_TAG_DEFAULT_TEXT = "【しあわせフレーバー（くるくる1回転イン、ワイプ後に文字大きくする）】\n行：{\\org([%W/2],[%y100])\\fsp0\\fs[%f-5]\\alpha&HFF&}{\\fr0.05\\t([%n3]0,[%n3+20]1,\\fr0\\fs[%f]\\alpha&H00&)}\n文字：{\\org([%x+%w/2],[%y])\\fr10\\fry360\\alpha&HFF&\\move(%x,[%y+40],%x,%y,[%n6]0,[%n6+80]0,23)\\t([%n6]0,[%n*6+50]0,0.5,\\fr0\\fry0\\alpha&H00&)}{\\t(%s,%s,\\fs[%f+15])\\t(%s,%e,\\fs%f)}\n\n【春夏秋冬（文字単位螺旋イン、ワイプ後に文字縮小して↑方向にアウト）】\n文字：{\\org([%x+%w/2],[%y])\\frx0\\fry0\\frz0\\fscx100\\fscy100\\alpha&HFF&\\move(%x,[%y+30],%x,%y,[%n25],[%n25+500],7)\\t([%n25],[%n25+260],0.45,\\alpha&H00&)}\n{\\t([%V+420+%n25],[%V+560+%n25],23,\\alpha&H1A&\\fsp-7)}\n{\\move(%x,%y,%x,[%y-70],[%V+560+%n25],[%V+980+%n25],7)}\n{\\t([%V+560+%n25],[%V+980+%n25],7,\\fscx78\\fscy78\\3a&HFF&\\blura&H00&)}\n{\\t([%V+820+%n25],[%V+980+%n25],1,\\alpha&HFF&)}\n\n【氷の城壁（文字単位螺旋イン、ワイプ後にくるくる回転アウト）】\n文字：{\\org([%x+%w/2],[%y])\\frx0\\fry0\\frz0\\fscx100\\fscy100\\alpha&HFF&\\move(%x,[%y+40],%x,%y,[%n6]0,[%n6+80]0,23)\\t([%n6]0,[%n6+40]0,0.45,\\alpha&H00&)}{\\t([%e+470],[%e+1170],1,\\frx0\\fry-270\\frz0\\fscx78\\fscy78\\alpha&HFF&\\3a&HFF&\\4a&HFF&)}\n\n【青空ジャンピングハート】\n行：{\\org([%W/2],[%y100])\\fsp0\\fs[%f-5]\\alpha&HFF&}{\\fr0.05\\t([%n3]0,[%n*3+20]1,\\fr0\\fsp0\\fs[%f]\\alpha&H00&)}\n文字：{\\org([%w/2+%x],[%y])}{\\fr10\\fry990\\alpha&HFF&\\t([%n3]0,[%n3+80]1,0.5,\\fr0\\fry0\\alpha&H00&)}{\\t(%s,%s,\\fs[%f+15])\\t(%s,%e,\\fs%f)}{\\move([%x-0],%y,[%x-50],[%y+50],[%e+200],[%e+1000])}{\\t([%e+200],[%e+1000],\\bord3\\frz180\\fry270\\fs10\\1a&Hff&\\3a&Hff&\\4a&Hff&)}\n\n【北斗の拳】\n{\\org([%x+%w/2],[%y])\\fad(200,200)\n\\fscx100\\fscy100\n\n\\t([%s],[%s+200],0.5,\\fscx90\\fscy90)\n\\t([%e-200],[%e],0.5,\\fscx100\\fscy100)\n\n\\t([%V+80],[%V+160],1,\\fscx80\\fscy80\\1c&H888888&)\n\\t([%V+160],[%V+280],0.5,\\fscx150\\fscy150\\1c&HFFFFFF&\\3c&HFFFFFF&\\4c&HFFFFFF&\\glow180\\gblur6)\n\n\\move(%x,%y,\n[%x + ((%n37)%17-8)85 + ((%n13)%5-2)30],\n[%y - 100 + ((%n29)%11-5)40],\n[%V+200],[%V+1000],23)\n\n\\t([%V+160],[%V+1000],1,\n\\fscx[60+((%n17)%40)]\\fscy[60+((%n23)%40)]\n\\frz[((%n*41)%360)]\n\\1a&HFF&\\3a&HFF&\\4a&HFF&\\blura&HFF&)\n\n【SI-VIS（中央に集まりながらフェードアウト）】\n行：{\\org([%W/2],[%y100])\\fsp0\\fs[%f-5]\\alpha&HFF&}{\\fr0.05\\t([%n3]0,[%n*3+20]1,\\fr0\\fsp0\\fs[%f]\\alpha&H00&)}\n文字：{\\move(%x,%y,%x,[%y-80],[%e+200],[%e+800],23)}{\\t([%e+200],[%e+800],28,\\alpha&HFF&\\fscx70\\fs30\\3a&HFF&\\4a&HFF&\\glow0)} \n\n【フリーレン（１文字ずつフェードアウト）】\n行：{\\org([%W/2],[%y100])\\fsp0\\fs[%f-5]\\alpha&HFF&}{\\fr0.05\\t([%n3]0,[%n3+20]1,\\fr0\\fsp0\\fs[%f]\\alpha&H00&)}\n文字：{\\org([%x+%w/2],[%y])\\alpha&HFF&\\fscx100\\fscy100\n\\t([%n3]0,[%n3+60]0,0.5,\\alpha&H00&)\n\\t([%n3]0,[%n3+50]0,23,\\fscx110\\fscy110)\n\\t([%n3+50]0,[%n3+100]0,23,\\fscx100\\fscy100)\n}\n{\\t([%e+200],[%e+1000],1,\\bord3\\fs10\\1a&Hff&\\3a&Hff&\\4a&Hff&)}\n\n【クラニカ（ふわっと文字が大きくなって登場、ふわっと↓方向にアウト）】\n文字：{\\org([%x+%w/2],[%y])\\frz4\\fscx90\\fscy90\\alpha&HFF&\\move(%x,[%y+20],%x,%y,[%n24],[%n24+500],7)\\t([%n24],[%n24+500],7,\\frz0\\fscx100\\fscy100\\alpha&H00&)} {\\t([%V+320+%n18],[%V+440+%n18],7,\\alpha&H18&\\fsp-3)} {\\move(%x,%y,%x,[%y-16],[%V+200+%n18],[%V+1300+%n18])} {\\t([%V+440+%n18],[%V+960+%n18],7,\\fscx94\\fscy94\\frz4\\alpha&HFF&\\3a&HFF&\\4a&HFF&\\blura&HFF&\\fs40)}\n{\\t([%V],[%V+300],7,\\1a&H30&\\3a&H60&\\blura&H100&)}";
 const PAGE_SIZE = 200;
 
 document.getElementById('updateLine').innerText = UPDATE_TS + ' 更新';
@@ -1334,6 +1385,209 @@ function renderTrend(){
   document.getElementById('trendBody').innerHTML = buildTrendHtml();
 }
 
+// ===== ASS tag extension =====
+let assEntries = [];
+let assRawMode = false;
+
+function showAssMsg(msg, kind){
+  const el = document.getElementById('assMsg');
+  if(!el) return;
+  el.innerText = msg || '';
+  el.className = 'ass-msg' + (kind ? ' '+kind : '');
+}
+function assNormalizeText(text){
+  return String(text||'').replace(/\r\n/g,'\n').replace(/\r/g,'\n').trim();
+}
+function parseAssTagText(text){
+  text = assNormalizeText(text);
+  if(!text) return [];
+  const heads = [];
+  const re = /【([^】]+)】/g;
+  let m;
+  while((m = re.exec(text)) !== null){
+    heads.push({title:m[1].trim(), start:m.index, bodyStart:re.lastIndex});
+  }
+  if(heads.length === 0){
+    return [{title:'新規ASSタグ', row:'', char:text}];
+  }
+  const entries = [];
+  heads.forEach((h, i)=>{
+    const nextStart = i + 1 < heads.length ? heads[i+1].start : text.length;
+    const body = text.slice(h.bodyStart, nextStart).trim();
+    const entry = {title:h.title || ('項目'+(i+1)), row:'', char:''};
+    const labels = [];
+    const labelRe = /(?:^|\n)(行|文字)：/g;
+    let lm;
+    while((lm = labelRe.exec(body)) !== null){
+      labels.push({kind:lm[1], labelStart:lm.index, contentStart:labelRe.lastIndex});
+    }
+    if(labels.length === 0){
+      entry.char = body;
+    }else{
+      const prefix = body.slice(0, labels[0].labelStart).trim();
+      if(prefix) entry.char = prefix;
+      labels.forEach((lb, li)=>{
+        const end = li + 1 < labels.length ? labels[li+1].labelStart : body.length;
+        const val = body.slice(lb.contentStart, end).trim();
+        if(lb.kind === '行') entry.row = entry.row ? entry.row + '\n' + val : val;
+        else entry.char = entry.char ? entry.char + '\n' + val : val;
+      });
+    }
+    entries.push(entry);
+  });
+  return entries;
+}
+function serializeAssTagEntries(entries){
+  return entries.map((e, idx)=>{
+    const title = (e.title || '').trim() || ('項目'+(idx+1));
+    const row = assNormalizeText(e.row);
+    const chr = assNormalizeText(e.char);
+    let out = '【' + title + '】';
+    if(row) out += '\n行：' + row;
+    if(chr) out += '\n文字：' + chr;
+    return out;
+  }).join('\n\n');
+}
+function readAssEntriesFromCards(){
+  return Array.from(document.querySelectorAll('.ass-card')).map(card=>({
+    title: card.querySelector('.ass-title')?.value || '',
+    row: card.querySelector('.ass-row')?.value || '',
+    char: card.querySelector('.ass-char')?.value || ''
+  }));
+}
+function assAutosize(el){
+  if(!el) return;
+  el.style.height = 'auto';
+  el.style.height = Math.max(el.scrollHeight + 2, el.classList.contains('char') ? 112 : 70) + 'px';
+}
+function renderAssEditor(entries){
+  assEntries = (entries || []).map(e=>({title:e.title||'', row:e.row||'', char:e.char||''}));
+  const list = document.getElementById('assList');
+  const count = document.getElementById('assCount');
+  if(count) count.innerText = assEntries.length;
+  if(!list) return;
+  if(assEntries.length === 0){
+    list.innerHTML = '<div class="empty">ASSタグ項目がありません</div>';
+    return;
+  }
+  list.innerHTML = assEntries.map((e, idx)=>`<div class="ass-card" data-index="${idx}">
+    <div class="ass-card-head">
+      <div class="ass-card-no">${idx+1}</div>
+      <input class="ass-input ass-title" type="text" value="${escAttr(e.title)}" placeholder="【】内の項目名">
+      <button class="ass-delete" type="button" title="この項目を削除" aria-label="この項目を削除"><i class="fas fa-trash-alt"></i></button>
+    </div>
+    <div class="ass-fields">
+      <div class="ass-field">
+        <div class="ass-field-label"><i class="fas fa-grip-lines"></i> 行</div>
+        <textarea class="ass-text ass-row" placeholder="行：に入れるASSタグ">${escHtml(e.row)}</textarea>
+      </div>
+      <div class="ass-field">
+        <div class="ass-field-label"><i class="fas fa-font"></i> 文字</div>
+        <textarea class="ass-text ass-char char" placeholder="文字：に入れるASSタグ">${escHtml(e.char)}</textarea>
+      </div>
+    </div>
+  </div>`).join('');
+  list.querySelectorAll('textarea').forEach(t=>{
+    assAutosize(t);
+    t.addEventListener('input',()=>assAutosize(t));
+  });
+  list.querySelectorAll('.ass-delete').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const card = btn.closest('.ass-card');
+      const idx = Number(card.dataset.index);
+      const cur = readAssEntriesFromCards();
+      cur.splice(idx, 1);
+      renderAssEditor(cur);
+      showAssMsg('項目を削除しました。保存するまでGASには反映されません。', '');
+    });
+  });
+}
+function assCurrentText(){
+  if(assRawMode){
+    return document.getElementById('assRawText').value;
+  }
+  return serializeAssTagEntries(readAssEntriesFromCards());
+}
+function assSetRawMode(on){
+  const panel = document.getElementById('assRawPanel');
+  const list = document.getElementById('assList');
+  const btn = document.getElementById('assRawToggle');
+  assRawMode = !!on;
+  if(assRawMode){
+    document.getElementById('assRawText').value = serializeAssTagEntries(readAssEntriesFromCards());
+    panel.classList.add('show');
+    list.classList.add('ass-hidden');
+    if(btn) btn.innerHTML = '<i class="fas fa-table"></i><span class="dl-lbl">項目編集</span>';
+  }else{
+    panel.classList.remove('show');
+    list.classList.remove('ass-hidden');
+    if(btn) btn.innerHTML = '<i class="fas fa-code"></i><span class="dl-lbl">テキスト編集</span>';
+  }
+}
+function assApplyRawToCards(){
+  const raw = document.getElementById('assRawText').value;
+  const entries = parseAssTagText(raw);
+  renderAssEditor(entries);
+  assSetRawMode(false);
+  showAssMsg('テキストを項目へ反映しました。保存するまでGASには反映されません。', 'ok');
+}
+async function assLoad(){
+  showAssMsg('読み込み中...', '');
+  let text = '';
+  try{
+    const res = await fetch(GAS_URL+'?filename='+encodeURIComponent(ASS_TAGS_FILENAME), {method:'GET'});
+    if(res.ok) text = await res.text();
+    if(!res.ok || !assNormalizeText(text) || text.slice(0,200).indexOf('Exception') >= 0){
+      text = ASS_TAG_DEFAULT_TEXT;
+      showAssMsg('保存ファイルが未作成または空のため、初期プリセットを表示しました。', '');
+    }else{
+      showAssMsg('読み込み完了 ('+parseAssTagText(text).length+' 項目)', 'ok');
+    }
+  }catch(e){
+    text = ASS_TAG_DEFAULT_TEXT;
+    showAssMsg('読み込みエラーのため初期プリセットを表示しました: '+e.message, 'error');
+  }
+  renderAssEditor(parseAssTagText(text));
+  assSetRawMode(false);
+}
+async function assSave(){
+  const content = assCurrentText();
+  if(!assNormalizeText(content)){ showAssMsg('内容が空です', 'error'); return; }
+  if(!confirm(ASS_TAGS_FILENAME+' を保存します。よろしいですか？')) return;
+  showAssMsg('保存中...', '');
+  try{
+    const res = await fetch(GAS_URL, {
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({filename:ASS_TAGS_FILENAME, content:content})
+    });
+    if(!res.ok){ showAssMsg('保存失敗: HTTP '+res.status, 'error'); return; }
+    if(assRawMode) renderAssEditor(parseAssTagText(content));
+    assSetRawMode(false);
+    showAssMsg('保存完了。次回読み込み時もこの内容が表示されます。', 'ok');
+  }catch(e){
+    showAssMsg('保存エラー: '+e.message, 'error');
+  }
+}
+function assAddEntry(){
+  const cur = assRawMode ? parseAssTagText(document.getElementById('assRawText').value) : readAssEntriesFromCards();
+  cur.push({title:'新規ASSタグ', row:'', char:''});
+  renderAssEditor(cur);
+  assSetRawMode(false);
+  showAssMsg('項目を追加しました。保存するまでGASには反映されません。', '');
+}
+function initAssEditor(){
+  const loadBtn = document.getElementById('assLoad');
+  if(!loadBtn) return;
+  renderAssEditor(parseAssTagText(ASS_TAG_DEFAULT_TEXT));
+  showAssMsg('初期プリセットを表示中です。保存済みデータを使う場合は「読み込み」を押してください。', '');
+  loadBtn.addEventListener('click', assLoad);
+  document.getElementById('assSave').addEventListener('click', assSave);
+  document.getElementById('assAdd').addEventListener('click', assAddEntry);
+  document.getElementById('assRawToggle').addEventListener('click', ()=>assSetRawMode(!assRawMode));
+  document.getElementById('assApplyRaw').addEventListener('click', assApplyRawToCards);
+}
+
 // ===== Env =====
 // CSV editor for cool_analysis.csv
 function showCsvMsg(msg, kind){
@@ -1628,6 +1882,7 @@ renderSetlist();
 renderCool();
 renderRanking();
 renderTrend();
+initAssEditor();
 </script>
 </body>
 </html>

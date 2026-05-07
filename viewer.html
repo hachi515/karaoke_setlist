@@ -59,11 +59,13 @@ body.dark .top-card,body.dark .card,body.dark .icon-btn,body.dark .pill-select,b
 body.dark .search-pill,body.dark .rank-row-flat,body.dark .notable-row,body.dark .trend-stat,
 body.dark .modal,body.dark .modal-row,body.dark .env-csv-text,body.dark .env-work-row,
 body.dark .env-lock-card,body.dark .popover,body.dark .pager button,body.dark .theme-toggle,
-body.dark .room-chip,body.dark .env-lock-input{
+body.dark .room-chip,body.dark .env-lock-input,body.dark .ass-card,body.dark .ass-input,
+body.dark .ass-text,body.dark .ass-toolbar-note,body.dark .ass-raw-panel{
   background:var(--panel);color:var(--text);border-color:var(--border);
 }
 body.dark .top-card input,body.dark .top-card select,body.dark .search-pill input,
-body.dark .env-csv-text,body.dark .env-lock-input,body.dark .room-search{
+body.dark .env-csv-text,body.dark .env-lock-input,body.dark .room-search,
+body.dark .ass-input,body.dark .ass-text{
   color:var(--text);background:transparent;
 }
 body.dark .room-search{border-color:var(--border)}
@@ -562,6 +564,30 @@ body.dark .site-lock{background:var(--bg)}
 .env-csv-msg.error{color:var(--red)}
 .env-csv-msg.ok{color:var(--green)}
 
+/* ===== ASS tag extension editor ===== */
+.ass-intro{font-size:12.5px;color:var(--text-sub);margin:6px 0 0;line-height:1.5}
+.ass-msg{margin:8px 0 0;font-size:12px;color:var(--text-sub);min-height:16px;font-weight:600}
+.ass-msg.error{color:var(--red)}
+.ass-msg.ok{color:var(--green)}
+.ass-actions{display:flex;gap:6px;justify-content:flex-end;align-items:center;flex-wrap:wrap;margin:8px 0 10px}
+.ass-toolbar-note{background:#fff;border:1px solid var(--border);border-radius:10px;padding:9px 12px;font-size:12px;color:var(--text-sub);line-height:1.5;margin-top:8px}
+.ass-list{display:flex;flex-direction:column;gap:10px;margin-top:10px}
+.ass-card{background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:0 1px 2px rgba(15,23,42,.03)}
+.ass-card-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border-soft)}
+.ass-card-no{width:30px;height:30px;border-radius:50%;background:var(--accent-bg);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex-shrink:0;font-variant-numeric:tabular-nums}
+.ass-input{flex:1;min-width:0;border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--primary);padding:8px 10px;font-size:13px;font-weight:700;outline:none}
+.ass-input:focus,.ass-text:focus{border-color:var(--accent)}
+.ass-delete{width:34px;height:34px;border-radius:8px;border:1px solid var(--border);background:#fff;color:var(--text-sub);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
+.ass-delete:hover{color:var(--red);border-color:#fecaca;background:#fef2f2}
+.ass-fields{padding:12px;display:grid;grid-template-columns:1fr;gap:10px}
+.ass-field-label{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:800;color:var(--accent);margin-bottom:5px;letter-spacing:.02em}
+.ass-text{width:100%;min-height:70px;border:1px solid var(--border);border-radius:10px;background:#fff;color:var(--text);padding:10px 12px;font-size:12.5px;line-height:1.55;font-family:"Noto Sans JP",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;resize:vertical;outline:none;white-space:pre;overflow:auto}
+.ass-text.char{min-height:112px}
+.ass-raw-panel{display:none;background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);padding:10px;margin-top:10px}
+.ass-raw-panel.show{display:block}
+.ass-raw-panel .env-csv-text{min-height:460px}
+.ass-hidden{display:none !important}
+
 /* Print */
 @media print{
   *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
@@ -922,7 +948,7 @@ body.dark .room-btn.selected{background:var(--green);color:#fff}
   </div>
 </div>
 
-<div class="update-line"><i class="far fa-clock" style="margin-right:4px"></i><span id="updateLine">2026/05/08 00:39 更新</span></div>
+<div class="update-line"><i class="far fa-clock" style="margin-right:4px"></i><span id="updateLine">2026/05/08 01:15 更新</span></div>
 
 <!-- Cool -->
 <div class="tab-content active" id="tab-cool">
@@ -1193,7 +1219,7 @@ const ROOMS = {"11000": "ゆーふうりん部屋", "11001": "ゆーふうりん
 const CATS = ["2026年春アニメ", "2026年冬アニメ", "2025年秋アニメ"];
 const TREND_PERIODS = [3, 7, 14, 30];
 const TREND_TARGET_CAT = "2026年春アニメ";
-const UPDATE_TS = "2026/05/08 00:39";
+const UPDATE_TS = "2026/05/08 01:15";
 const MYLIST_GAS_URL = "https://script.google.com/macros/s/AKfycbwhx-_zhE7IJvRLgOegHpQ5WYqC6cBG3fENWtMa0sEX0Rwnh__dPoS25OPkkU9xvIDp/exec";
 
 document.getElementById('updateLine').innerText = UPDATE_TS + ' 更新';
