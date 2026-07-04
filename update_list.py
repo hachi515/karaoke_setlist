@@ -27,8 +27,8 @@ GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyzKEPfj0bYcRyEdizwQX
 CSV_EMPTY_PREFIX_BYTES = b'\xef\xbb\xbf\r\n\t '
 EXPECTED_HISTORY_COLUMNS = ['取得日', '部屋主', '順番', '曲名（ファイル名）', '作品名', '歌手名', '歌った人']
 
-ALLOWED_CATEGORIES = ["2026年春アニメ", "2026年冬アニメ", "2025年秋アニメ"]
-TREND_TARGET_CATEGORY = "2026年春アニメ"
+ALLOWED_CATEGORIES = ["2026年夏アニメ", "2026年春アニメ", "2026年冬アニメ", "2025年秋アニメ"]
+TREND_TARGET_CATEGORY = "2026年夏アニメ"
 TREND_PERIOD_OPTIONS = [3, 7, 14, 30]
 TREND_PICKUP_TOTAL = 10
 
@@ -724,7 +724,7 @@ def assign_matches_with_artist_disambiguation(items, hdf):
 
 
 COOL_START = pd.to_datetime("2026/01/01")
-COOL_END = pd.to_datetime("2026/06/30")
+COOL_END = pd.to_datetime("2026/09/30")
 target_history = full_history[
     (full_history['dt_obj'] >= COOL_START) & (full_history['dt_obj'] <= COOL_END)
 ] if not full_history.empty else pd.DataFrame()
