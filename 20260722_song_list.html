@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+
+<html lang="ja">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<title>20260722新宿</title>
+<style>
+    :root {
+      --ink: #222222;
+      --muted: #6f7780;
+      --line: #dfe3e6;
+      --panel: #ffffff;
+      --page: #f1f2f3;
+      --header: #3d3d3d;
+      --accent: #8FB5DE;
+    }
+
+    * { box-sizing: border-box; }
+
+    html {
+      color: var(--ink);
+      background: var(--page);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Yu Gothic UI", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+      line-height: 1.55;
+      -webkit-text-size-adjust: 100%;
+    }
+
+    body { margin: 0; }
+
+    .page {
+      width: min(1440px, calc(100% - 36px));
+      margin: 28px auto 48px;
+    }
+
+    .titlebar {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      min-height: 52px;
+      padding: 10px 14px 10px 17px;
+      background: var(--panel);
+      border-left: 3px solid #555;
+      border-bottom: 1px solid var(--line);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 18px;
+      letter-spacing: .04em;
+      font-weight: 700;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: minmax(260px, 1fr) 220px auto;
+      align-items: stretch;
+      gap: 0;
+      margin-top: 14px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+    }
+
+    .control {
+      position: relative;
+      display: flex;
+      align-items: center;
+      min-height: 48px;
+      border-right: 1px solid var(--line);
+    }
+
+    .control:last-child { border-right: 0; }
+
+    .search-mark {
+      position: absolute;
+      left: 14px;
+      font-size: 15px;
+      color: var(--muted);
+      pointer-events: none;
+    }
+
+    input, select {
+      width: 100%;
+      height: 46px;
+      border: 0;
+      border-radius: 0;
+      background: #fff;
+      color: var(--ink);
+      font: inherit;
+      font-size: 16px;
+      outline: none;
+    }
+
+    input { padding: 0 14px 0 39px; }
+    select { padding: 0 36px 0 14px; cursor: pointer; }
+
+    input:focus, select:focus { box-shadow: inset 0 -2px 0 var(--accent); }
+
+    .result-count {
+      min-width: 150px;
+      justify-content: flex-end;
+      padding: 0 16px;
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 18px;
+      padding: 10px 2px 9px;
+      color: #4b5157;
+      font-size: 13px;
+    }
+
+    .legend-item { display: inline-flex; align-items: center; gap: 7px; }
+    .legend-swatch { width: 18px; height: 8px; transform: skewX(-20deg); }
+
+    .table-wrap {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      background: var(--panel);
+      border: 1px solid var(--line);
+    }
+
+    table {
+      width: 100%;
+      min-width: 1060px;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    thead th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      padding: 11px 12px;
+      background: var(--header);
+      color: white;
+      text-align: left;
+      font-size: 13px;
+      letter-spacing: .03em;
+      font-weight: 700;
+      border-right: 1px solid #555;
+    }
+
+    thead th:last-child { border-right: 0; }
+
+    tbody tr {
+      border-bottom: 1px solid rgba(0, 0, 0, .075);
+    }
+
+    tbody tr[data-person="れん"] {
+      --row-color: #fdf1f4;
+      --row-hover: #fbe6eb;
+    }
+
+    tbody tr[data-person="つぼはち"] {
+      --row-color: #f1f9f3;
+      --row-hover: #e4f2e8;
+    }
+
+    tbody tr[data-person="すみた"] {
+      --row-color: #fffbed;
+      --row-hover: #fff4cc;
+    }
+
+    tbody tr[data-person="れい"] {
+      --row-color: #f0f9fb;
+      --row-hover: #e3f3f7;
+    }
+
+    tbody tr:last-child { border-bottom: 0; }
+
+    /* Paint every cell explicitly so the singer cell cannot appear white. */
+    tbody td {
+      background-color: var(--row-color, #fff);
+      transition: background-color .12s ease;
+    }
+
+    tbody tr:hover td { background-color: var(--row-hover, #f7f7f7); }
+
+    td {
+      padding: 12px 12px;
+      vertical-align: top;
+      font-size: 13.5px;
+      overflow-wrap: anywhere;
+      word-break: normal;
+    }
+
+    .col-order { width: 52px; text-align: center; color: var(--muted); }
+
+    /* A clean, gapless person-color accent sits at the left edge of each row. */
+    tbody .col-order {
+      position: relative;
+      font-variant-numeric: tabular-nums;
+    }
+
+    tbody .col-order::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 5px;
+      background: var(--person-color);
+    }
+    .col-title { width: 27%; font-weight: 600; }
+    .col-work { width: 18%; }
+    .col-artist { width: 21%; }
+    .col-person {
+      width: 104px;
+      font-weight: 700;
+      border: 0;
+      box-shadow: none;
+    }
+    .col-comment { width: 20%; }
+
+    .person-label {
+      display: inline;
+      min-width: 0;
+      padding: 0;
+      background: transparent;
+      border: 0;
+      color: inherit;
+      text-align: left;
+      font-weight: 700;
+    }
+
+    .empty { color: #a8adb2; }
+
+    .no-results {
+      display: none;
+      padding: 42px 20px;
+      background: #fff;
+      color: var(--muted);
+      text-align: center;
+      border: 1px solid var(--line);
+      border-top: 0;
+    }
+
+    .song-row[hidden] { display: none !important; }
+
+    @media (max-width: 840px) {
+      .page {
+        width: calc(100% - 20px);
+        margin: 14px auto 32px;
+      }
+
+      .titlebar {
+        min-height: 48px;
+        padding: 10px 12px 10px 14px;
+      }
+
+      h1 { font-size: 17px; }
+
+      .toolbar { grid-template-columns: 1fr; margin-top: 10px; }
+      .control { border-right: 0; border-bottom: 1px solid var(--line); }
+      .control:last-child { border-bottom: 0; }
+      .result-count { min-width: 0; justify-content: flex-start; }
+
+      .legend {
+        flex-wrap: nowrap;
+        gap: 7px 14px;
+        overflow-x: auto;
+        padding: 9px 2px 8px;
+        white-space: nowrap;
+        font-size: 12px;
+      }
+
+      table { min-width: 1000px; }
+      thead th { padding: 9px 8px; font-size: 12px; }
+      td { padding: 9px 8px; font-size: 12.5px; line-height: 1.5; }
+
+      .col-order { width: 44px; }
+      .col-title { width: 270px; }
+      .col-work { width: 185px; }
+      .col-artist { width: 205px; }
+      .col-person { width: 86px; }
+      .col-comment { width: 180px; }
+    }
+
+    @media print {
+      html, body { background: white; }
+      .page { width: 100%; margin: 0; }
+      .toolbar, .legend { display: none; }
+      .table-wrap { overflow: visible; border: 0; }
+      table { min-width: 0; }
+      thead th { position: static; }
+      tbody tr:hover td { background-color: var(--row-color, #fff); }
+    }
+</style>
+</head>
+<body>
+<main class="page">
+<header class="titlebar">
+<h1>20260722新宿</h1>
+
+</header>
+<section aria-label="絞り込み" class="toolbar">
+<label class="control">
+<span class="search-mark">⌕</span>
+<input autocomplete="off" id="search" placeholder="曲名・作品名・歌手名・コメントで検索" type="search"/>
+</label>
+<label class="control">
+<select aria-label="歌った人で絞り込む" id="person-filter">
+<option value="">すべての人</option><option value="れん">れん</option><option value="つぼはち">つぼはち</option><option value="すみた">すみた</option><option value="れい">れい</option>
+</select>
+</label>
+<div class="control result-count" id="result-count">表示 72 / 72 件</div>
+</section>
+<div aria-label="歌った人の色分け" class="legend"><span class="legend-item"><span class="legend-swatch" style="background:#F4B6C4"></span>れん</span><span class="legend-item"><span class="legend-swatch" style="background:#A8D5B5"></span>つぼはち</span><span class="legend-item"><span class="legend-swatch" style="background:#F6DE72"></span>すみた</span><span class="legend-item"><span class="legend-swatch" style="background:#8CCAD8"></span>れい</span></div>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th class="col-order">順番</th>
+<th class="col-title">曲名（ファイル名）</th>
+
+<th class="col-work">作品名</th>
+<th class="col-artist">歌手名</th>
+<th class="col-person">歌った人</th>
+<th class="col-comment">コメント</th>
+</tr>
+</thead>
+<tbody id="song-body">
+<tr class="song-row" data-person="れん" data-search="1 magic 0 自称悪役令嬢な婚約者の観察記録。 ed rloevo れん " style="--person-color:#F4B6C4;">
+<td class="col-order" data-label="順番">1</td>
+<td class="col-title" data-label="曲名（ファイル名）">Magic</td>
+
+<td class="col-work" data-label="作品名">自称悪役令嬢な婚約者の観察記録。 ED</td>
+<td class="col-artist" data-label="歌手名">RLOEVO</td>
+<td class="col-person" data-label="歌った人">れん</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="つぼはち" data-search="2 【ティーンエイジブルー※フル編集1クール最終話迄】[アオのハコed]／eve／on-off 0   つぼはち " style="--person-color:#A8D5B5;">
+<td class="col-order" data-label="順番">2</td>
+<td class="col-title" data-label="曲名（ファイル名）">【ティーンエイジブルー※フル編集1クール最終話迄】[アオのハコED]／Eve／On-Off</td>
+
+<td class="col-work" data-label="作品名"><span class="empty">—</span></td>
+<td class="col-artist" data-label="歌手名"><span class="empty">—</span></td>
+<td class="col-person" data-label="歌った人">つぼはち</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="すみた" data-search="3 ボタン 0 relife op penguin research すみた " style="--person-color:#F6DE72;">
+<td class="col-order" data-label="順番">3</td>
+<td class="col-title" data-label="曲名（ファイル名）">ボタン</td>
+
+<td class="col-work" data-label="作品名">ReLIFE OP</td>
+<td class="col-artist" data-label="歌手名">PENGUIN RESEARCH</td>
+<td class="col-person" data-label="歌った人">すみた</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="れい" data-search="4 ポケモンオールスターズ1025 (213/1025) 0 ポケモンオールスターズ1025 (213/1025) オーイシマサヨシ れい 酔っ払う前に歌います。ポケモンの名前が覚えられない。" style="--person-color:#8CCAD8;">
+<td class="col-order" data-label="順番">4</td>
+<td class="col-title" data-label="曲名（ファイル名）">ポケモンオールスターズ1025 (213/1025)</td>
+
+<td class="col-work" data-label="作品名">ポケモンオールスターズ1025 (213/1025)</td>
+<td class="col-artist" data-label="歌手名">オーイシマサヨシ</td>
+<td class="col-person" data-label="歌った人">れい</td>
+<td class="col-comment" data-label="コメント">酔っ払う前に歌います。ポケモンの名前が覚えられない。</td>
+</tr>
+<tr class="song-row" data-person="れん" data-search="5 endless you【アニメ】 0 最推しの義兄を愛でるため、長生きします! ed 蒼井翔太 れん " style="--person-color:#F4B6C4;">
+<td class="col-order" data-label="順番">5</td>
+<td class="col-title" data-label="曲名（ファイル名）">Endless You【アニメ】</td>
+
+<td class="col-work" data-label="作品名">最推しの義兄を愛でるため、長生きします! ED</td>
+<td class="col-artist" data-label="歌手名">蒼井翔太</td>
+<td class="col-person" data-label="歌った人">れん</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="つぼはち" data-search="6 fly to the future【アニメ】 0 劇場版 うたの☆プリンスさまっ♪ マジloveキングダム quartet night つぼはち " style="--person-color:#A8D5B5;">
+<td class="col-order" data-label="順番">6</td>
+<td class="col-title" data-label="曲名（ファイル名）">FLY TO THE FUTURE【アニメ】</td>
+
+<td class="col-work" data-label="作品名">劇場版 うたの☆プリンスさまっ♪ マジLOVEキングダム</td>
+<td class="col-artist" data-label="歌手名">QUARTET NIGHT</td>
+<td class="col-person" data-label="歌った人">つぼはち</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="すみた" data-search="7 taboo night xxxx【パート分け】 0 劇場版 うたの☆プリンスさまっ♪ taboo night xxxx live quartet night すみた こっちなら何とか…" style="--person-color:#F6DE72;">
+<td class="col-order" data-label="順番">7</td>
+<td class="col-title" data-label="曲名（ファイル名）">TABOO NIGHT XXXX【パート分け】</td>
+
+<td class="col-work" data-label="作品名">劇場版 うたの☆プリンスさまっ♪ TABOO NIGHT XXXX LIVE</td>
+<td class="col-artist" data-label="歌手名">QUARTET NIGHT</td>
+<td class="col-person" data-label="歌った人">すみた</td>
+<td class="col-comment" data-label="コメント">こっちなら何とか…</td>
+</tr>
+<tr class="song-row" data-person="れい" data-search="8 ハイメンテナンスガール【オーイシマサヨシ mv】 0 花織さんは転生しても喧嘩がしたい  れい " style="--person-color:#8CCAD8;">
+<td class="col-order" data-label="順番">8</td>
+<td class="col-title" data-label="曲名（ファイル名）">ハイメンテナンスガール【オーイシマサヨシ MV】</td>
+
+<td class="col-work" data-label="作品名">花織さんは転生しても喧嘩がしたい</td>
+<td class="col-artist" data-label="歌手名"><span class="empty">—</span></td>
+<td class="col-person" data-label="歌った人">れい</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="れん" data-search="9 trash candy【mv=アニメ】 0 文豪ストレイドッグス op 1 granrodeo れん " style="--person-color:#F4B6C4;">
+<td class="col-order" data-label="順番">9</td>
+<td class="col-title" data-label="曲名（ファイル名）">TRASH CANDY【MV=アニメ】</td>
+
+<td class="col-work" data-label="作品名">文豪ストレイドッグス OP 1</td>
+<td class="col-artist" data-label="歌手名">GRANRODEO</td>
+<td class="col-person" data-label="歌った人">れん</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="つぼはち" data-search="10 変幻自在のマジカルスター【アニメ】 0 黒子のバスケ第2期 op2 granrodeo つぼはち " style="--person-color:#A8D5B5;">
+<td class="col-order" data-label="順番">10</td>
+<td class="col-title" data-label="曲名（ファイル名）">変幻自在のマジカルスター【アニメ】</td>
+
+<td class="col-work" data-label="作品名">黒子のバスケ第2期 OP2</td>
+<td class="col-artist" data-label="歌手名">GRANRODEO</td>
+<td class="col-person" data-label="歌った人">つぼはち</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="すみた" data-search="11 慟哭ノ雨【mv】 0 恋する天使アンジェリーク～かがやきの明日～ op granrodeo すみた " style="--person-color:#F6DE72;">
+<td class="col-order" data-label="順番">11</td>
+<td class="col-title" data-label="曲名（ファイル名）">慟哭ノ雨【MV】</td>
+
+<td class="col-work" data-label="作品名">恋する天使アンジェリーク～かがやきの明日～ OP</td>
+<td class="col-artist" data-label="歌手名">GRANRODEO</td>
+<td class="col-person" data-label="歌った人">すみた</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="れい" data-search="12 「創聖のアクエリオン」オーイシマサヨシ×佐々木李子×granrodeo【オフボーカル・ライブ音源】 0   れい " style="--person-color:#8CCAD8;">
+<td class="col-order" data-label="順番">12</td>
+<td class="col-title" data-label="曲名（ファイル名）">「創聖のアクエリオン」オーイシマサヨシ×佐々木李子×GRANRODEO【オフボーカル・ライブ音源】</td>
+
+<td class="col-work" data-label="作品名"><span class="empty">—</span></td>
+<td class="col-artist" data-label="歌手名"><span class="empty">—</span></td>
+<td class="col-person" data-label="歌った人">れい</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="れん" data-search="13 リーチライト【第16話ed映像】 -1 杖と剣のウィストリア ed シユイ れん " style="--person-color:#F4B6C4;">
+<td class="col-order" data-label="順番">13</td>
+<td class="col-title" data-label="曲名（ファイル名）">リーチライト【第16話ED映像】</td>
+
+<td class="col-work" data-label="作品名">杖と剣のウィストリア ED</td>
+<td class="col-artist" data-label="歌手名">シユイ</td>
+<td class="col-person" data-label="歌った人">れん</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="つぼはち" data-search="14 believers【アニメ映像ver2.0・11話まで】 0 杖と剣のウィストリア op ash da hero つぼはち " style="--person-color:#A8D5B5;">
+<td class="col-order" data-label="順番">14</td>
+<td class="col-title" data-label="曲名（ファイル名）">BELIEVERS【アニメ映像ver2.0・11話まで】</td>
+
+<td class="col-work" data-label="作品名">杖と剣のウィストリア OP</td>
+<td class="col-artist" data-label="歌手名">ASH DA HERO</td>
+<td class="col-person" data-label="歌った人">つぼはち</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="すみた" data-search="15 人誑し/ひとたらし【ver1 アニメ公式 mv】 0 あかね噺 桑田佳祐 すみた " style="--person-color:#F6DE72;">
+<td class="col-order" data-label="順番">15</td>
+<td class="col-title" data-label="曲名（ファイル名）">人誑し/ひとたらし【Ver1 アニメ公式 MV】</td>
+
+<td class="col-work" data-label="作品名">あかね噺</td>
+<td class="col-artist" data-label="歌手名">桑田佳祐</td>
+<td class="col-person" data-label="歌った人">すみた</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="れい" data-search="16 「主人公になろう！ feat.鈴木愛理（本人映像）」オーイシマサヨシ【オフボーカル・コーラス入り】 0   れい " style="--person-color:#8CCAD8;">
+<td class="col-order" data-label="順番">16</td>
+<td class="col-title" data-label="曲名（ファイル名）">「主人公になろう！ feat.鈴木愛理（本人映像）」オーイシマサヨシ【オフボーカル・コーラス入り】</td>
+
+<td class="col-work" data-label="作品名"><span class="empty">—</span></td>
+<td class="col-artist" data-label="歌手名"><span class="empty">—</span></td>
+<td class="col-person" data-label="歌った人">れい</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="れん" data-search="17 believe in my way【劇場アニメ2025】 0 ベルサイユのばら オスカル(沢城みゆき)、マリー・アントワネット(平野綾)、アンドレ(豊永利行)、フェルゼン(加藤和樹) れん " style="--person-color:#F4B6C4;">
+<td class="col-order" data-label="順番">17</td>
+<td class="col-title" data-label="曲名（ファイル名）">Believe in My Way【劇場アニメ2025】</td>
+
+<td class="col-work" data-label="作品名">ベルサイユのばら</td>
+<td class="col-artist" data-label="歌手名">オスカル(沢城みゆき)、マリー・アントワネット(平野綾)、アンドレ(豊永利行)、フェルゼン(加藤和樹)</td>
+<td class="col-person" data-label="歌った人">れん</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="つぼはち" data-search="18 透明【最終話反映】 0 氷の城壁 op novelbright つぼはち " style="--person-color:#A8D5B5;">
+<td class="col-order" data-label="順番">18</td>
+<td class="col-title" data-label="曲名（ファイル名）">透明【最終話反映】</td>
+
+<td class="col-work" data-label="作品名">氷の城壁 OP</td>
+<td class="col-artist" data-label="歌手名">Novelbright</td>
+<td class="col-person" data-label="歌った人">つぼはち</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="すみた" data-search="19 【テイルズ オブ ゼスティリア ザ クロス】《op》風ノ唄／スレイ(木村良平)ミクリオ(逢坂良太)【on-off】※パート分け有・声優カバー 0   すみた " style="--person-color:#F6DE72;">
+<td class="col-order" data-label="順番">19</td>
+<td class="col-title" data-label="曲名（ファイル名）">【テイルズ オブ ゼスティリア ザ クロス】《OP》風ノ唄／スレイ(木村良平)ミクリオ(逢坂良太)【On-Off】※パート分け有・声優カバー</td>
+
+<td class="col-work" data-label="作品名"><span class="empty">—</span></td>
+<td class="col-artist" data-label="歌手名"><span class="empty">—</span></td>
+<td class="col-person" data-label="歌った人">すみた</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="れい" data-search="20 the rose of versailles【劇場アニメ2025】 0 ベルサイユのばら オスカル(沢城みゆき)、マリー・アントワネット(平野綾)、アンドレ(豊永利行)、フェルゼン(加藤和樹) れい " style="--person-color:#8CCAD8;">
+<td class="col-order" data-label="順番">20</td>
+<td class="col-title" data-label="曲名（ファイル名）">The Rose of Versailles【劇場アニメ2025】</td>
+
+<td class="col-work" data-label="作品名">ベルサイユのばら</td>
+<td class="col-artist" data-label="歌手名">オスカル(沢城みゆき)、マリー・アントワネット(平野綾)、アンドレ(豊永利行)、フェルゼン(加藤和樹)</td>
+<td class="col-person" data-label="歌った人">れい</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="れん" data-search="21 うれしい!たのしい!大好き!【ver1 暫定版】 0 お隣の天使様にいつの間にか駄目人間にされていた件 第2期 椎名真昼 (cv:石見舞菜香) れん " style="--person-color:#F4B6C4;">
+<td class="col-order" data-label="順番">21</td>
+<td class="col-title" data-label="曲名（ファイル名）">うれしい!たのしい!大好き!【Ver1 暫定版】</td>
+
+<td class="col-work" data-label="作品名">お隣の天使様にいつの間にか駄目人間にされていた件 第2期</td>
+<td class="col-artist" data-label="歌手名">椎名真昼 (CV:石見舞菜香)</td>
+<td class="col-person" data-label="歌った人">れん</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="つぼはち" data-search="22 god's s.t.a.r.【アニメ】 0 うたの☆プリンスさまっ♪ マジloveレジェンドスター quartet night つぼはち " style="--person-color:#A8D5B5;">
+<td class="col-order" data-label="順番">22</td>
+<td class="col-title" data-label="曲名（ファイル名）">God's S.T.A.R.【アニメ】</td>
+
+<td class="col-work" data-label="作品名">うたの☆プリンスさまっ♪ マジLOVEレジェンドスター</td>
+<td class="col-artist" data-label="歌手名">QUARTET NIGHT</td>
+<td class="col-person" data-label="歌った人">つぼはち</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="すみた" data-search="23 薔薇は美しく散る【ベルサイユのばら・影山ヒロノブ(カバー)】 0   すみた " style="--person-color:#F6DE72;">
+<td class="col-order" data-label="順番">23</td>
+<td class="col-title" data-label="曲名（ファイル名）">薔薇は美しく散る【ベルサイユのばら・影山ヒロノブ(カバー)】</td>
+
+<td class="col-work" data-label="作品名"><span class="empty">—</span></td>
+<td class="col-artist" data-label="歌手名"><span class="empty">—</span></td>
+<td class="col-person" data-label="歌った人">すみた</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="れい" data-search="24 愛の光と影 0 ベルサイユのばら 鈴木宏子 れい " style="--person-color:#8CCAD8;">
+<td class="col-order" data-label="順番">24</td>
+<td class="col-title" data-label="曲名（ファイル名）">愛の光と影</td>
+
+<td class="col-work" data-label="作品名">ベルサイユのばら</td>
+<td class="col-artist" data-label="歌手名">鈴木宏子</td>
+<td class="col-person" data-label="歌った人">れい</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="れん" data-search="25 花の子ルンルン 0 花の子ルンルン 堀江美都子、ザ・チャープス れん リメイクすると聞いて" style="--person-color:#F4B6C4;">
+<td class="col-order" data-label="順番">25</td>
+<td class="col-title" data-label="曲名（ファイル名）">花の子ルンルン</td>
+
+<td class="col-work" data-label="作品名">花の子ルンルン</td>
+<td class="col-artist" data-label="歌手名">堀江美都子、ザ・チャープス</td>
+<td class="col-person" data-label="歌った人">れん</td>
+<td class="col-comment" data-label="コメント">リメイクすると聞いて</td>
+</tr>
+<tr class="song-row" data-person="つぼはち" data-search="26 petals【最終話反映】 -3 春夏秋冬代行者 春の舞 op orangestar,夏背 つぼはち " style="--person-color:#A8D5B5;">
+<td class="col-order" data-label="順番">26</td>
+<td class="col-title" data-label="曲名（ファイル名）">Petals【最終話反映】</td>
+
+<td class="col-work" data-label="作品名">春夏秋冬代行者 春の舞 OP</td>
+<td class="col-artist" data-label="歌手名">Orangestar,夏背</td>
+<td class="col-person" data-label="歌った人">つぼはち</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="すみた" data-search="27 我ら気高きエーデルシュタイン!!【アニメ】 0 美男高校地球防衛部happy kiss! ed 地球征服部es すみた " style="--person-color:#F6DE72;">
+<td class="col-order" data-label="順番">27</td>
+<td class="col-title" data-label="曲名（ファイル名）">我ら気高きエーデルシュタイン!!【アニメ】</td>
+
+<td class="col-work" data-label="作品名">美男高校地球防衛部HAPPY KISS! ED</td>
+<td class="col-artist" data-label="歌手名">地球征服部ES</td>
+<td class="col-person" data-label="歌った人">すみた</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="れい" data-search="28 君は恋人(最終話編集) 0 お隣の天使様にいつの間にか駄目人間にされていた件2 op オーイシマサヨシ れい " style="--person-color:#8CCAD8;">
+<td class="col-order" data-label="順番">28</td>
+<td class="col-title" data-label="曲名（ファイル名）">君は恋人(最終話編集)</td>
+
+<td class="col-work" data-label="作品名">お隣の天使様にいつの間にか駄目人間にされていた件2 OP</td>
+<td class="col-artist" data-label="歌手名">オーイシマサヨシ</td>
+<td class="col-person" data-label="歌った人">れい</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="れん" data-search="29 喰らえ!デブレバター!!【アニメ】 0 美男高校地球防衛部happy kiss! 白骨マーサ(松岡禎丞) れん " style="--person-color:#F4B6C4;">
+<td class="col-order" data-label="順番">29</td>
+<td class="col-title" data-label="曲名（ファイル名）">喰らえ!デブレバター!!【アニメ】</td>
+
+<td class="col-work" data-label="作品名">美男高校地球防衛部HAPPY KISS!</td>
+<td class="col-artist" data-label="歌手名">白骨マーサ(松岡禎丞)</td>
+<td class="col-person" data-label="歌った人">れん</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="つぼはち" data-search="30 reply【公式アニメmv】 -3 超かぐや姫! in かぐや姫 つぼはち " style="--person-color:#A8D5B5;">
+<td class="col-order" data-label="順番">30</td>
+<td class="col-title" data-label="曲名（ファイル名）">Reply【公式アニメMV】</td>
+
+<td class="col-work" data-label="作品名">超かぐや姫! IN</td>
+<td class="col-artist" data-label="歌手名">かぐや姫</td>
+<td class="col-person" data-label="歌った人">つぼはち</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="すみた" data-search="31 沸点突破☆love is power☆【アニメ】 0 美男高校地球防衛部love!love! op 地球防衛部(箱根有基(山本和臣)、由布院煙(梅原裕一郎)、鬼怒川熱史(西山宏太朗)、鳴子硫黄(白井悠介)、蔵王立(増田俊樹)) すみた " style="--person-color:#F6DE72;">
+<td class="col-order" data-label="順番">31</td>
+<td class="col-title" data-label="曲名（ファイル名）">沸点突破☆LOVE IS POWER☆【アニメ】</td>
+
+<td class="col-work" data-label="作品名">美男高校地球防衛部LOVE!LOVE! OP</td>
+<td class="col-artist" data-label="歌手名">地球防衛部(箱根有基(山本和臣)、由布院煙(梅原裕一郎)、鬼怒川熱史(西山宏太朗)、鳴子硫黄(白井悠介)、蔵王立(増田俊樹))</td>
+<td class="col-person" data-label="歌った人">すみた</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="れい" data-search="32 【ssss.gridman】「union」『oxt』(off-on)animax musix 2018 0   れい " style="--person-color:#8CCAD8;">
+<td class="col-order" data-label="順番">32</td>
+<td class="col-title" data-label="曲名（ファイル名）">【SSSS.GRIDMAN】「UNION」『OxT』(off-on)ANIMAX MUSIX 2018</td>
+
+<td class="col-work" data-label="作品名"><span class="empty">—</span></td>
+<td class="col-artist" data-label="歌手名"><span class="empty">—</span></td>
+<td class="col-person" data-label="歌った人">れい</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="れん" data-search="33 wondrous【アニメ】 0 ワンダンス ed elsee れん " style="--person-color:#F4B6C4;">
+<td class="col-order" data-label="順番">33</td>
+<td class="col-title" data-label="曲名（ファイル名）">Wondrous【アニメ】</td>
+
+<td class="col-work" data-label="作品名">ワンダンス ED</td>
+<td class="col-artist" data-label="歌手名">ELSEE</td>
+<td class="col-person" data-label="歌った人">れん</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="つぼはち" data-search="34 シャイン【アニメ】 0 うたの☆プリンスさまっ♪ マジloveレボリューションズ op 宮野真守 つぼはち " style="--person-color:#A8D5B5;">
+<td class="col-order" data-label="順番">34</td>
+<td class="col-title" data-label="曲名（ファイル名）">シャイン【アニメ】</td>
+
+<td class="col-work" data-label="作品名">うたの☆プリンスさまっ♪ マジLOVEレボリューションズ OP</td>
+<td class="col-artist" data-label="歌手名">宮野真守</td>
+<td class="col-person" data-label="歌った人">つぼはち</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="すみた" data-search="35 カノン【アニメ】 0 うたの☆プリンスさまっ♪ マジlove2000% op 宮野真守 すみた " style="--person-color:#F6DE72;">
+<td class="col-order" data-label="順番">35</td>
+<td class="col-title" data-label="曲名（ファイル名）">カノン【アニメ】</td>
+
+<td class="col-work" data-label="作品名">うたの☆プリンスさまっ♪ マジLOVE2000% OP</td>
+<td class="col-artist" data-label="歌手名">宮野真守</td>
+<td class="col-person" data-label="歌った人">すみた</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="れい" data-search="36 ポワゾンkiss【アニメ】 0 うたの☆プリンスさまっ♪ マジlove2000% quartet night れい " style="--person-color:#8CCAD8;">
+<td class="col-order" data-label="順番">36</td>
+<td class="col-title" data-label="曲名（ファイル名）">ポワゾンKISS【アニメ】</td>
+
+<td class="col-work" data-label="作品名">うたの☆プリンスさまっ♪ マジLOVE2000%</td>
+<td class="col-artist" data-label="歌手名">QUARTET NIGHT</td>
+<td class="col-person" data-label="歌った人">れい</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="れん" data-search="37 wandering in a maze【アニメ】 0 劇場版 うたの☆プリンスさまっ♪ taboo night xxxx 美風藍(蒼井翔太) れん " style="--person-color:#F4B6C4;">
+<td class="col-order" data-label="順番">37</td>
+<td class="col-title" data-label="曲名（ファイル名）">Wandering in a maze【アニメ】</td>
+
+<td class="col-work" data-label="作品名">劇場版 うたの☆プリンスさまっ♪ TABOO NIGHT XXXX</td>
+<td class="col-artist" data-label="歌手名">美風藍(蒼井翔太)</td>
+<td class="col-person" data-label="歌った人">れん</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="つぼはち" data-search="38 jinn-ω-ray【アニメ】 0 劇場版 うたの☆プリンスさまっ♪ taboo night xxxx quartet night つぼはち " style="--person-color:#A8D5B5;">
+<td class="col-order" data-label="順番">38</td>
+<td class="col-title" data-label="曲名（ファイル名）">JINN-Ω-RAY【アニメ】</td>
+
+<td class="col-work" data-label="作品名">劇場版 うたの☆プリンスさまっ♪ TABOO NIGHT XXXX</td>
+<td class="col-artist" data-label="歌手名">QUARTET NIGHT</td>
+<td class="col-person" data-label="歌った人">つぼはち</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="すみた" data-search="39 オルフェ【live=2024king】 0 うたの☆プリンスさまっ♪ マジlove1000% op 宮野真守×蒼井翔太×内田雄馬 すみた " style="--person-color:#F6DE72;">
+<td class="col-order" data-label="順番">39</td>
+<td class="col-title" data-label="曲名（ファイル名）">オルフェ【LIVE=2024KING】</td>
+
+<td class="col-work" data-label="作品名">うたの☆プリンスさまっ♪ マジLOVE1000% OP</td>
+<td class="col-artist" data-label="歌手名">宮野真守×蒼井翔太×内田雄馬</td>
+<td class="col-person" data-label="歌った人">すみた</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="れい" data-search="40 男気全開go!fight!!【アニメ】 0 うたの☆プリンスさまっ♪ マジlove1000% 来栖翔(下野紘) れい " style="--person-color:#8CCAD8;">
+<td class="col-order" data-label="順番">40</td>
+<td class="col-title" data-label="曲名（ファイル名）">男気全開Go!Fight!!【アニメ】</td>
+
+<td class="col-work" data-label="作品名">うたの☆プリンスさまっ♪ マジLOVE1000%</td>
+<td class="col-artist" data-label="歌手名">来栖翔(下野紘)</td>
+<td class="col-person" data-label="歌った人">れい</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="れん" data-search="41 マジlove1000%【live=1st】 0 うたの☆プリンスさまっ♪ マジlove1000% ed st☆rish れん " style="--person-color:#F4B6C4;">
+<td class="col-order" data-label="順番">41</td>
+<td class="col-title" data-label="曲名（ファイル名）">マジLOVE1000%【LIVE=1st】</td>
+
+<td class="col-work" data-label="作品名">うたの☆プリンスさまっ♪ マジLOVE1000% ED</td>
+<td class="col-artist" data-label="歌手名">ST☆RISH</td>
+<td class="col-person" data-label="歌った人">れん</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="つぼはち" data-search="42 マジloveレジェンドスター【live=6th】 0 うたの☆プリンスさまっ♪ マジloveレジェンドスター ed st☆rish つぼはち " style="--person-color:#A8D5B5;">
+<td class="col-order" data-label="順番">42</td>
+<td class="col-title" data-label="曲名（ファイル名）">マジLOVEレジェンドスター【LIVE=6th】</td>
+
+<td class="col-work" data-label="作品名">うたの☆プリンスさまっ♪ マジLOVEレジェンドスター ED</td>
+<td class="col-artist" data-label="歌手名">ST☆RISH</td>
+<td class="col-person" data-label="歌った人">つぼはち</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="すみた" data-search="43 騎士のkissは雪より優しく【live=4th,fm】 0 うたの☆プリンスさまっ♪ ed 聖川真斗(鈴村健一) すみた 部屋が涼しくなったのでｗ" style="--person-color:#F6DE72;">
+<td class="col-order" data-label="順番">43</td>
+<td class="col-title" data-label="曲名（ファイル名）">騎士のKissは雪より優しく【LIVE=4th,FM】</td>
+
+<td class="col-work" data-label="作品名">うたの☆プリンスさまっ♪ ED</td>
+<td class="col-artist" data-label="歌手名">聖川真斗(鈴村健一)</td>
+<td class="col-person" data-label="歌った人">すみた</td>
+<td class="col-comment" data-label="コメント">部屋が涼しくなったのでｗ</td>
+</tr>
+<tr class="song-row" data-person="れい" data-search="44 knocking on the mind【アニメ】 0 うたの☆プリンスさまっ♪ マジlove1000% 鈴村健一 れい " style="--person-color:#8CCAD8;">
+<td class="col-order" data-label="順番">44</td>
+<td class="col-title" data-label="曲名（ファイル名）">Knocking on the mind【アニメ】</td>
+
+<td class="col-work" data-label="作品名">うたの☆プリンスさまっ♪ マジLOVE1000%</td>
+<td class="col-artist" data-label="歌手名">鈴村健一</td>
+<td class="col-person" data-label="歌った人">れい</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="れん" data-search="45 winter blossom【live=3rd】 0 うたの☆プリンスさまっ♪ all star ed 美風藍(蒼井翔太) れん " style="--person-color:#F4B6C4;">
+<td class="col-order" data-label="順番">45</td>
+<td class="col-title" data-label="曲名（ファイル名）">Winter Blossom【LIVE=3rd】</td>
+
+<td class="col-work" data-label="作品名">うたの☆プリンスさまっ♪ All Star ED</td>
+<td class="col-artist" data-label="歌手名">美風藍(蒼井翔太)</td>
+<td class="col-person" data-label="歌った人">れん</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="つぼはち" data-search="46 ポラリス【live=5th】 0 うたの☆プリンスさまっ♪ シアターシャイニング 四ノ宮那月(cv:谷山紀章),一ノ瀬トキヤ(cv:宮野真守),愛島セシル(cv:鳥海浩輔) つぼはち " style="--person-color:#A8D5B5;">
+<td class="col-order" data-label="順番">46</td>
+<td class="col-title" data-label="曲名（ファイル名）">ポラリス【LIVE=5th】</td>
+
+<td class="col-work" data-label="作品名">うたの☆プリンスさまっ♪ シアターシャイニング</td>
+<td class="col-artist" data-label="歌手名">四ノ宮那月(CV:谷山紀章),一ノ瀬トキヤ(CV:宮野真守),愛島セシル(CV:鳥海浩輔)</td>
+<td class="col-person" data-label="歌った人">つぼはち</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="すみた" data-search="47 超☆愛(マジラブ)合体!!エンジェロボ!! 0 劇場版 そらのおとしもの 時計じかけの哀女神 宮内タカユキ 桜井智樹 見月そはら すみた マジlove" style="--person-color:#F6DE72;">
+<td class="col-order" data-label="順番">47</td>
+<td class="col-title" data-label="曲名（ファイル名）">超☆愛(マジラブ)合体!!エンジェロボ!!</td>
+
+<td class="col-work" data-label="作品名">劇場版 そらのおとしもの 時計じかけの哀女神</td>
+<td class="col-artist" data-label="歌手名">宮内タカユキ 桜井智樹 見月そはら</td>
+<td class="col-person" data-label="歌った人">すみた</td>
+<td class="col-comment" data-label="コメント">マジLOVE</td>
+</tr>
+<tr class="song-row" data-person="れい" data-search="48 quartet★night【psp】 0 うたの☆プリンスさまっ♪ all star op 森久保祥太郎,鈴木達央,蒼井翔太,前野智昭 れい " style="--person-color:#8CCAD8;">
+<td class="col-order" data-label="順番">48</td>
+<td class="col-title" data-label="曲名（ファイル名）">QUARTET★NIGHT【PSP】</td>
+
+<td class="col-work" data-label="作品名">うたの☆プリンスさまっ♪ All Star OP</td>
+<td class="col-artist" data-label="歌手名">森久保祥太郎,鈴木達央,蒼井翔太,前野智昭</td>
+<td class="col-person" data-label="歌った人">れい</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="れん" data-search="49 笑顔ヶ丘音頭【アニメ】 0 せいぜいがんばれ! 魔法少女くるみ ed5 鈴木キヨシ(林勇)、高橋イサム(羽多野渉)、佐藤シゲル(寺島拓篤)、デビるん(松本慶祐) れん " style="--person-color:#F4B6C4;">
+<td class="col-order" data-label="順番">49</td>
+<td class="col-title" data-label="曲名（ファイル名）">笑顔ヶ丘音頭【アニメ】</td>
+
+<td class="col-work" data-label="作品名">せいぜいがんばれ! 魔法少女くるみ ED5</td>
+<td class="col-artist" data-label="歌手名">鈴木キヨシ(林勇)、高橋イサム(羽多野渉)、佐藤シゲル(寺島拓篤)、デビるん(松本慶祐)</td>
+<td class="col-person" data-label="歌った人">れん</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="つぼはち" data-search="50 マジloveレボリューションズ【アニメ】 0 うたの☆プリンスさまっ♪ マジloveレボリューションズ ed st☆rish つぼはち " style="--person-color:#A8D5B5;">
+<td class="col-order" data-label="順番">50</td>
+<td class="col-title" data-label="曲名（ファイル名）">マジLOVEレボリューションズ【アニメ】</td>
+
+<td class="col-work" data-label="作品名">うたの☆プリンスさまっ♪ マジLOVEレボリューションズ ED</td>
+<td class="col-artist" data-label="歌手名">ST☆RISH</td>
+<td class="col-person" data-label="歌った人">つぼはち</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="すみた" data-search="51 once &amp; forever【live=2007ride】 0 マブラヴオルタネイティヴ granrodeo すみた " style="--person-color:#F6DE72;">
+<td class="col-order" data-label="順番">51</td>
+<td class="col-title" data-label="曲名（ファイル名）">Once &amp; Forever【LIVE=2007RIDE】</td>
+
+<td class="col-work" data-label="作品名">マブラヴオルタネイティヴ</td>
+<td class="col-artist" data-label="歌手名">GRANRODEO</td>
+<td class="col-person" data-label="歌った人">すみた</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="れい" data-search="52 絶対零度emotion【psp】 0 うたの☆プリンスさまっ♪ all star ed カミュ(前野智昭) れい " style="--person-color:#8CCAD8;">
+<td class="col-order" data-label="順番">52</td>
+<td class="col-title" data-label="曲名（ファイル名）">絶対零度Emotion【PSP】</td>
+
+<td class="col-work" data-label="作品名">うたの☆プリンスさまっ♪ All Star ED</td>
+<td class="col-artist" data-label="歌手名">カミュ(前野智昭)</td>
+<td class="col-person" data-label="歌った人">れい</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="れん" data-search="53 radiance (cut) starship operators【川田まみ】 0   れん " style="--person-color:#F4B6C4;">
+<td class="col-order" data-label="順番">53</td>
+<td class="col-title" data-label="曲名（ファイル名）">radiance (cut) Starship Operators【川田まみ】</td>
+
+<td class="col-work" data-label="作品名"><span class="empty">—</span></td>
+<td class="col-artist" data-label="歌手名"><span class="empty">—</span></td>
+<td class="col-person" data-label="歌った人">れん</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="つぼはち" data-search="54 セレナーデ【ver2 最終話まで】 0 【推しの子】 第3期 なとり つぼはち " style="--person-color:#A8D5B5;">
+<td class="col-order" data-label="順番">54</td>
+<td class="col-title" data-label="曲名（ファイル名）">セレナーデ【Ver2 最終話まで】</td>
+
+<td class="col-work" data-label="作品名">【推しの子】 第3期</td>
+<td class="col-artist" data-label="歌手名">なとり</td>
+<td class="col-person" data-label="歌った人">つぼはち</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="すみた" data-search="55 d×d×d【アニメ】 0 ダメプリ anime caravan op breakerz すみた 音源が新しくなったようなので" style="--person-color:#F6DE72;">
+<td class="col-order" data-label="順番">55</td>
+<td class="col-title" data-label="曲名（ファイル名）">D×D×D【アニメ】</td>
+
+<td class="col-work" data-label="作品名">ダメプリ ANIME CARAVAN OP</td>
+<td class="col-artist" data-label="歌手名">BREAKERZ</td>
+<td class="col-person" data-label="歌った人">すみた</td>
+<td class="col-comment" data-label="コメント">音源が新しくなったようなので</td>
+</tr>
+<tr class="song-row" data-person="れい" data-search="56 サインはb -new arrange ver.-【パート分け有り】 0 【推しの子】 in b小町 れい " style="--person-color:#8CCAD8;">
+<td class="col-order" data-label="順番">56</td>
+<td class="col-title" data-label="曲名（ファイル名）">サインはB -New Arrange Ver.-【パート分け有り】</td>
+
+<td class="col-work" data-label="作品名">【推しの子】 IN</td>
+<td class="col-artist" data-label="歌手名">B小町</td>
+<td class="col-person" data-label="歌った人">れい</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="れん" data-search="57 tone【アニメ】 0 この音とまれ! op 蒼井翔太 れん " style="--person-color:#F4B6C4;">
+<td class="col-order" data-label="順番">57</td>
+<td class="col-title" data-label="曲名（ファイル名）">Tone【アニメ】</td>
+
+<td class="col-work" data-label="作品名">この音とまれ! OP</td>
+<td class="col-artist" data-label="歌手名">蒼井翔太</td>
+<td class="col-person" data-label="歌った人">れん</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="つぼはち" data-search="58 テンペスト【live=6th】 0 うたの☆プリンスさまっ♪ マジloveレジェンドスター op 宮野真守 つぼはち " style="--person-color:#A8D5B5;">
+<td class="col-order" data-label="順番">58</td>
+<td class="col-title" data-label="曲名（ファイル名）">テンペスト【LIVE=6th】</td>
+
+<td class="col-work" data-label="作品名">うたの☆プリンスさまっ♪ マジLOVEレジェンドスター OP</td>
+<td class="col-artist" data-label="歌手名">宮野真守</td>
+<td class="col-person" data-label="歌った人">つぼはち</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="すみた" data-search="59 onyxxx【アニメ映像、パート分け】 0 超かぐや姫! in black onyx すみた " style="--person-color:#F6DE72;">
+<td class="col-order" data-label="順番">59</td>
+<td class="col-title" data-label="曲名（ファイル名）">OnyXXX【アニメ映像、パート分け】</td>
+
+<td class="col-work" data-label="作品名">超かぐや姫! IN</td>
+<td class="col-artist" data-label="歌手名">Black onyX</td>
+<td class="col-person" data-label="歌った人">すみた</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="れい" data-search="60 「守りたい、その笑顔」佐久間大介（snow man）【オフボーカル・コーラス入り】 0   れい " style="--person-color:#8CCAD8;">
+<td class="col-order" data-label="順番">60</td>
+<td class="col-title" data-label="曲名（ファイル名）">「守りたい、その笑顔」佐久間大介（Snow Man）【オフボーカル・コーラス入り】</td>
+
+<td class="col-work" data-label="作品名"><span class="empty">—</span></td>
+<td class="col-artist" data-label="歌手名"><span class="empty">—</span></td>
+<td class="col-person" data-label="歌った人">れい</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="れん" data-search="61 seize me if you can【アニメ】 0 劇場版 うたの☆プリンスさまっ♪ taboo night xxxx 寿嶺二(森久保祥太郎) れん " style="--person-color:#F4B6C4;">
+<td class="col-order" data-label="順番">61</td>
+<td class="col-title" data-label="曲名（ファイル名）">Seize me if you can【アニメ】</td>
+
+<td class="col-work" data-label="作品名">劇場版 うたの☆プリンスさまっ♪ TABOO NIGHT XXXX</td>
+<td class="col-artist" data-label="歌手名">寿嶺二(森久保祥太郎)</td>
+<td class="col-person" data-label="歌った人">れん</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="つぼはち" data-search="62 【a3!】《主題歌》mankai☆開花宣言／a3ders! (酒井広大, 江口拓也, 沢城千春, 田丸篤志)【on-off】※第１部 0   つぼはち " style="--person-color:#A8D5B5;">
+<td class="col-order" data-label="順番">62</td>
+<td class="col-title" data-label="曲名（ファイル名）">【A3!】《主題歌》MANKAI☆開花宣言／A3ders! (酒井広大, 江口拓也, 沢城千春, 田丸篤志)【On-Off】※第１部</td>
+
+<td class="col-work" data-label="作品名"><span class="empty">—</span></td>
+<td class="col-artist" data-label="歌手名"><span class="empty">—</span></td>
+<td class="col-person" data-label="歌った人">つぼはち</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="すみた" data-search="63 裏切りの夕焼け【アニメ】 0 デュラララ op1 theatre brook すみた " style="--person-color:#F6DE72;">
+<td class="col-order" data-label="順番">63</td>
+<td class="col-title" data-label="曲名（ファイル名）">裏切りの夕焼け【アニメ】</td>
+
+<td class="col-work" data-label="作品名">デュラララ OP1</td>
+<td class="col-artist" data-label="歌手名">THEATRE BROOK</td>
+<td class="col-person" data-label="歌った人">すみた</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="れい" data-search="64 ファンタジック☆プレリュード【アニメ】 0 劇場版 うたの☆プリンスさまっ♪ マジloveキングダム st☆rish れい " style="--person-color:#8CCAD8;">
+<td class="col-order" data-label="順番">64</td>
+<td class="col-title" data-label="曲名（ファイル名）">ファンタジック☆プレリュード【アニメ】</td>
+
+<td class="col-work" data-label="作品名">劇場版 うたの☆プリンスさまっ♪ マジLOVEキングダム</td>
+<td class="col-artist" data-label="歌手名">ST☆RISH</td>
+<td class="col-person" data-label="歌った人">れい</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="れん" data-search="65 spin a roulette【ドラマ】 0 声優探偵 ed 内田雄馬 れん " style="--person-color:#F4B6C4;">
+<td class="col-order" data-label="順番">65</td>
+<td class="col-title" data-label="曲名（ファイル名）">Spin a Roulette【ドラマ】</td>
+
+<td class="col-work" data-label="作品名">声優探偵 ED</td>
+<td class="col-artist" data-label="歌手名">内田雄馬</td>
+<td class="col-person" data-label="歌った人">れん</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="つぼはち" data-search="66 lulu. 0 葬送のフリーレン(第2期) op mrs.green apple つぼはち " style="--person-color:#A8D5B5;">
+<td class="col-order" data-label="順番">66</td>
+<td class="col-title" data-label="曲名（ファイル名）">lulu.</td>
+
+<td class="col-work" data-label="作品名">葬送のフリーレン(第2期) OP</td>
+<td class="col-artist" data-label="歌手名">Mrs.GREEN APPLE</td>
+<td class="col-person" data-label="歌った人">つぼはち</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="すみた" data-search="67 lλst resolution (japanese ver.)【アニメ】 0 the unlimited 兵部京介 op2 the emblem of the unlimited すみた " style="--person-color:#F6DE72;">
+<td class="col-order" data-label="順番">67</td>
+<td class="col-title" data-label="曲名（ファイル名）">LΛST RESOLUTION (Japanese ver.)【アニメ】</td>
+
+<td class="col-work" data-label="作品名">THE UNLIMITED 兵部京介 OP2</td>
+<td class="col-artist" data-label="歌手名">The Emblem of THE UNLIMITED</td>
+<td class="col-person" data-label="歌った人">すみた</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="れい" data-search="68 らしさ【公式アニメmv】 0 ひゃくえむ。 official髭男dism れい " style="--person-color:#8CCAD8;">
+<td class="col-order" data-label="順番">68</td>
+<td class="col-title" data-label="曲名（ファイル名）">らしさ【公式アニメMV】</td>
+
+<td class="col-work" data-label="作品名">ひゃくえむ。</td>
+<td class="col-artist" data-label="歌手名">Official髭男dism</td>
+<td class="col-person" data-label="歌った人">れい</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="れん" data-search="69 カレパ!【公式動画】 0 か 江口拓也 れん " style="--person-color:#F4B6C4;">
+<td class="col-order" data-label="順番">69</td>
+<td class="col-title" data-label="曲名（ファイル名）">カレパ!【公式動画】</td>
+
+<td class="col-work" data-label="作品名">か</td>
+<td class="col-artist" data-label="歌手名">江口拓也</td>
+<td class="col-person" data-label="歌った人">れん</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="つぼはち" data-search="70 風のアンセム(最終話編集) 0 とんがり帽子のアトリエ op eve feat. suis from ヨルシカ つぼはち " style="--person-color:#A8D5B5;">
+<td class="col-order" data-label="順番">70</td>
+<td class="col-title" data-label="曲名（ファイル名）">風のアンセム(最終話編集)</td>
+
+<td class="col-work" data-label="作品名">とんがり帽子のアトリエ OP</td>
+<td class="col-artist" data-label="歌手名">Eve feat. suis from ヨルシカ</td>
+<td class="col-person" data-label="歌った人">つぼはち</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="すみた" data-search="71 ユリーカ 0 宇宙兄弟 初音ミク すみた " style="--person-color:#F6DE72;">
+<td class="col-order" data-label="順番">71</td>
+<td class="col-title" data-label="曲名（ファイル名）">ユリーカ</td>
+
+<td class="col-work" data-label="作品名">宇宙兄弟</td>
+<td class="col-artist" data-label="歌手名">初音ミク</td>
+<td class="col-person" data-label="歌った人">すみた</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+<tr class="song-row" data-person="れい" data-search="72 ウルトラブラスト【アニメ】 0 劇場版 うたの☆プリンスさまっ♪ マジloveキングダム st☆rish れい " style="--person-color:#8CCAD8;">
+<td class="col-order" data-label="順番">72</td>
+<td class="col-title" data-label="曲名（ファイル名）">ウルトラブラスト【アニメ】</td>
+
+<td class="col-work" data-label="作品名">劇場版 うたの☆プリンスさまっ♪ マジLOVEキングダム</td>
+<td class="col-artist" data-label="歌手名">ST☆RISH</td>
+<td class="col-person" data-label="歌った人">れい</td>
+<td class="col-comment" data-label="コメント"><span class="empty">—</span></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="no-results" id="no-results">条件に一致する曲がありません。</div>
+</main>
+<script>
+    (() => {
+      const search = document.getElementById('search');
+      const personFilter = document.getElementById('person-filter');
+      const rows = [...document.querySelectorAll('.song-row')];
+      const count = document.getElementById('result-count');
+      const noResults = document.getElementById('no-results');
+      const total = rows.length;
+
+      const normalize = (value) => value.toLocaleLowerCase('ja').normalize('NFKC').trim();
+
+      function applyFilters() {
+        const query = normalize(search.value);
+        const person = personFilter.value;
+        let visible = 0;
+
+        for (const row of rows) {
+          const matchesQuery = !query || normalize(row.dataset.search).includes(query);
+          const matchesPerson = !person || row.dataset.person === person;
+          const show = matchesQuery && matchesPerson;
+          row.hidden = !show;
+          if (show) visible += 1;
+        }
+
+        count.textContent = `表示 ${visible} / ${total} 件`;
+        noResults.style.display = visible === 0 ? 'block' : 'none';
+      }
+
+      search.addEventListener('input', applyFilters);
+      personFilter.addEventListener('change', applyFilters);
+    })();
+  </script>
+</body>
+</html>
