@@ -1,0 +1,40 @@
+name: Check Yukari ports
+
+on:
+  workflow_dispatch:
+  schedule:
+    # GitHub Actions の schedule は最短5分。混雑時は遅延することがあります。
+    - cron: "*/5 * * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: yukari-port-check
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check ports
+        run: python scripts/check_yukari_ports.py
+
+      - name: Commit status when changed
+        run: |
+          if git diff --quiet -- yukari-status.json; then
+            echo "No status change"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add yukari-status.json
+          git commit -m "Update Yukari port status"
+          git push
