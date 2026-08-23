@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-08-23T15:14:47.229872Z",
+  "checked_at": "2026-08-23T15:37:58.318306Z",
   "host": "ykr.moe",
   "range": "11000-11130",
   "online_count": 1,
@@ -7,193 +7,193 @@
     {
       "port": 11000,
       "online": false,
-      "ms": 768,
+      "ms": 1211,
       "error": "OSError"
     },
     {
       "port": 11001,
       "online": false,
-      "ms": 4129,
+      "ms": 4566,
       "error": "OSError"
     },
     {
       "port": 11002,
       "online": false,
-      "ms": 4128,
+      "ms": 4567,
       "error": "OSError"
     },
     {
       "port": 11003,
       "online": false,
-      "ms": 4125,
+      "ms": 4567,
       "error": "OSError"
     },
     {
       "port": 11004,
       "online": false,
-      "ms": 4128,
+      "ms": 4566,
       "error": "OSError"
     },
     {
       "port": 11005,
       "online": false,
-      "ms": 769,
+      "ms": 1208,
       "error": "OSError"
     },
     {
       "port": 11006,
       "online": false,
-      "ms": 766,
+      "ms": 1207,
       "error": "OSError"
     },
     {
       "port": 11007,
       "online": false,
-      "ms": 770,
+      "ms": 1205,
       "error": "OSError"
     },
     {
       "port": 11008,
       "online": false,
-      "ms": 769,
+      "ms": 1206,
       "error": "OSError"
     },
     {
       "port": 11009,
       "online": false,
-      "ms": 770,
+      "ms": 1207,
       "error": "OSError"
     },
     {
       "port": 11010,
       "online": false,
-      "ms": 4127,
+      "ms": 4564,
       "error": "OSError"
     },
     {
       "port": 11011,
       "online": false,
-      "ms": 4124,
+      "ms": 4562,
       "error": "OSError"
     },
     {
       "port": 11012,
       "online": false,
-      "ms": 769,
+      "ms": 1203,
       "error": "OSError"
     },
     {
       "port": 11013,
       "online": false,
-      "ms": 773,
+      "ms": 1205,
       "error": "OSError"
     },
     {
       "port": 11014,
       "online": false,
-      "ms": 766,
+      "ms": 1212,
       "error": "OSError"
     },
     {
       "port": 11015,
       "online": false,
-      "ms": 767,
+      "ms": 1205,
       "error": "OSError"
     },
     {
       "port": 11016,
       "online": false,
-      "ms": 767,
+      "ms": 1211,
       "error": "OSError"
     },
     {
       "port": 11017,
       "online": false,
-      "ms": 768,
+      "ms": 1203,
       "error": "OSError"
     },
     {
       "port": 11018,
       "online": false,
-      "ms": 767,
+      "ms": 1204,
       "error": "OSError"
     },
     {
       "port": 11019,
       "online": false,
-      "ms": 766,
+      "ms": 1204,
       "error": "OSError"
     },
     {
       "port": 11020,
       "online": false,
-      "ms": 769,
+      "ms": 1203,
       "error": "OSError"
     },
     {
       "port": 11021,
       "online": false,
-      "ms": 4123,
+      "ms": 4559,
       "error": "OSError"
     },
     {
       "port": 11022,
       "online": false,
-      "ms": 770,
+      "ms": 1210,
       "error": "OSError"
     },
     {
       "port": 11023,
       "online": false,
-      "ms": 771,
+      "ms": 1202,
       "error": "OSError"
     },
     {
       "port": 11024,
       "online": false,
-      "ms": 767,
+      "ms": 1202,
       "error": "OSError"
     },
     {
       "port": 11025,
       "online": false,
-      "ms": 767,
+      "ms": 1209,
       "error": "OSError"
     },
     {
       "port": 11026,
       "online": false,
-      "ms": 768,
+      "ms": 1201,
       "error": "OSError"
     },
     {
       "port": 11027,
       "online": false,
-      "ms": 770,
+      "ms": 1202,
       "error": "OSError"
     },
     {
       "port": 11028,
       "online": false,
-      "ms": 4124,
+      "ms": 4560,
       "error": "OSError"
     },
     {
       "port": 11029,
       "online": false,
-      "ms": 770,
+      "ms": 1198,
       "error": "OSError"
     },
     {
       "port": 11030,
       "online": false,
-      "ms": 767,
+      "ms": 1197,
       "error": "OSError"
     },
     {
       "port": 11031,
       "online": false,
-      "ms": 764,
+      "ms": 1211,
       "error": "OSError"
     },
     {
@@ -205,19 +205,19 @@
     {
       "port": 11033,
       "online": false,
-      "ms": 147,
+      "ms": 145,
       "error": "OSError"
     },
     {
       "port": 11034,
       "online": false,
-      "ms": 146,
+      "ms": 145,
       "error": "OSError"
     },
     {
       "port": 11035,
       "online": false,
-      "ms": 146,
+      "ms": 145,
       "error": "OSError"
     },
     {
@@ -229,7 +229,7 @@
     {
       "port": 11037,
       "online": false,
-      "ms": 147,
+      "ms": 145,
       "error": "OSError"
     },
     {
@@ -241,31 +241,31 @@
     {
       "port": 11039,
       "online": false,
-      "ms": 147,
+      "ms": 145,
       "error": "OSError"
     },
     {
       "port": 11040,
       "online": false,
-      "ms": 149,
+      "ms": 146,
       "error": "OSError"
     },
     {
       "port": 11041,
       "online": false,
-      "ms": 3506,
+      "ms": 3505,
       "error": "OSError"
     },
     {
       "port": 11042,
       "online": false,
-      "ms": 148,
+      "ms": 146,
       "error": "OSError"
     },
     {
       "port": 11043,
       "online": false,
-      "ms": 3507,
+      "ms": 3505,
       "error": "OSError"
     },
     {
@@ -277,25 +277,25 @@
     {
       "port": 11045,
       "online": false,
-      "ms": 3505,
+      "ms": 3504,
       "error": "OSError"
     },
     {
       "port": 11046,
       "online": false,
-      "ms": 148,
+      "ms": 146,
       "error": "OSError"
     },
     {
       "port": 11047,
       "online": false,
-      "ms": 3506,
+      "ms": 3505,
       "error": "OSError"
     },
     {
       "port": 11048,
       "online": false,
-      "ms": 3506,
+      "ms": 3505,
       "error": "OSError"
     },
     {
@@ -313,19 +313,19 @@
     {
       "port": 11051,
       "online": false,
-      "ms": 146,
+      "ms": 147,
       "error": "OSError"
     },
     {
       "port": 11052,
       "online": false,
-      "ms": 145,
+      "ms": 146,
       "error": "OSError"
     },
     {
       "port": 11053,
       "online": false,
-      "ms": 146,
+      "ms": 145,
       "error": "OSError"
     },
     {
@@ -337,13 +337,13 @@
     {
       "port": 11055,
       "online": false,
-      "ms": 145,
+      "ms": 149,
       "error": "OSError"
     },
     {
       "port": 11056,
       "online": false,
-      "ms": 146,
+      "ms": 150,
       "error": "OSError"
     },
     {
@@ -385,25 +385,25 @@
     {
       "port": 11063,
       "online": false,
-      "ms": 3501,
+      "ms": 3504,
       "error": "OSError"
     },
     {
       "port": 11064,
       "online": false,
-      "ms": 3503,
+      "ms": 3504,
       "error": "OSError"
     },
     {
       "port": 11065,
       "online": false,
-      "ms": 146,
+      "ms": 145,
       "error": "OSError"
     },
     {
       "port": 11066,
       "online": true,
-      "ms": 155,
+      "ms": 162,
       "error": ""
     },
     {
@@ -427,31 +427,31 @@
     {
       "port": 11070,
       "online": false,
-      "ms": 146,
+      "ms": 145,
       "error": "OSError"
     },
     {
       "port": 11071,
       "online": false,
-      "ms": 3504,
+      "ms": 3503,
       "error": "OSError"
     },
     {
       "port": 11072,
       "online": false,
-      "ms": 146,
+      "ms": 145,
       "error": "OSError"
     },
     {
       "port": 11073,
       "online": false,
-      "ms": 150,
+      "ms": 145,
       "error": "OSError"
     },
     {
       "port": 11074,
       "online": false,
-      "ms": 146,
+      "ms": 145,
       "error": "OSError"
     },
     {
@@ -469,13 +469,13 @@
     {
       "port": 11077,
       "online": false,
-      "ms": 3504,
+      "ms": 157,
       "error": "OSError"
     },
     {
       "port": 11078,
       "online": false,
-      "ms": 149,
+      "ms": 159,
       "error": "OSError"
     },
     {
@@ -499,7 +499,7 @@
     {
       "port": 11082,
       "online": false,
-      "ms": 145,
+      "ms": 146,
       "error": "OSError"
     },
     {
@@ -517,7 +517,7 @@
     {
       "port": 11085,
       "online": false,
-      "ms": 145,
+      "ms": 146,
       "error": "OSError"
     },
     {
@@ -547,7 +547,7 @@
     {
       "port": 11090,
       "online": false,
-      "ms": 3502,
+      "ms": 3503,
       "error": "OSError"
     },
     {
@@ -571,13 +571,13 @@
     {
       "port": 11094,
       "online": false,
-      "ms": 3503,
+      "ms": 3504,
       "error": "OSError"
     },
     {
       "port": 11095,
       "online": false,
-      "ms": 145,
+      "ms": 146,
       "error": "OSError"
     },
     {
@@ -595,13 +595,13 @@
     {
       "port": 11098,
       "online": false,
-      "ms": 145,
+      "ms": 146,
       "error": "OSError"
     },
     {
       "port": 11099,
       "online": false,
-      "ms": 146,
+      "ms": 145,
       "error": "OSError"
     },
     {
@@ -619,7 +619,7 @@
     {
       "port": 11102,
       "online": false,
-      "ms": 146,
+      "ms": 145,
       "error": "OSError"
     },
     {
@@ -637,7 +637,7 @@
     {
       "port": 11105,
       "online": false,
-      "ms": 146,
+      "ms": 154,
       "error": "OSError"
     },
     {
@@ -655,7 +655,7 @@
     {
       "port": 11108,
       "online": false,
-      "ms": 146,
+      "ms": 148,
       "error": "OSError"
     },
     {
@@ -673,7 +673,7 @@
     {
       "port": 11111,
       "online": false,
-      "ms": 3504,
+      "ms": 3501,
       "error": "OSError"
     },
     {
@@ -685,7 +685,7 @@
     {
       "port": 11113,
       "online": false,
-      "ms": 3505,
+      "ms": 3504,
       "error": "OSError"
     },
     {
@@ -697,7 +697,7 @@
     {
       "port": 11115,
       "online": false,
-      "ms": 3502,
+      "ms": 3504,
       "error": "OSError"
     },
     {
@@ -709,7 +709,7 @@
     {
       "port": 11117,
       "online": false,
-      "ms": 3504,
+      "ms": 3505,
       "error": "OSError"
     },
     {
@@ -721,19 +721,19 @@
     {
       "port": 11119,
       "online": false,
-      "ms": 146,
+      "ms": 145,
       "error": "OSError"
     },
     {
       "port": 11120,
       "online": false,
-      "ms": 146,
+      "ms": 145,
       "error": "OSError"
     },
     {
       "port": 11121,
       "online": false,
-      "ms": 145,
+      "ms": 147,
       "error": "OSError"
     },
     {
@@ -751,13 +751,13 @@
     {
       "port": 11124,
       "online": false,
-      "ms": 145,
+      "ms": 149,
       "error": "OSError"
     },
     {
       "port": 11125,
       "online": false,
-      "ms": 145,
+      "ms": 146,
       "error": "OSError"
     },
     {
@@ -787,7 +787,7 @@
     {
       "port": 11130,
       "online": false,
-      "ms": 145,
+      "ms": 147,
       "error": "OSError"
     }
   ]
