@@ -27,8 +27,8 @@ GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyzKEPfj0bYcRyEdizwQX
 CSV_EMPTY_PREFIX_BYTES = b'\xef\xbb\xbf\r\n\t '
 EXPECTED_HISTORY_COLUMNS = ['取得日', '部屋主', '順番', '曲名（ファイル名）', '作品名', '歌手名', '歌った人']
 
-ALLOWED_CATEGORIES = ["2026年夏アニメ", "2026年春アニメ", "2026年冬アニメ", "2025年秋アニメ"]
-TREND_TARGET_CATEGORY = "2026年夏アニメ"
+ALLOWED_CATEGORIES = ["2026年秋アニメ", "2026年夏アニメ", "2026年春アニメ", "2026年冬アニメ", "2025年秋アニメ"]
+TREND_TARGET_CATEGORY = "2026年秋アニメ"
 TREND_PERIOD_OPTIONS = [3, 7, 14, 30]
 TREND_PICKUP_TOTAL = 10
 
@@ -315,7 +315,7 @@ def sort_history_df(df):
     if '順番' in df.columns:
         df['順番'] = pd.to_numeric(df['順番'], errors='coerce')
     if '取得日' in df.columns:
-        df['_temp_date'] = pd.to_datetime(df['取得日'], errors='coerce')
+        df['_temp_date'] = pd.to_datetime(df['取得日'], format='mixed', errors='coerce')
         sort_cols = ['_temp_date']
         ascending = [False]
         if '順番' in df.columns:
@@ -486,6 +486,8 @@ def fetch_room_df(port):
 # --- 既存履歴読み込み ---
 history_records, loaded_history_files, history_filename_by_num, history_load_ok = load_all_history_files()
 print(f"履歴ファイル: {loaded_history_files}")
+if not history_load_ok:
+    raise RuntimeError("履歴の読み込みが不完全です。履歴CSV・既存HTMLの更新を中止します。")
 history_dfs = [h['df'] for h in history_records]
 full_history_before_update = cleanup_history_df(pd.concat(history_dfs, ignore_index=True)) if history_dfs else pd.DataFrame()
 
@@ -584,7 +586,7 @@ for fn in OFFLINE_FILES:
 # --- 集計用ソース ---
 analysis_source_df = full_df.copy()
 if not analysis_source_df.empty:
-    analysis_source_df['dt_obj'] = pd.to_datetime(analysis_source_df['取得日'], errors='coerce')
+    analysis_source_df['dt_obj'] = pd.to_datetime(analysis_source_df['取得日'], format='mixed', errors='coerce')
     analysis_source_df = analysis_source_df.dropna(subset=['dt_obj'])
     analysis_source_df['norm_filename'] = analysis_source_df['曲名（ファイル名）'].apply(normalize_text)
 
@@ -607,28 +609,40 @@ else:
 
 
 raw_df = load_df_from_gas("cool_analysis.csv", header=None)
+if raw_df.empty:
+    print("[Catalog] GAS取得失敗または空のためローカルCSVを使用")
+    raw_df = load_df_from_local("cool_analysis.csv", header=None)
+if raw_df.empty:
+    raise RuntimeError("cool_analysis.csv を読み込めません。既存HTMLは更新しません。")
 categorized_data = {}
+seen_catalog_songs = {}
 if not raw_df.empty:
-    raw_df = raw_df.fillna("").drop_duplicates(keep='last')
+    raw_df = raw_df.fillna("")
     cur_cat = None
     for idx, row in raw_df.iterrows():
         if not any(str(x).strip() for x in row):
             continue
-        col0 = str(row[0]).strip()
-        is_cat = any(c in col0 for c in ALLOWED_CATEGORIES) and "作品名" not in col0
-        if is_cat:
-            cur_cat = col0
-            categorized_data.setdefault(cur_cat, [])
+        col0 = str(row.iloc[0]).strip()
+        # 未対応クールも区切りとして扱い、直前のクールに混入させない。
+        if re.fullmatch(r"\d{4}年[春夏秋冬]アニメ", col0):
+            cur_cat = col0 if col0 in ALLOWED_CATEGORIES else None
+            if cur_cat is not None:
+                categorized_data.setdefault(cur_cat, [])
             continue
         if "作品名" in col0 or cur_cat is None:
             continue
-        anime = str(row[0]).strip() if len(row) > 0 else ""
-        type_ = str(row[1]).strip() if len(row) > 1 else ""
-        artist = str(row[2]).strip() if len(row) > 2 else ""
-        song = str(row[3]).strip() if len(row) > 3 else ""
+        anime = str(row.iloc[0]).strip() if len(row) > 0 else ""
+        type_ = str(row.iloc[1]).strip() if len(row) > 1 else ""
+        artist = str(row.iloc[2]).strip() if len(row) > 2 else ""
+        song = str(row.iloc[3]).strip() if len(row) > 3 else ""
         if not anime and not song:
             continue
-        categorized_data[cur_cat].append({"anime": anime, "type": type_, "artist": artist, "song": song})
+        # 同じ主題歌が別クールへ継続する場合も、それぞれのクールに残す。
+        song_key = (anime, type_, artist, song)
+        seen = seen_catalog_songs.setdefault(cur_cat, set())
+        if song_key not in seen:
+            categorized_data[cur_cat].append({"anime": anime, "type": type_, "artist": artist, "song": song})
+            seen.add(song_key)
 
 
 def is_song_created(item):
@@ -724,9 +738,10 @@ def assign_matches_with_artist_disambiguation(items, hdf):
 
 
 COOL_START = pd.to_datetime("2026/01/01")
-COOL_END = pd.to_datetime("2026/09/30")
+COOL_END = pd.to_datetime("2027/01/01")  # 終端は含めず、12/31の時刻付き履歴も集計
+COUNT_PERIOD_LABEL = "2026/01/01〜2026/12/31"
 target_history = full_history[
-    (full_history['dt_obj'] >= COOL_START) & (full_history['dt_obj'] <= COOL_END)
+    (full_history['dt_obj'] >= COOL_START) & (full_history['dt_obj'] < COOL_END)
 ] if not full_history.empty else pd.DataFrame()
 
 cool_data_for_js = {}
@@ -807,7 +822,7 @@ for pd_days in TREND_PERIOD_OPTIONS:
     if not full_history.empty:
         cur_h = full_history[(full_history['dt_obj'] >= cs) & (full_history['dt_obj'] < ce)]
         prv_h = full_history[(full_history['dt_obj'] >= ps) & (full_history['dt_obj'] < pe)]
-        all_h = full_history[(full_history['dt_obj'] >= COOL_START) & (full_history['dt_obj'] <= COOL_END)]
+        all_h = full_history[(full_history['dt_obj'] >= COOL_START) & (full_history['dt_obj'] < COOL_END)]
     else:
         cur_h = pd.DataFrame()
         prv_h = pd.DataFrame()
@@ -1063,6 +1078,7 @@ body.dark .trend-pickup-row .num-badge{background:#7f1d1d;color:#fecaca}
 
 /* Toolbar */
 .tab-toolbar{max-width:var(--maxw);margin:14px auto 0;padding:0 16px;display:flex;flex-direction:column;gap:8px}
+.season-note{max-width:var(--maxw);margin:8px auto;color:var(--text-mute);font-size:12px;padding:0 16px}
 .toolbar-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 
 .search-pill{
@@ -1655,7 +1671,7 @@ body.dark .site-lock{background:var(--bg)}
 <div class="tab-content" id="tab-cool">
   <div class="tab-toolbar">
     <div class="toolbar-row">
-      <select class="pill-select" id="coolCat"></select>
+      <select class="pill-select" id="coolCat" aria-label="集計クール"></select>
       <select class="pill-select" id="coolSort">
         <option value="user">人気順 (人数)</option>
         <option value="count" selected>人気順 (歌唱数)</option>
@@ -1666,6 +1682,7 @@ body.dark .site-lock{background:var(--bg)}
       <button class="dl-btn compact" onclick="downloadCoolHTML('all')" title="全クール保存"><i class="fas fa-file-download"></i><span class="dl-lbl">全クール</span></button>
     </div>
   </div>
+  <div class="season-note">歌唱履歴の集計期間: __COUNT_PERIOD__</div>
   <div class="count-line"><i class="far fa-bookmark"></i><span id="coolCount">0</span> 作品</div>
   <div id="coolList"></div>
 </div>
@@ -1674,7 +1691,7 @@ body.dark .site-lock{background:var(--bg)}
 <div class="tab-content" id="tab-ranking">
   <div class="tab-toolbar">
     <div class="toolbar-row">
-      <select class="pill-select" id="rankCat"></select>
+      <select class="pill-select" id="rankCat" aria-label="ランキングのクール"></select>
       <select class="pill-select" id="rankMode">
         <option value="count">歌唱数ランキング</option>
         <option value="user">歌唱人数ランキング</option>
@@ -1683,6 +1700,7 @@ body.dark .site-lock{background:var(--bg)}
       <button class="dl-btn compact" onclick="downloadRankingHTML('all')" title="全クール保存"><i class="fas fa-file-download"></i><span class="dl-lbl">全クール</span></button>
     </div>
   </div>
+  <div class="season-note">歌唱履歴の集計期間: __COUNT_PERIOD__</div>
   <div class="count-line"><i class="fas fa-list-ol"></i><span id="rankCount">0</span> 件</div>
   <div id="rankList"></div>
 </div>
@@ -1704,6 +1722,7 @@ body.dark .site-lock{background:var(--bg)}
       <button class="dl-btn ghost compact" onclick="downloadTrendHTML()" title="HTML保存"><i class="fas fa-file-download"></i><span class="dl-lbl">HTML保存</span></button>
     </div>
   </div>
+  <div class="season-note">推移の対象: __TREND_CAT__</div>
   <div id="trendBody"></div>
 </div>
 
@@ -2834,6 +2853,7 @@ html_content = (html_content
     .replace("__UPDATE_TS__", current_datetime_str)
     .replace("__UPDATE__", current_datetime_str)
     .replace("__TREND_CAT__", TREND_TARGET_CATEGORY)
+    .replace("__COUNT_PERIOD__", COUNT_PERIOD_LABEL)
 )
 
 with open("index.html", "w", encoding="utf-8") as f:
@@ -2893,7 +2913,10 @@ try:
         .replace("__TREND_TARGET_JSON__", trend_target_json)
         .replace("__UPDATE_TS__", current_datetime_str)
     )
-    _v_body_rendered = _v_body.replace("__UPDATE__", current_datetime_str)
+    _v_body_rendered = (_v_body.replace("__UPDATE__", current_datetime_str)
+        .replace("__TREND_CAT__", TREND_TARGET_CATEGORY)
+        .replace("__COUNT_PERIOD__", COUNT_PERIOD_LABEL)
+    )
 
     _viewer_html = (
         '<!DOCTYPE html>\n'

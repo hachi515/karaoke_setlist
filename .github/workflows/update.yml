@@ -2,62 +2,83 @@ name: Update List
 
 on:
   schedule:
-    # 10分ごとに実行 (cron構文)
-    - cron: '*/10 * * * *'
-  workflow_dispatch: # 手動実行ボタンも有効にする
+    # UTCの毎時17分・47分。混雑しやすい正時を避け、遅延に備え30分間隔で起動する。
+    # GitHub scheduleは実行時刻や最大間隔を保証しない。外部起動についてはSETUP_UPDATES.md参照。
+    - cron: '17,47 * * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - update_list.py
+      - viewer_template/**
+      - cool_analysis.csv
+      - requirements.txt
+      - tests/**
+      - .github/workflows/update.yml
 
 permissions:
   contents: write
 
+concurrency:
+  group: update-list
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.9'
+          python-version: '3.12'
+          cache: pip
 
       - name: Install dependencies
-        run: |
-          pip install pandas requests lxml html5lib
+        run: python -m pip install -r requirements.txt
+
+      - name: Check generation consistency
+        run: python -m unittest discover -s tests -v
 
       - name: Run script
         run: python update_list.py
 
       - name: Commit and push if changed
+        shell: bash
         run: |
-          git config --global user.name 'GitHub Action'
-          git config --global user.email 'action@github.com'
-          
-          # 履歴CSV (history*.csv) は GAS のみ管理から
-          # 「リポジトリ正本 + GAS バックアップ」構成へ変更したため、
-          # index.html と一緒にリポジトリへコミットする。
-          # history*.csv は初回など存在しないケースもあるため失敗を握り潰す。
-          git add index.html
-          # update_list.py は viewer.html も生成するため、こちらも忘れずに add する。
-          # add しないと未ステージの変更が残り、後段の `git pull --rebase` が
-          # "cannot pull with rebase: You have unstaged changes." で失敗する (exit 128)。
-          git add viewer.html 2>/dev/null || true
-          git add history*.csv 2>/dev/null || true
-          
-          # 変更がある場合のみコミット
-          if ! git diff --quiet || ! git diff --staged --quiet; then
-            git commit -m "Auto update list"
-            git pull --rebase origin main
-            git push origin main
+          set -euo pipefail
+          git config user.name 'GitHub Action'
+          git config user.email 'action@github.com'
+          git add index.html viewer.html
+          git add -- 'history*.csv'
+          if git diff --staged --quiet; then
+            echo "No generated changes"
+            exit 0
           fi
+          git commit -m "Auto update list"
+          # 同時にstatus/mylistの更新がmainへ入った場合は、取り込み直して再試行する。
+          for attempt in 1 2 3; do
+            git pull --rebase origin main
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then sleep 5; fi
+          done
+          echo "Failed to push generated changes after 3 attempts" >&2
+          exit 1
 
-      # ★追加: Github Pagesへのデプロイ
       - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
+        uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./  # index.htmlがあるディレクトリ
-          publish_branch: gh-pages  # 公開用ブランチ
-          keep_files: true # 既存ファイルを消さない
-          exclude_assets: '.github,*.py,*.yml,requirements.txt,README.md' # 不要なファイルを除外
+          publish_dir: ./
+          publish_branch: gh-pages
+          keep_files: true
+          exclude_assets: '.github,tests,*.py,*.yml,requirements.txt,README.md,SETUP_*.md'
