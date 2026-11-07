@@ -41,7 +41,7 @@
 <div class="tab-content active" id="tab-cool">
   <div class="tab-toolbar">
     <div class="toolbar-row">
-      <select class="pill-select" id="coolCat"></select>
+      <select class="pill-select" id="coolCat" aria-label="集計クール"></select>
       <select class="pill-select" id="coolSort">
         <option value="user">人気順 (人数)</option>
         <option value="count" selected>人気順 (歌唱数)</option>
@@ -50,6 +50,7 @@
       </select>
     </div>
   </div>
+  <div class="season-note">歌唱履歴の集計期間: __COUNT_PERIOD__</div>
   <div class="count-line"><i class="far fa-bookmark"></i><span id="coolCount">0</span> 作品</div>
   <div id="coolList"></div>
 </div>
@@ -58,13 +59,14 @@
 <div class="tab-content" id="tab-ranking">
   <div class="tab-toolbar">
     <div class="toolbar-row">
-      <select class="pill-select" id="rankCat"></select>
+      <select class="pill-select" id="rankCat" aria-label="ランキングのクール"></select>
       <select class="pill-select" id="rankMode">
         <option value="count">歌唱数ランキング</option>
         <option value="user">歌唱人数ランキング</option>
       </select>
     </div>
   </div>
+  <div class="season-note">歌唱履歴の集計期間: __COUNT_PERIOD__</div>
   <div class="count-line"><i class="fas fa-list-ol"></i><span id="rankCount">0</span> 件</div>
   <div id="rankList"></div>
 </div>
@@ -85,6 +87,7 @@
       </select>
     </div>
   </div>
+  <div class="season-note">推移の対象: __TREND_CAT__</div>
   <div id="trendBody"></div>
 </div>
 
