@@ -1,4 +1,5 @@
 name: Update List
+run-name: Update List · ${{ github.event_name == 'workflow_dispatch' && inputs.trigger_source || github.event_name }}
 
 on:
   schedule:
@@ -6,6 +7,16 @@ on:
     # GitHub scheduleは実行時刻や最大間隔を保証しない。外部起動についてはSETUP_UPDATES.md参照。
     - cron: '17,47 * * * *'
   workflow_dispatch:
+    inputs:
+      trigger_source:
+        description: 起動元（GASからの自動起動と手動実行を識別）
+        type: choice
+        required: false
+        default: manual
+        options:
+          - manual
+          - gas-hourly
+          - external
   push:
     branches: [main]
     paths:
@@ -15,6 +26,7 @@ on:
       - requirements.txt
       - tests/**
       - .github/workflows/update.yml
+      - .github/gas/**
 
 permissions:
   contents: write
@@ -46,6 +58,9 @@ jobs:
 
       - name: Check generation consistency
         run: python -m unittest discover -s tests -v
+
+      - name: Check hourly trigger
+        run: node --test tests/test_gas_scheduler.cjs
 
       - name: Run script
         run: python update_list.py

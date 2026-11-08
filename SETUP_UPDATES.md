@@ -43,28 +43,66 @@ GitHub公式にも、混雑時にはscheduleが遅延し、キュー中のジョ
 また、公開リポジトリで60日間活動がないとscheduleは自動無効化されます。
 [公式ドキュメント](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)
 
-今回のクラウド環境からGitHub APIへのアクセスは403で、過去のActions実行ログは取得できませんでした。
-5時間空いた直接原因は未確定です。再発時は `Update List` の実行履歴で次を分けて確認してください。
+2026/11/08の再調査では、GitHubのWeb画面でUpdate Listが `active`、生成・Pagesデプロイの成功を確認しました。
+一方、定期起動の実績には約4時間の空白がありました。起動しなかった予定時刻の内部理由はGitHub側にしかなく、
+cronの変更だけで1〜2時間間隔へ復旧したとは判断できません。手動実行の成功と定期起動の復旧は区別します。
+
+再発時は `Update List` の実行履歴で次を分けて確認してください。
 
 1. 実行自体がない：scheduleの遅延・間引き、無効化、デフォルトブランチ上の設定を確認。
 2. 実行が失敗：GAS/ゆかりの応答、履歴取得エラー、push競合、Pagesデプロイのログを確認。
 3. 実行成功でも公開HTMLが古い：Pagesが `gh-pages / (root)` を配信しているか確認。
    このワークフローは `gh-pages` へデプロイします。
 
-## 1〜2時間以内の更新を重視する場合
+## GitHubの定期起動に依存しない毎時更新（GAS）
 
-GitHub内のscheduleだけに依存せず、外部のスケジューラーから毎時23分などに既存の
-`workflow_dispatch` を呼ぶ構成を推奨します。登録済みのcronサーバーやクラウドスケジューラーを使用します。
+[毎時起動スクリプト](.github/gas/hourly_update.gs) を用意しました。
+既存のCSV用GASやWebアプリを変更せず、定期起動専用のApps Scriptプロジェクトへ追加できます。
+GitHubの `schedule` は予備として残し、GASの時間主導型トリガーから毎時 `workflow_dispatch` を呼びます。
+GitHub側のcronが開始されなくても、この起動経路は独立して動きます。
+
+### 初回のみ行う設定
+
+1. GitHubの **Settings → Developer settings → Personal access tokens → Fine-grained tokens** で、
+   `hachi515/karaoke_setlist` だけを対象とするトークンを作成します。
+   **Repository permissions → Actions: Read and write** が必要です。
+   トークンはソース・チャットへ貼らず、次のGAS設定へ直接保存します。有効期限後は更新が必要です。
+2. [Google Apps Script](https://script.google.com/home) で定期起動専用の新しいプロジェクトを作り、
+   `.github/gas/hourly_update.gs` の内容を貼り付けて保存します。Webアプリとしてのデプロイは不要です。
+3. GASの **プロジェクトの設定 → スクリプト プロパティ** に、名前 `GITHUB_ACTIONS_TOKEN`、
+   値に作成したトークンを登録します。
+4. GASの実行関数で **installKaraokeHourlyTrigger** を選んで一度実行し、
+   自分のアカウントによる外部通信・トリガー作成を承認します。
+   接続を確認して毎時トリガーを作り、最初の更新要求をその場で送ります。
+5. GitHubの **Actions → Update List** に **Update List · gas-hourly** が現れ、
+   生成・Pages公開まで成功することを確認します。さらに次の時間主導型実行も成功すれば毎時起動を確認できます。
+
+### 動作と確認方法
+
+- GASからの要求は `inputs.trigger_source=gas-hourly` を指定します。
+  GitHubの実行タイトルで `schedule`・`manual`・`gas-hourly` を区別できます。
+  イベントの種別自体は `workflow_dispatch`（画面によっては「Manually run」）になります。
+- スクリプトプロパティ `KARAOKE_LAST_DISPATCH_AT` は最後にGitHubが起動要求を受理した時刻（UTC）です。
+  生成・公開の成功時刻ではないので、GASの **実行数** とGitHub Actionsの結果も確認してください。
+- インストール関数を再実行しても、この処理のトリガーだけを置き換えます。既存のCSV処理などは削除しません。
+  新規作成に失敗した場合は既存トリガーを保持します。
+- 認証失敗はエラーにし、一時的な5xx・短い429制限だけを最大3回試します。
+  トークンはログへ出力しません。複数の起動処理が重なった場合は重複送信を抑制します。
+- 停止するときは **removeKaraokeHourlyTrigger** を実行します。
+- コードのサービス境界・認証失敗・再試行・トリガー保全は、次のテストで検証できます。
 
 ```sh
-# 外部実行環境で、対象リポジトリにActions: write権限の認証を安全に設定してから実行。
-gh workflow run update.yml --repo hachi515/karaoke_setlist --ref main
+node --test tests/test_gas_scheduler.cjs
 ```
 
-HTTPで呼ぶ場合は `POST https://api.github.com/repos/hachi515/karaoke_setlist/actions/workflows/update.yml/dispatches`、
-本文は `{"ref":"main"}` です。認証は対象リポジトリに絞ったGitHub Appまたはfine-grained tokenを使い、
-トークンをリポジトリやチャットへ貼らず、外部サービスのシークレット管理に保存します。
+GASの権限承認・トークン登録・時間主導型トリガーは、GitHubへのpushだけでは設定されません。
+このクラウドからGoogleアカウントの編集権限やトークン値は取得できないため、上記の初回設定が必要です。
+設定前の段階では「毎時自動更新が復旧した」とは扱いません。
+GASの時間主導型トリガーやActionsのランナー待ちにも遅延はあり、厳密な時間保証ではありません。
 
-外部起動でもActionsのランナー待ち・外部データ障害は残ります。時間上限を厳密に満たす必要がある場合は、
-外部実行環境で生成・配信まで行い、最終成功時刻が2時間以上古い場合の監視を併用してください。
-この変更では外部サービスの契約・認証設定や本番ジョブの登録は行っていません。
+既存の外部cronサーバーがある場合は、同じ起動口を次のコマンドから利用できます。
+
+```sh
+# 外部実行環境で対象リポジトリにActions: write権限の認証を安全に設定してから実行。
+gh workflow run update.yml --repo hachi515/karaoke_setlist --ref main -f trigger_source=external
+```
